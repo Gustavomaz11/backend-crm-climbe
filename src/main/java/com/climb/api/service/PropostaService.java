@@ -2,8 +2,10 @@ package com.climb.api.service;
 
 import com.climb.api.model.Empresa;
 import com.climb.api.model.Proposta;
+import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.PermissaoCodigo;
+import com.climb.api.model.dto.PropostaAprovacaoRequestDTO;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
@@ -67,8 +69,8 @@ public class PropostaService {
         return toResponseDTO(proposta);
     }
 
-    public List<PropostaResponseDTO> listarPorStatus(String status) {
-        if (status == null || status.isBlank()) {
+    public List<PropostaResponseDTO> listarPorStatus(PropostaStatus status) {
+        if (status == null) {
             throw new RuntimeException("Status é obrigatório");
         }
 
@@ -91,6 +93,23 @@ public class PropostaService {
         proposta.setStatus(dto.status());
         proposta.setUrl(dto.url());
         proposta.setDataCriacao(dto.dataCriacao() != null ? dto.dataCriacao() : LocalDate.now());
+
+        return toResponseDTO(repository.save(proposta));
+    }
+
+    public PropostaResponseDTO aprovar(Long id, PropostaAprovacaoRequestDTO dto) {
+        if (dto.status() == null) {
+            throw new RuntimeException("Status é obrigatório");
+        }
+
+        if (dto.status() == PropostaStatus.PENDENTE) {
+            throw new RuntimeException("Status inválido para aprovação");
+        }
+
+        Proposta proposta = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Proposta não encontrada"));
+
+        proposta.setStatus(dto.status());
 
         return toResponseDTO(repository.save(proposta));
     }
@@ -121,8 +140,8 @@ public class PropostaService {
         repository.deleteById(id);
     }
 
-    private void validarStatus(String status) {
-        if (status == null || status.isBlank()) {
+    private void validarStatus(PropostaStatus status) {
+        if (status == null) {
             throw new RuntimeException("Status é obrigatório");
         }
     }
