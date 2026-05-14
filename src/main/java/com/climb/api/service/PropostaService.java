@@ -85,7 +85,7 @@ public class PropostaService {
         if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
         }
-        validarStatus(dto.status());
+        validarStatusParaCriacao(dto.status());
 
         Proposta proposta = new Proposta();
         proposta.setEmpresa(buscarEmpresa(dto.empresaId()));
@@ -119,7 +119,7 @@ public class PropostaService {
         if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para editar propostas");
         }
-        validarStatus(dto.status());
+        validarStatusParaAtualizacao(dto.status());
 
         Proposta proposta = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Proposta não encontrada"));
@@ -144,5 +144,34 @@ public class PropostaService {
         if (status == null) {
             throw new RuntimeException("Status é obrigatório");
         }
+        
+        // Valida se é um dos status permitidos do enum PropostaStatus
+        boolean statusValido = false;
+        for (PropostaStatus s : PropostaStatus.values()) {
+            if (s.equals(status)) {
+                statusValido = true;
+                break;
+            }
+        }
+        
+        if (!statusValido) {
+            throw new RuntimeException("Status inválido. Status permitidos: PENDENTE, APROVADA, REJEITADA");
+        }
+    }
+
+    private void validarStatusParaCriacao(PropostaStatus status) {
+        validarStatus(status);
+        
+        // Ao criar uma proposta, o status inicial deve ser PENDENTE
+        if (status != PropostaStatus.PENDENTE) {
+            throw new RuntimeException("Uma proposta nova deve ser criada com status PENDENTE. Status permitido: PENDENTE");
+        }
+    }
+
+    private void validarStatusParaAtualizacao(PropostaStatus status) {
+        validarStatus(status);
+        
+        // Ao atualizar uma proposta, permite qualquer status válido
+        // Validação mais específica pode ser adicionada conforme as regras de negócio evoluem
     }
 }
