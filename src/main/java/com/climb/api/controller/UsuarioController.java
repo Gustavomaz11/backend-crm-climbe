@@ -8,10 +8,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.climb.api.model.PermissaoCodigo;
+import com.climb.api.model.dto.ApiResponse;
+import com.climb.api.model.dto.CompletarCadastroRequestDTO;
 import com.climb.api.model.dto.UsuarioRequestDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 import com.climb.api.service.RbacService;
 import com.climb.api.service.UsuarioService;
+import org.springframework.http.ResponseEntity;
 
 @RestController
 @RequestMapping("/usuarios")
@@ -61,6 +64,17 @@ public class UsuarioController {
     public UsuarioResponseDTO aprovarUsuario(@PathVariable Long id) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
         return service.aprovarUsuario(id);
+    }
+
+    @PostMapping("/completar-cadastro")
+    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> completarCadastro(
+            @RequestBody CompletarCadastroRequestDTO dto) {
+        try {
+            Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getDetails();
+            return ResponseEntity.ok(ApiResponse.ok(service.completarCadastro(userId, dto), "Cadastro concluído com sucesso"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
     }
 
     private void exigirPermissao(PermissaoCodigo permissao) {

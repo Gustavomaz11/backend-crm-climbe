@@ -3,11 +3,9 @@ package com.climb.api.service;
 import com.climb.api.config.GoogleCalendarConfig;
 import com.climb.api.model.Cargo;
 import com.climb.api.model.OAuth2ExchangeCode;
-import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.OAuthProvider;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.UsuarioOAuth;
-import com.climb.api.model.dto.CompleteGoogleRegistrationRequestDTO;
 import com.climb.api.model.dto.ExchangeCodeResponseDTO;
 import com.climb.api.model.dto.GoogleAuthorizationUrlResponseDTO;
 import com.climb.api.model.dto.GoogleOAuthResolveResponseDTO;
@@ -51,6 +49,7 @@ public class GoogleOAuthService {
     public static final String STATUS_GOOGLE_NOT_LINKED = "GOOGLE_NOT_LINKED";
     public static final String STATUS_LINK_SUCCESS = "LINK_SUCCESS";
     public static final String STATUS_PENDING_APPROVAL = "PENDING_APPROVAL";
+    public static final String STATUS_COMPLETAR_CADASTRO = "COMPLETAR_CADASTRO";
 
     // Google API endpoints
     private static final String GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -286,13 +285,40 @@ public class GoogleOAuthService {
 
         if (vinculo != null) {
             Usuario usuario = vinculo.getUsuario();
-            if (!"ATIVO".equals(usuario.getSituacao())) {
+
+            if ("CADASTRO_PENDENTE".equals(usuario.getSituacao())) {
                 GoogleOAuthResolveResponseDTO response = new GoogleOAuthResolveResponseDTO();
                 response.setStatus(STATUS_PENDING_APPROVAL);
                 response.setEmail(email);
                 response.setMessage("Your account is pending administrator approval.");
                 return response;
             }
+
+            if ("COMPLETAR_CADASTRO".equals(usuario.getSituacao())) {
+                GoogleOAuthResolveResponseDTO response = new GoogleOAuthResolveResponseDTO();
+                response.setStatus(STATUS_COMPLETAR_CADASTRO);
+                response.setLogin(authenticationService.gerarRespostaLoginSemValidacao(usuario));
+                response.setEmail(email);
+                response.setMessage("Your account was approved. Please complete your profile.");
+                return response;
+            }
+
+            if ("ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
+                GoogleOAuthResolveResponseDTO response = new GoogleOAuthResolveResponseDTO();
+                response.setStatus(STATUS_PENDING_APPROVAL);
+                response.setEmail(email);
+                response.setMessage("Your account is pending administrator approval.");
+                return response;
+            }
+
+            if (!"ATIVO".equals(usuario.getSituacao())) {
+                GoogleOAuthResolveResponseDTO response = new GoogleOAuthResolveResponseDTO();
+                response.setStatus(STATUS_PENDING_APPROVAL);
+                response.setEmail(email);
+                response.setMessage("Your account has been deactivated. Contact the administrator.");
+                return response;
+            }
+
             LoginResponseDTO login = authenticationService.gerarRespostaLogin(usuario);
             GoogleOAuthResolveResponseDTO response = new GoogleOAuthResolveResponseDTO();
             response.setStatus(STATUS_LOGIN_SUCCESS);
@@ -312,78 +338,15 @@ public class GoogleOAuthService {
             return response;
         }
 
-        OAuth2PendingRegistration pending = pendingRegistrationRepository
-                .findByProviderAndProviderUserId(OAuthProvider.GOOGLE, providerUserId)
-                .orElseGet(OAuth2PendingRegistration::new);
-
-        pending.setProvider(OAuthProvider.GOOGLE);
-        pending.setProviderUserId(providerUserId);
-        pending.setEmail(email);
-        pending.setNome(nome);
-        pending.setAvatarUrl(avatarUrl);
-        pending.setTokenUnico(UUID.randomUUID().toString());
-        pending.setExpiraEm(LocalDateTime.now().plusMinutes(30));
-        pending.setConsumido(false);
-        if (pending.getCriadoEm() == null) {
-            pending.setCriadoEm(LocalDateTime.now());
-        }
-
-        pendingRegistrationRepository.save(pending);
+        criarUsuarioParcialGoogle(email, nome, providerUserId, avatarUrl);
 
         GoogleOAuthResolveResponseDTO response = new GoogleOAuthResolveResponseDTO();
-        response.setStatus(STATUS_CADASTRO_PENDENTE);
-        response.setPendingToken(pending.getTokenUnico());
+        response.setStatus(STATUS_PENDING_APPROVAL);
         response.setEmail(email);
         response.setNome(nome);
         response.setAvatarUrl(avatarUrl);
-        response.setMessage("Complete seu cadastro para finalizar o login com Google.");
+        response.setMessage("Access request submitted. Waiting for administrator approval.");
         return response;
-    }
-
-    @Transactional
-    public void concluirCadastro(CompleteGoogleRegistrationRequestDTO dto) {
-        if (dto.getPendingToken() == null || dto.getPendingToken().isBlank()) {
-            throw new RuntimeException("Pending token obrigatorio");
-        }
-
-        limparPendenciasExpiradas();
-
-        OAuth2PendingRegistration pending = pendingRegistrationRepository
-                .findByTokenUnicoAndConsumidoFalse(dto.getPendingToken())
-                .orElseThrow(() -> new RuntimeException("Cadastro Google pendente nao encontrado ou expirado"));
-
-        if (pending.getExpiraEm().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Cadastro Google pendente expirado");
-        }
-
-        Usuario usuarioExistente = usuarioService.buscarPorEmail(pending.getEmail());
-        if (usuarioExistente != null) {
-            throw new RuntimeException("Ja existe um usuario cadastrado com esse e-mail");
-        }
-
-        Usuario usuario = usuarioService.criarViaGoogle(
-                pending.getNome(),
-                pending.getEmail(),
-                dto.getCpf(),
-                dto.getContato(),
-                dto.getSenha(),
-                dto.getCargoId()
-        );
-
-        UsuarioOAuth vinculo = new UsuarioOAuth();
-        vinculo.setUsuario(usuario);
-        vinculo.setProvider(OAuthProvider.GOOGLE);
-        vinculo.setProviderUserId(pending.getProviderUserId());
-        vinculo.setEmailProvider(pending.getEmail());
-        vinculo.setNomeProvider(pending.getNome());
-        vinculo.setAvatarUrl(pending.getAvatarUrl());
-        vinculo.setVinculadoEm(LocalDateTime.now());
-        usuarioOAuthRepository.save(vinculo);
-
-        pending.setConsumido(true);
-        pendingRegistrationRepository.save(pending);
-
-        // Não gerar resposta de login - aguardar aprovação do admin
     }
 
     @Transactional
@@ -497,6 +460,33 @@ public class GoogleOAuthService {
                     .queryParam("google_oauth", "pending_approval")
                     .queryParam("email", email != null ? email : "")
                     .build().encode(StandardCharsets.UTF_8).toUri();
+            case STATUS_COMPLETAR_CADASTRO -> {
+                LoginResponseDTO login = resolution.getLogin();
+                limparExchangeCodesExpirados();
+                String code = gerarCodigoSeguro();
+                OAuth2ExchangeCode exchangeCode = new OAuth2ExchangeCode();
+                exchangeCode.setCode(code);
+                exchangeCode.setAccessToken(login.getAccessToken());
+                exchangeCode.setRefreshToken(login.getRefreshToken());
+                exchangeCode.setGoogleAccessToken(googleAccessToken);
+                exchangeCode.setGoogleRefreshToken(googleRefreshToken);
+                exchangeCode.setExpiresIn(login.getExpiresIn());
+                if (login.getUsuario() != null) {
+                    exchangeCode.setUserId(login.getUsuario().getId());
+                    exchangeCode.setUserEmail(login.getUsuario().getEmail());
+                    exchangeCode.setUserName(login.getUsuario().getNomeCompleto());
+                    exchangeCode.setUserStatus(login.getUsuario().getSituacao());
+                    exchangeCode.setUserRole(login.getUsuario().getCargoNome());
+                }
+                exchangeCode.setExpiraEm(LocalDateTime.now().plusSeconds(EXCHANGE_CODE_EXPIRATION_SECONDS));
+                exchangeCode.setConsumido(false);
+                exchangeCode.setCriadoEm(LocalDateTime.now());
+                exchangeCodeRepository.save(exchangeCode);
+                yield UriComponentsBuilder.fromUriString(googleCalendarConfig.getFrontendUrl())
+                        .queryParam("google_oauth", "completar_cadastro")
+                        .queryParam("code", code)
+                        .build().encode(StandardCharsets.UTF_8).toUri();
+            }
             default -> gerarRedirecionamentoErro("Unknown status: " + resolution.getStatus());
         };
     }
@@ -507,6 +497,31 @@ public class GoogleOAuthService {
         if (!isConfigured()) {
             throw new RuntimeException("Google Calendar OAuth nao configurado. Defina GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET e GOOGLE_CALENDAR_REDIRECT_URI.");
         }
+    }
+
+    private Usuario criarUsuarioParcialGoogle(String email, String nome, String providerUserId, String avatarUrl) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+
+        Usuario usuario = new Usuario();
+        usuario.setNomeCompleto(nome != null && !nome.isBlank() ? nome : normalizedEmail.substring(0, normalizedEmail.indexOf('@')));
+        usuario.setEmail(normalizedEmail);
+        usuario.setCpf(gerarCpfGoogle(normalizedEmail));
+        usuario.setContato("");
+        usuario.setSenhaHash("GOOGLE_OAUTH_" + UUID.randomUUID());
+        usuario.setSituacao("CADASTRO_PENDENTE");
+        Usuario salvo = usuarioRepository.save(usuario);
+
+        UsuarioOAuth vinculo = new UsuarioOAuth();
+        vinculo.setUsuario(salvo);
+        vinculo.setProvider(OAuthProvider.GOOGLE);
+        vinculo.setProviderUserId(providerUserId);
+        vinculo.setEmailProvider(email);
+        vinculo.setNomeProvider(nome);
+        vinculo.setAvatarUrl(avatarUrl);
+        vinculo.setVinculadoEm(LocalDateTime.now());
+        usuarioOAuthRepository.save(vinculo);
+
+        return salvo;
     }
 
     @SuppressWarnings("unchecked")
@@ -621,7 +636,7 @@ public class GoogleOAuthService {
         usuario.setEmail(normalizedEmail);
         usuario.setContato("");
         usuario.setSenhaHash("GOOGLE_OAUTH_" + UUID.randomUUID());
-        usuario.setSituacao("INATIVO"); // Novo fluxo: usuários Google também começam INATIVO até aprovação
+        usuario.setSituacao("ESPERANDO_APROVACAO");
         usuario.setCargo(cargo);
 
         return usuarioRepository.save(usuario);

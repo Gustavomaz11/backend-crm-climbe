@@ -73,9 +73,32 @@ public class AuthenticationService {
             throw new RuntimeException(usuarioNaoEncontradoMessage);
         }
 
-        if (!"ATIVO".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Usuario inativo");
+        if ("CADASTRO_PENDENTE".equals(usuario.getSituacao())) {
+            throw new RuntimeException("Sua conta esta aguardando aprovacao do administrador");
         }
+
+        if ("ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
+            throw new RuntimeException("Sua solicitacao de acesso esta pendente de aprovacao do administrador");
+        }
+
+        if ("COMPLETAR_CADASTRO".equals(usuario.getSituacao())) {
+            throw new RuntimeException("Sua conta foi aprovada. Complete seu cadastro para acessar o sistema");
+        }
+
+        if ("INATIVO".equals(usuario.getSituacao())) {
+            throw new RuntimeException("Sua conta foi desativada. Entre em contato com o administrador");
+        }
+
+        if (!"ATIVO".equals(usuario.getSituacao())) {
+            throw new RuntimeException("Usuario com situacao invalida");
+        }
+    }
+
+    public LoginResponseDTO gerarRespostaLoginSemValidacao(Usuario usuario) {
+        String accessToken = jwtUtil.generateAccessToken(usuario.getId(), usuario.getEmail());
+        String refreshToken = jwtUtil.generateRefreshToken(usuario.getId(), usuario.getEmail());
+        UsuarioResponseDTO dto = buildUsuarioResponseDTO(usuario);
+        return new LoginResponseDTO(accessToken, refreshToken, dto, jwtUtil.getAccessTokenExpirationTime());
     }
 
     public LoginResponseDTO gerarRespostaLogin(Usuario usuario) {

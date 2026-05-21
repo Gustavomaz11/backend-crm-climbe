@@ -8,6 +8,7 @@ import com.climb.api.model.Cargo;
 import com.climb.api.model.Usuario;
 import com.climb.api.repository.CargoRepository;
 import com.climb.api.repository.UsuarioRepository;
+import com.climb.api.model.dto.CompletarCadastroRequestDTO;
 import com.climb.api.model.dto.UsuarioRequestDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 
@@ -107,7 +108,7 @@ public class UsuarioService {
         usuario.setCpf(cpf);
         usuario.setEmail(email);
         usuario.setContato(contato);
-        usuario.setSituacao("INATIVO"); // Solicitação de acesso via Google: começa INATIVO
+        usuario.setSituacao("ESPERANDO_APROVACAO");
         usuario.setCargo(cargo);
         usuario.setSenhaHash(passwordEncoder.encode(senha));
 
@@ -153,8 +154,7 @@ public class UsuarioService {
         String senhaHash = passwordEncoder.encode(dto.getSenha());
         usuario.setSenhaHash(senhaHash);
 
-        // Solicitação de acesso: usuário começa INATIVO até aprovação do admin
-        usuario.setSituacao("INATIVO");
+        usuario.setSituacao("ESPERANDO_APROVACAO");
 
         if (dto.getCargoId() != null) {
             Cargo cargo = cargoRepository.findById(dto.getCargoId())
@@ -204,7 +204,9 @@ public class UsuarioService {
         usuario.setContato(dto.getContato());
 
         if (dto.getSituacao() != null) {
-            if (!dto.getSituacao().equals("ATIVO") && !dto.getSituacao().equals("INATIVO")) {
+            if (!dto.getSituacao().equals("ATIVO")
+                    && !dto.getSituacao().equals("INATIVO")
+                    && !dto.getSituacao().equals("ESPERANDO_APROVACAO")) {
                 throw new RuntimeException("Situação inválida");
             }
             usuario.setSituacao(dto.getSituacao());
@@ -228,21 +230,57 @@ public class UsuarioService {
     public UsuarioResponseDTO aprovarUsuario(Long id) {
         Usuario usuario = buscarPorId(id);
 
-        if (!"INATIVO".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Usuário já está ativo ou situação inválida");
+        if ("ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
+            usuario.setSituacao("ATIVO");
+        } else if ("CADASTRO_PENDENTE".equals(usuario.getSituacao())) {
+            usuario.setSituacao("COMPLETAR_CADASTRO");
+        } else {
+            throw new RuntimeException("Usuário não está aguardando aprovação");
         }
 
-        usuario.setSituacao("ATIVO");
-        Usuario atualizado = repository.save(usuario);
-
-        return toResponseDTO(atualizado);
+        return toResponseDTO(repository.save(usuario));
     }
 
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {
         return repository.findAll()
                 .stream()
-                .filter(u -> "INATIVO".equals(u.getSituacao()))
+                .filter(u -> "ESPERANDO_APROVACAO".equals(u.getSituacao())
+                          || "CADASTRO_PENDENTE".equals(u.getSituacao()))
                 .map(this::toResponseDTO)
                 .toList();
+    }
+
+    public UsuarioResponseDTO completarCadastro(Long usuarioId, CompletarCadastroRequestDTO dto) {
+        Usuario usuario = buscarPorId(usuarioId);
+
+        if (!"COMPLETAR_CADASTRO".equals(usuario.getSituacao())) {
+            throw new RuntimeException("Usuário não está na etapa de completar cadastro");
+        }
+
+        if (dto.getCpf() == null || dto.getCpf().isBlank()) {
+            throw new RuntimeException("CPF é obrigatório");
+        }
+        if (dto.getContato() == null || dto.getContato().isBlank()) {
+            throw new RuntimeException("Contato é obrigatório");
+        }
+        if (dto.getCargoId() == null) {
+            throw new RuntimeException("Cargo é obrigatório");
+        }
+
+        repository.findByCpf(dto.getCpf()).ifPresent(u -> {
+            if (!u.getId().equals(usuarioId)) {
+                throw new RuntimeException("CPF já cadastrado");
+            }
+        });
+
+        Cargo cargo = cargoRepository.findById(dto.getCargoId())
+                .orElseThrow(() -> new RuntimeException("Cargo não encontrado"));
+
+        usuario.setCpf(dto.getCpf());
+        usuario.setContato(dto.getContato());
+        usuario.setCargo(cargo);
+        usuario.setSituacao("ATIVO");
+
+        return toResponseDTO(repository.save(usuario));
     }
 }
