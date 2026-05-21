@@ -1,7 +1,6 @@
 package com.climb.api.controller;
 
 import com.climb.api.model.dto.RelatorioPdfDownloadDTO;
-import com.climb.api.model.dto.RelatorioRequestDTO;
 import com.climb.api.model.dto.RelatorioResponseDTO;
 import com.climb.api.service.RelatorioService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,7 +29,7 @@ public class RelatorioController {
 
     @Operation(
             summary = "Criar relatório com PDF",
-            description = "Cria um relatório a partir dos dados informados e anexa um arquivo PDF enviado via multipart/form-data."
+            description = "Cria um relatório vinculado a um contrato e anexa um arquivo PDF enviado via multipart/form-data."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Relatório criado e PDF anexado com sucesso"),
@@ -41,10 +40,9 @@ public class RelatorioController {
     @PostMapping(value = "/upload-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<RelatorioResponseDTO> uploadPdf(
             @RequestParam("contratoId") Long contratoId,
-            @RequestParam(value = "descricao", required = false) String descricao,
             @RequestParam("file") MultipartFile file
     ) {
-        return ResponseEntity.ok(service.uploadPdf(contratoId, descricao, file));
+        return ResponseEntity.ok(service.uploadPdf(contratoId, file));
     }
 
     @Operation(summary = "Listar todos os relatórios")
@@ -55,9 +53,7 @@ public class RelatorioController {
     }
 
     @Operation(summary = "Listar relatórios por contrato")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso")
-    })
+    @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso")
     @GetMapping("/contrato/{contratoId}")
     public ResponseEntity<List<RelatorioResponseDTO>> listarPorContrato(
             @PathVariable Long contratoId
@@ -76,20 +72,21 @@ public class RelatorioController {
     }
 
     @Operation(
-            summary = "Atualizar relatório",
-            description = "Atualiza os dados de um relatório. O documento PDF vinculado deve ser alterado pelo endpoint de upload."
+            summary = "Substituir PDF do relatório",
+            description = "Substitui o arquivo PDF anexado a um relatório existente. A vinculação com o contrato não é alterada por este endpoint."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Relatório atualizado com sucesso"),
-            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
-            @ApiResponse(responseCode = "404", description = "Relatório ou contrato não encontrado")
+            @ApiResponse(responseCode = "200", description = "PDF do relatório substituído com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Arquivo ausente, inválido ou corrompido"),
+            @ApiResponse(responseCode = "404", description = "Relatório não encontrado"),
+            @ApiResponse(responseCode = "500", description = "Erro ao salvar o PDF do relatório")
     })
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<RelatorioResponseDTO> atualizar(
             @PathVariable Long id,
-            @RequestBody RelatorioRequestDTO dto
+            @RequestParam("file") MultipartFile file
     ) {
-        return ResponseEntity.ok(service.atualizar(id, dto));
+        return ResponseEntity.ok(service.atualizar(id, file));
     }
 
     @Operation(
@@ -101,7 +98,7 @@ public class RelatorioController {
             @ApiResponse(responseCode = "404", description = "Relatório ou PDF anexado não encontrado"),
             @ApiResponse(responseCode = "500", description = "Erro ao carregar o PDF anexado")
     })
-    @GetMapping("/{id}/visualizar-pdf")
+    @GetMapping(value = "/{id}/visualizar-pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> visualizarPdf(@PathVariable Long id) {
         RelatorioPdfDownloadDTO pdf = service.obterPdfInline(id);
         return ResponseEntity.ok()

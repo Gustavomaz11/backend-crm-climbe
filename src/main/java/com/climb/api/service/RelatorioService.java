@@ -4,7 +4,6 @@ import com.climb.api.mapper.RelatorioMapper;
 import com.climb.api.model.Contrato;
 import com.climb.api.model.Relatorio;
 import com.climb.api.model.dto.RelatorioPdfDownloadDTO;
-import com.climb.api.model.dto.RelatorioRequestDTO;
 import com.climb.api.model.dto.RelatorioResponseDTO;
 import com.climb.api.repository.ContratoRepository;
 import com.climb.api.repository.RelatorioRepository;
@@ -45,37 +44,29 @@ public class RelatorioService {
         this.pastaRelatorios = Paths.get(pastaRelatorios);
     }
 
-    public RelatorioResponseDTO uploadPdf(Long contratoId, String descricao, MultipartFile file) {
+    public RelatorioResponseDTO uploadPdf(Long contratoId, MultipartFile file) {
         byte[] conteudo = validarPdf(file);
 
         Relatorio relatorio = new Relatorio();
         relatorio.setContrato(buscarContratoPorId(contratoId));
-        relatorio.setDescricao(descricao);
         relatorio.setDataEnvio(LocalDate.now());
 
         Relatorio relatorioSalvo = repository.save(relatorio);
 
-        Path caminho = resolverCaminhoPdf(relatorioSalvo.getIdRelatorio());
-
-        try {
-            Files.createDirectories(caminho.getParent());
-
-            Files.write(
-                    caminho,
-                    conteudo,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-            );
-        } catch (IOException e) {
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Nao foi possivel salvar o PDF do relatorio"
-            );
-        }
-
-        relatorioSalvo.setUrlPdf(caminho.toString());
+        salvarPdf(relatorioSalvo, conteudo);
 
         return relatorioMapper.toResponseDto(repository.save(relatorioSalvo));
+    }
+
+    public RelatorioResponseDTO atualizar(Long id, MultipartFile file) {
+        Relatorio relatorio = buscarPorId(id);
+
+        byte[] conteudo = validarPdf(file);
+
+        salvarPdf(relatorio, conteudo);
+        relatorio.setDataEnvio(LocalDate.now());
+
+        return relatorioMapper.toResponseDto(repository.save(relatorio));
     }
 
     public List<RelatorioResponseDTO> listar() {
@@ -91,20 +82,6 @@ public class RelatorioService {
     public RelatorioResponseDTO buscarPorIdResponse(Long id) {
         Relatorio relatorio = buscarPorId(id);
         return relatorioMapper.toResponseDto(relatorio);
-    }
-
-    public RelatorioResponseDTO atualizar(Long id, RelatorioRequestDTO dto) {
-        Relatorio relatorio = buscarPorId(id);
-
-        if (dto.contratoId() != null) {
-            relatorio.setContrato(buscarContratoPorId(dto.contratoId()));
-        }
-
-        if (dto.descricao() != null) {
-            relatorio.setDescricao(dto.descricao());
-        }
-
-        return relatorioMapper.toResponseDto(repository.save(relatorio));
     }
 
     public void deletar(Long id) {
@@ -154,6 +131,28 @@ public class RelatorioService {
                         HttpStatus.NOT_FOUND,
                         "Contrato nao encontrado"
                 ));
+    }
+
+    private void salvarPdf(Relatorio relatorio, byte[] conteudo) {
+        Path caminho = resolverCaminhoPdf(relatorio.getIdRelatorio());
+
+        try {
+            Files.createDirectories(caminho.getParent());
+
+            Files.write(
+                    caminho,
+                    conteudo,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING
+            );
+        } catch (IOException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Nao foi possivel salvar o PDF do relatorio"
+            );
+        }
+
+        relatorio.setUrlPdf(caminho.toString());
     }
 
     private byte[] validarPdf(MultipartFile arquivo) {
@@ -236,7 +235,6 @@ public class RelatorioService {
         try {
             Files.deleteIfExists(Paths.get(caminhoPdf));
         } catch (IOException ignored) {
-            // O relatorio e removido mesmo se a limpeza do arquivo falhar.
         }
     }
 }

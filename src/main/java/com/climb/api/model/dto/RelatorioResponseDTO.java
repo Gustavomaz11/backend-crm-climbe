@@ -6,6 +6,5 @@ public record RelatorioResponseDTO(
         Long idRelatorio,
         Long contratoId,
         String urlPdf,
-        LocalDate dataEnvio,
-        String descricao
+        LocalDate dataEnvio
 ) {}
