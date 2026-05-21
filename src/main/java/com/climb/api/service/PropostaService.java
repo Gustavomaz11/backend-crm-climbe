@@ -1,21 +1,26 @@
 package com.climb.api.service;
 
 import com.climb.api.model.Empresa;
-import com.climb.api.model.Proposta;
-import com.climb.api.model.enums.PropostaStatus;
-import com.climb.api.model.Usuario;
+import com.climb.api.model.HistoricoAprovacaoProposta;
 import com.climb.api.model.PermissaoCodigo;
+import com.climb.api.model.Proposta;
+import com.climb.api.model.Usuario;
+import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.dto.PropostaAprovacaoRequestDTO;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
+import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
 import com.climb.api.repository.PropostaRepository;
 import com.climb.api.repository.UsuarioRepository;
 import com.climb.api.service.RbacService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import com.climb.api.model.dto.HistoricoAprovacaoPropostaResponseDTO;
 
 @Service
 public class PropostaService {
@@ -23,16 +28,37 @@ public class PropostaService {
     private final PropostaRepository repository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final HistoricoAprovacaoPropostaRepository historicoRepository;
     private final RbacService rbacService;
 
     public PropostaService(PropostaRepository repository,
                            EmpresaRepository empresaRepository,
                            UsuarioRepository usuarioRepository,
+                           HistoricoAprovacaoPropostaRepository historicoRepository,
                            RbacService rbacService) {
         this.repository = repository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.historicoRepository = historicoRepository;
         this.rbacService = rbacService;
+    }
+
+    public List<HistoricoAprovacaoPropostaResponseDTO> listarHistorico(Long propostaId) {
+        if (propostaId == null || !repository.existsById(propostaId)) {
+            throw new RuntimeException("Proposta não encontrada");
+        }
+
+        return historicoRepository.findByPropostaIdOrderByDataAlteracaoDesc(propostaId)
+                .stream()
+                .map(h -> new HistoricoAprovacaoPropostaResponseDTO(
+                        h.getIdHistorico(),
+                        h.getPropostaId(),
+                        h.getUsuarioId(),
+                        h.getStatusAnterior(),
+                        h.getStatusNovo(),
+                        h.getDataAlteracao()
+                ))
+                .toList();
     }
 
     private PropostaResponseDTO toResponseDTO(Proposta proposta) {
@@ -40,8 +66,8 @@ public class PropostaService {
                 proposta.getIdProposta(),
                 proposta.getEmpresa() != null ? proposta.getEmpresa().getIdEmpresa() : null,
                 proposta.getUsuario() != null ? proposta.getUsuario().getId() : null,
-                proposta.getStatus(),
                 proposta.getUrl(),
+                proposta.getStatus(),
                 proposta.getDataCriacao()
         );
     }
@@ -97,7 +123,12 @@ public class PropostaService {
         return toResponseDTO(repository.save(proposta));
     }
 
-    public PropostaResponseDTO aprovar(Long id, PropostaAprovacaoRequestDTO dto) {
+    @Transactional
+    public PropostaResponseDTO aprovar(Long id, Long usuarioId, PropostaAprovacaoRequestDTO dto) {
+        if (usuarioId == null) {
+            throw new RuntimeException("Usuário não autenticado");
+        }
+
         if (dto.status() == null) {
             throw new RuntimeException("Status é obrigatório");
         }
@@ -109,9 +140,28 @@ public class PropostaService {
         Proposta proposta = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Proposta não encontrada"));
 
-        proposta.setStatus(dto.status());
+        PropostaStatus statusAnterior = proposta.getStatus();
 
-        return toResponseDTO(repository.save(proposta));
+        if (statusAnterior == dto.status()) {
+            return toResponseDTO(proposta);
+        }
+
+        if (statusAnterior == PropostaStatus.REJEITADA && dto.status() == PropostaStatus.APROVADA) {
+            throw new RuntimeException("Não é permitido reverter uma proposta rejeitada para aprovada");
+        }
+
+        proposta.setStatus(dto.status());
+        Proposta propostaAtualizada = repository.save(proposta);
+
+        HistoricoAprovacaoProposta historico = new HistoricoAprovacaoProposta();
+        historico.setPropostaId(propostaAtualizada.getIdProposta());
+        historico.setUsuarioId(usuarioId);
+        historico.setStatusAnterior(statusAnterior.name());
+        historico.setStatusNovo(dto.status().name());
+        historico.setDataAlteracao(LocalDateTime.now());
+        historicoRepository.save(historico);
+
+        return toResponseDTO(propostaAtualizada);
     }
 
     public PropostaResponseDTO atualizar(Long id, PropostaRequestDTO dto) {

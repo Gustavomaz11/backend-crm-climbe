@@ -99,7 +99,19 @@ public class PropostaController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Usuário não tem permissão para aprovar/rejeitar propostas"));
             }
 
-            return ResponseEntity.ok(ApiResponse.ok(service.aprovar(id, aprovacao)));
+            return ResponseEntity.ok(ApiResponse.ok(service.aprovar(id, usuarioId, aprovacao)));
+        } catch (RuntimeException e) {
+            if ("Proposta não encontrada".equals(e.getMessage())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id}/historico")
+    public ResponseEntity<ApiResponse<List<com.climb.api.model.dto.HistoricoAprovacaoPropostaResponseDTO>>> historico(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(ApiResponse.ok(service.listarHistorico(id)));
         } catch (RuntimeException e) {
             if ("Proposta não encontrada".equals(e.getMessage())) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(e.getMessage()));
