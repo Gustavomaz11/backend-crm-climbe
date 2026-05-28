@@ -1,6 +1,9 @@
 package com.climb.api.service;
 
+import com.climb.api.mapper.UsuarioMapper;
+import com.climb.api.model.AuthStatus;
 import com.climb.api.model.Usuario;
+import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,102 +15,100 @@ public class AuthenticationService {
     private final UsuarioService usuarioService;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
+    private final UsuarioMapper usuarioMapper;
 
-    public AuthenticationService(UsuarioService usuarioService, JwtUtil jwtUtil, PasswordEncoder passwordEncoder) {
+    public AuthenticationService(UsuarioService usuarioService,
+                                 JwtUtil jwtUtil,
+                                 PasswordEncoder passwordEncoder,
+                                 UsuarioMapper usuarioMapper) {
         this.usuarioService = usuarioService;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
+        this.usuarioMapper = usuarioMapper;
     }
 
-    public LoginResponseDTO autenticar(String email, String senha) {
+    public AuthResult<LoginResponseDTO> autenticar(String email, String senha) {
         Usuario usuario = usuarioService.buscarPorEmail(email);
-        validarUsuarioAtivo(usuario, "Email ou senha invalidos");
-
-        if (!passwordEncoder.matches(senha, usuario.getSenhaHash())) {
-            throw new RuntimeException("Senha invalida");
+        AuthResult<Void> situacao = validarUsuarioAtivo(usuario, "Email ou senha invalidos");
+        if (!situacao.isSuccess()) {
+            AuthStatus status = situacao.status() == AuthStatus.USER_NOT_FOUND
+                    ? AuthStatus.INVALID_CREDENTIALS
+                    : situacao.status();
+            return AuthResult.failure(status, situacao.message());
         }
 
-        return gerarRespostaLogin(usuario);
+        if (!passwordEncoder.matches(senha, usuario.getSenhaHash())) {
+            return AuthResult.failure(AuthStatus.INVALID_CREDENTIALS, "Email ou senha invalidos");
+        }
+
+        return AuthResult.success(buildLoginResponse(usuario));
     }
 
-    public LoginResponseDTO autenticarComGoogle(String email) {
+    public AuthResult<LoginResponseDTO> autenticarComGoogle(String email) {
         Usuario usuario = usuarioService.buscarPorEmail(email);
-        validarUsuarioAtivo(usuario, "Usuario nao cadastrado para login com Google");
-        return gerarRespostaLogin(usuario);
+        AuthResult<Void> situacao = validarUsuarioAtivo(usuario, "Usuario nao cadastrado para login com Google");
+        if (!situacao.isSuccess()) {
+            return AuthResult.failure(situacao.status(), situacao.message());
+        }
+        return AuthResult.success(buildLoginResponse(usuario));
     }
 
-    public String refreshAccessToken(String refreshToken) {
+    public AuthResult<String> refreshAccessToken(String refreshToken) {
         if (!jwtUtil.validateToken(refreshToken)) {
-            throw new RuntimeException("Refresh token invalido ou expirado");
+            return AuthResult.failure(AuthStatus.INVALID_REFRESH_TOKEN, "Refresh token invalido ou expirado");
         }
 
         String tokenType = jwtUtil.extractTokenType(refreshToken);
         if (!"refresh".equals(tokenType)) {
-            throw new RuntimeException("Token fornecido nao e um refresh token");
+            return AuthResult.failure(AuthStatus.WRONG_TOKEN_TYPE, "Token fornecido nao e um refresh token");
         }
 
         Long usuarioId = jwtUtil.extractUserId(refreshToken);
         String email = jwtUtil.extractEmail(refreshToken);
 
-        return jwtUtil.generateAccessToken(usuarioId, email);
+        return AuthResult.success(jwtUtil.generateAccessToken(usuarioId, email));
     }
 
-    private UsuarioResponseDTO buildUsuarioResponseDTO(Usuario usuario) {
-        UsuarioResponseDTO dto = new UsuarioResponseDTO();
-        dto.setId(usuario.getId());
-        dto.setNomeCompleto(usuario.getNomeCompleto());
-        dto.setCpf(usuario.getCpf());
-        dto.setEmail(usuario.getEmail());
-        dto.setContato(usuario.getContato());
-        dto.setSituacao(usuario.getSituacao());
-
-        if (usuario.getCargo() != null) {
-            dto.setCargoNome(usuario.getCargo().getNome());
-        }
-
-        return dto;
-    }
-
-    public void validarUsuarioAtivo(Usuario usuario, String usuarioNaoEncontradoMessage) {
+    public AuthResult<Void> validarUsuarioAtivo(Usuario usuario, String usuarioNaoEncontradoMessage) {
         if (usuario == null) {
-            throw new RuntimeException(usuarioNaoEncontradoMessage);
+            return AuthResult.failure(AuthStatus.USER_NOT_FOUND, usuarioNaoEncontradoMessage);
         }
 
-        if ("CADASTRO_PENDENTE".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Sua conta esta aguardando aprovacao do administrador");
-        }
-
-        if ("ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Sua solicitacao de acesso esta pendente de aprovacao do administrador");
-        }
-
-        if ("COMPLETAR_CADASTRO".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Sua conta foi aprovada. Complete seu cadastro para acessar o sistema");
-        }
-
-        if ("INATIVO".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Sua conta foi desativada. Entre em contato com o administrador");
-        }
-
-        if (!"ATIVO".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Usuario com situacao invalida");
-        }
+        return switch (String.valueOf(usuario.getSituacao())) {
+            case "CADASTRO_PENDENTE" -> AuthResult.failure(
+                    AuthStatus.PENDING_APPROVAL,
+                    "Sua conta esta aguardando aprovacao do administrador");
+            case "ESPERANDO_APROVACAO" -> AuthResult.failure(
+                    AuthStatus.PENDING_APPROVAL,
+                    "Sua solicitacao de acesso esta pendente de aprovacao do administrador");
+            case "COMPLETAR_CADASTRO" -> AuthResult.failure(
+                    AuthStatus.COMPLETAR_CADASTRO,
+                    "Sua conta foi aprovada. Complete seu cadastro para acessar o sistema");
+            case "INATIVO" -> AuthResult.failure(
+                    AuthStatus.INATIVO,
+                    "Sua conta foi desativada. Entre em contato com o administrador");
+            case "ATIVO" -> AuthResult.success(null);
+            default -> AuthResult.failure(AuthStatus.SITUACAO_INVALIDA, "Usuario com situacao invalida");
+        };
     }
 
     public LoginResponseDTO gerarRespostaLoginSemValidacao(Usuario usuario) {
-        String accessToken = jwtUtil.generateAccessToken(usuario.getId(), usuario.getEmail());
-        String refreshToken = jwtUtil.generateRefreshToken(usuario.getId(), usuario.getEmail());
-        UsuarioResponseDTO dto = buildUsuarioResponseDTO(usuario);
-        return new LoginResponseDTO(accessToken, refreshToken, dto, jwtUtil.getAccessTokenExpirationTime());
+        return buildLoginResponse(usuario);
     }
 
-    public LoginResponseDTO gerarRespostaLogin(Usuario usuario) {
-        validarUsuarioAtivo(usuario, "Usuario nao encontrado");
+    public AuthResult<LoginResponseDTO> gerarRespostaLogin(Usuario usuario) {
+        AuthResult<Void> situacao = validarUsuarioAtivo(usuario, "Usuario nao encontrado");
+        if (!situacao.isSuccess()) {
+            return AuthResult.failure(situacao.status(), situacao.message());
+        }
+        return AuthResult.success(buildLoginResponse(usuario));
+    }
+
+    private LoginResponseDTO buildLoginResponse(Usuario usuario) {
         String accessToken = jwtUtil.generateAccessToken(usuario.getId(), usuario.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(usuario.getId(), usuario.getEmail());
-        UsuarioResponseDTO usuarioDTO = buildUsuarioResponseDTO(usuario);
+        UsuarioResponseDTO usuarioDTO = usuarioMapper.toResponse(usuario);
         long expiresIn = jwtUtil.getAccessTokenExpirationTime();
-
         return new LoginResponseDTO(accessToken, refreshToken, usuarioDTO, expiresIn);
     }
 }

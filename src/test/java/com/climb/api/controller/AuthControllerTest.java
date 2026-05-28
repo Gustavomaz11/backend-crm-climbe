@@ -1,6 +1,6 @@
 package com.climb.api.controller;
 
-import com.climb.api.model.dto.CompleteGoogleRegistrationRequestDTO;
+import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.LoginRequestDTO;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.RefreshTokenRequestDTO;
@@ -19,10 +19,7 @@ import org.springframework.http.converter.json.MappingJackson2HttpMessageConvert
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -59,7 +56,8 @@ class AuthControllerTest {
         request.setSenha("senha123");
 
         LoginResponseDTO response = criarLoginResponse();
-        when(authenticationService.autenticar("usuario@teste.com", "senha123")).thenReturn(response);
+        when(authenticationService.autenticar("usuario@teste.com", "senha123"))
+                .thenReturn(AuthResult.success(response));
 
         mockMvc.perform(post("/auth/login")
                         .contentType("application/json")
@@ -71,32 +69,12 @@ class AuthControllerTest {
     }
 
     @Test
-    void deveConcluirCadastroGoogle() throws Exception {
-        CompleteGoogleRegistrationRequestDTO request = new CompleteGoogleRegistrationRequestDTO();
-        request.setPendingToken("pending-123");
-        request.setCpf("12345678900");
-        request.setContato("85999999999");
-        request.setSenha("SenhaForte123!");
-        request.setCargoId(1L);
-
-        doNothing().when(googleOAuthService).concluirCadastro(any(CompleteGoogleRegistrationRequestDTO.class));
-
-        mockMvc.perform(post("/auth/google/complete-registration")
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data").value("Solicitação de acesso enviada com sucesso. Aguarde aprovação do administrador."));
-
-        verify(googleOAuthService).concluirCadastro(any(CompleteGoogleRegistrationRequestDTO.class));
-    }
-
-    @Test
     void deveRenovarToken() throws Exception {
         RefreshTokenRequestDTO request = new RefreshTokenRequestDTO();
         request.setRefreshToken("refresh-token");
 
-        when(authenticationService.refreshAccessToken(eq("refresh-token"))).thenReturn("novo-access-token");
+        when(authenticationService.refreshAccessToken(eq("refresh-token")))
+                .thenReturn(AuthResult.success("novo-access-token"));
 
         mockMvc.perform(post("/auth/refresh")
                         .contentType("application/json")
