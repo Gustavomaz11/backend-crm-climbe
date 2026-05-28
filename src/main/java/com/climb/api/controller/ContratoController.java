@@ -2,7 +2,12 @@ package com.climb.api.controller;
 
 import com.climb.api.model.Contrato;
 import com.climb.api.service.ContratoService;
+import io.swagger.v3.oas.annotations.Parameter;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -44,5 +49,17 @@ public class ContratoController {
     @DeleteMapping("/{id}")
     public void deletar(@PathVariable Long id) {
         service.deletar(id);
+    }
+
+    @PatchMapping(value = "/{id}/pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Contrato enviarPdf(
+            @PathVariable Long id,
+            @Parameter(description = "Arquivo PDF do contrato") @RequestParam("arquivo") MultipartFile arquivo) {
+        return service.enviarPdf(id, arquivo);
+    }
+
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<Resource> baixarPdf(@PathVariable Long id) {
+        return service.baixarPdf(id);
     }
 }
