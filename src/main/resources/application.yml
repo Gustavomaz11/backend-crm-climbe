@@ -17,6 +17,8 @@ management:
 app:
   mail:
     from: ${APP_MAIL_FROM:no-reply@climb.com}
+  contract-storage:
+    directory: ${CONTRACT_STORAGE_DIRECTORY:uploads/contratos}
   contract-notifications:
     expiration-warning-days: ${CONTRACT_EXPIRATION_WARNING_DAYS:30}
     expiration-cron: "${CONTRACT_EXPIRATION_CRON:0 0 8 * * *}"

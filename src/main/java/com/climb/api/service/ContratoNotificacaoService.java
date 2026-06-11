@@ -129,11 +129,19 @@ public class ContratoNotificacaoService {
     }
 
     private Usuario obterResponsavel(Contrato contrato) {
+        if (contrato.getUsuario() != null) {
+            return contrato.getUsuario();
+        }
+
         Proposta proposta = contrato.getProposta();
         return proposta != null ? proposta.getUsuario() : null;
     }
 
     private Empresa obterEmpresa(Contrato contrato) {
+        if (contrato.getEmpresa() != null) {
+            return contrato.getEmpresa();
+        }
+
         Proposta proposta = contrato.getProposta();
         return proposta != null ? proposta.getEmpresa() : null;
     }

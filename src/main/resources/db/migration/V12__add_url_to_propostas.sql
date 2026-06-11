@@ -1,0 +1,2 @@
+ALTER TABLE propostas
+    ADD COLUMN url VARCHAR(255);
