@@ -1,0 +1,13 @@
+package com.climb.api.model;
+
+public enum AuthStatus {
+    SUCCESS,
+    INVALID_CREDENTIALS,
+    USER_NOT_FOUND,
+    PENDING_APPROVAL,
+    COMPLETAR_CADASTRO,
+    INATIVO,
+    SITUACAO_INVALIDA,
+    INVALID_REFRESH_TOKEN,
+    WRONG_TOKEN_TYPE
+}

@@ -41,6 +41,7 @@ public class SecurityConfig {
                                 "/", "/auth/**",
                                 "/hello", "/error", "/actuator/health", "/actuator/info"
                         ).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/usuarios").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
@@ -48,7 +49,9 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**"
                         ).permitAll()
-                        .anyRequest().authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/usuarios/completar-cadastro")
+                                .hasRole("PENDING_REGISTRATION")
+                        .anyRequest().hasRole("USER")
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(AbstractHttpConfigurer::disable)

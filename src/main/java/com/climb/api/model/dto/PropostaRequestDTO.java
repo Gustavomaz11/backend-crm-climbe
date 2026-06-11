@@ -1,6 +1,7 @@
 package com.climb.api.model.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import com.climb.api.model.enums.PropostaStatus;
+import com.climb.api.validation.ValidPropostaStatus;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
@@ -8,7 +9,8 @@ import java.time.LocalDate;
 public record PropostaRequestDTO(
         @NotNull Long empresaId,
         @NotNull Long usuarioId,
-        @NotBlank String status,
+        String url,
+        @NotNull @ValidPropostaStatus PropostaStatus status,
         LocalDate dataCriacao
 ) {
 }

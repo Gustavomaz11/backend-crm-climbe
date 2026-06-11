@@ -1,5 +1,6 @@
 package com.climb.api.model;
 
+import com.climb.api.model.enums.PropostaStatus;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 
@@ -20,8 +21,12 @@ public class Proposta {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String status;
+    private PropostaStatus status;
+
+    @Column(name = "url")
+    private String url;
 
     @Column(name = "data_criacao")
     private LocalDate dataCriacao;
@@ -35,8 +40,11 @@ public class Proposta {
     public Usuario getUsuario() { return usuario; }
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public PropostaStatus getStatus() { return status; }
+    public void setStatus(PropostaStatus status) { this.status = status; }
+
+    public String getUrl() { return url; }
+    public void setUrl(String url) { this.url = url; }
 
     public LocalDate getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDate dataCriacao) { this.dataCriacao = dataCriacao; }

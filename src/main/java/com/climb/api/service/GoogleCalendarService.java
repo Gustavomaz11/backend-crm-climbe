@@ -31,13 +31,11 @@ public class GoogleCalendarService {
 
     private static final Logger log = LoggerFactory.getLogger(GoogleCalendarService.class);
 
-    public String criarEvento(Reuniao reuniao, String accessToken) throws Exception {
-        Event created = buildCalendar(accessToken).events()
+    public Event criarEvento(Reuniao reuniao, String accessToken) throws Exception {
+        return buildCalendar(accessToken).events()
                 .insert("primary", buildEvent(reuniao))
                 .setConferenceDataVersion(1)
                 .execute();
-
-        return created.getId();
     }
 
     public void atualizarEvento(Reuniao reuniao, String accessToken) throws Exception {
@@ -221,6 +219,32 @@ public class GoogleCalendarService {
             return ev.getStart().getDate().toString();
         }
         return "";
+    }
+
+    public String extrairLinkMeet(Event event) {
+        if (event == null) {
+            return null;
+        }
+
+        if (event.getHangoutLink() != null && !event.getHangoutLink().isBlank()) {
+            return event.getHangoutLink();
+        }
+
+        ConferenceData conferenceData = event.getConferenceData();
+        if (conferenceData == null || conferenceData.getEntryPoints() == null) {
+            return null;
+        }
+
+        for (EntryPoint entryPoint : conferenceData.getEntryPoints()) {
+            if (entryPoint == null || entryPoint.getUri() == null || entryPoint.getUri().isBlank()) {
+                continue;
+            }
+            if ("video".equalsIgnoreCase(entryPoint.getEntryPointType())) {
+                return entryPoint.getUri();
+            }
+        }
+
+        return null;
     }
 
     public void deletarEvento(String googleEventId, String accessToken) throws Exception {

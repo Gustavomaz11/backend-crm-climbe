@@ -1,7 +1,8 @@
 package com.climb.api.controller;
 
+import com.climb.api.model.AuthStatus;
 import com.climb.api.model.dto.ApiResponse;
-import com.climb.api.model.dto.CompleteGoogleRegistrationRequestDTO;
+import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.ExchangeCodeRequestDTO;
 import com.climb.api.model.dto.ExchangeCodeResponseDTO;
 import com.climb.api.model.dto.GoogleAuthorizationUrlResponseDTO;
@@ -41,22 +42,22 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponseDTO>> login(@RequestBody LoginRequestDTO dto) {
-        try {
-            LoginResponseDTO response = authenticationService.autenticar(dto.getEmail(), dto.getSenha());
-            return ResponseEntity.ok(ApiResponse.ok(response, "Login realizado com sucesso"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(e.getMessage()));
+        AuthResult<LoginResponseDTO> result = authenticationService.autenticar(dto.getEmail(), dto.getSenha());
+        if (result.isSuccess()) {
+            return ResponseEntity.ok(ApiResponse.ok(result.data(), "Login realizado com sucesso"));
         }
+        return ResponseEntity.status(httpStatusFor(result.status()))
+                .body(ApiResponse.error(result.message()));
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<String>> refresh(@RequestBody RefreshTokenRequestDTO dto) {
-        try {
-            String newAccessToken = authenticationService.refreshAccessToken(dto.getRefreshToken());
-            return ResponseEntity.ok(ApiResponse.ok(newAccessToken, "Token renovado com sucesso"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(e.getMessage()));
+        AuthResult<String> result = authenticationService.refreshAccessToken(dto.getRefreshToken());
+        if (result.isSuccess()) {
+            return ResponseEntity.ok(ApiResponse.ok(result.data(), "Token renovado com sucesso"));
         }
+        return ResponseEntity.status(httpStatusFor(result.status()))
+                .body(ApiResponse.error(result.message()));
     }
 
     @GetMapping("/google/url")
@@ -87,8 +88,7 @@ public class AuthController {
                 return redirect(redirectUri);
             }
 
-            var response = googleOAuthService.trocarCodePorToken(code);
-            URI redirectUri = googleOAuthService.gerarRedirecionamentoFrontend(response);
+            URI redirectUri = googleOAuthService.resolverCallbackGoogle(code);
             return redirect(redirectUri);
 
         } catch (RuntimeException e) {
@@ -103,17 +103,6 @@ public class AuthController {
                 .build();
     }
 
-    @PostMapping("/google/complete-registration")
-    public ResponseEntity<ApiResponse<LoginResponseDTO>> completeGoogleRegistration(
-            @RequestBody CompleteGoogleRegistrationRequestDTO dto) {
-        try {
-            LoginResponseDTO response = googleOAuthService.concluirCadastro(dto);
-            return ResponseEntity.ok(ApiResponse.ok(response, "Cadastro Google concluido com sucesso"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(400).body(ApiResponse.error(e.getMessage()));
-        }
-    }
-
     @PostMapping("/exchange")
     public ResponseEntity<ApiResponse<ExchangeCodeResponseDTO>> exchangeCode(
             @RequestBody ExchangeCodeRequestDTO dto) {
@@ -124,5 +113,19 @@ public class AuthController {
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(e.getMessage()));
         }
+    }
+
+    private static HttpStatus httpStatusFor(AuthStatus status) {
+        return switch (status) {
+            case SUCCESS -> HttpStatus.OK;
+            case INVALID_CREDENTIALS,
+                 USER_NOT_FOUND,
+                 INVALID_REFRESH_TOKEN,
+                 WRONG_TOKEN_TYPE -> HttpStatus.UNAUTHORIZED;
+            case PENDING_APPROVAL,
+                 COMPLETAR_CADASTRO,
+                 INATIVO,
+                 SITUACAO_INVALIDA -> HttpStatus.FORBIDDEN;
+        };
     }
 }
