@@ -43,4 +43,13 @@ public class OAuth2PendingRegistration {
 
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
+
+    @Column(nullable = false)
+    private Boolean aprovado = false;
+
+    @Column(name = "aprovado_em")
+    private LocalDateTime aprovadoEm;
+
+    @Column(name = "aprovado_por")
+    private Long aprovadoPor;
 }

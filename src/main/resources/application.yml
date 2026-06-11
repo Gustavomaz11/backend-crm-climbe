@@ -28,6 +28,7 @@ jwt:
   expiration:
     access-token: 900000
     refresh-token: 604800000
+    pending-token: 1800000
   issuer: climb-api
 
 google:

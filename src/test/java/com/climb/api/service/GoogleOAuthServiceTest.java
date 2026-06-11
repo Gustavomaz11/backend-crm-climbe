@@ -4,7 +4,7 @@ import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.OAuthProvider;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.UsuarioOAuth;
-import com.climb.api.model.dto.CompleteGoogleRegistrationRequestDTO;
+import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.GoogleOAuthResolveResponseDTO;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.repository.OAuth2PendingRegistrationRepository;
@@ -12,7 +12,6 @@ import com.climb.api.repository.UsuarioOAuthRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,9 +20,6 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -40,10 +36,16 @@ class GoogleOAuthServiceTest {
     private OAuth2PendingRegistrationRepository pendingRegistrationRepository;
 
     @Mock
+    private OAuth2PendingService pendingService;
+
+    @Mock
     private UsuarioService usuarioService;
 
     @Mock
     private AuthenticationService authenticationService;
+
+    @Mock
+    private JwtUtil jwtUtil;
 
     @InjectMocks
     private GoogleOAuthService googleOAuthService;
@@ -71,7 +73,9 @@ class GoogleOAuthServiceTest {
 
         when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
                 .thenReturn(Optional.of(vinculo));
-        when(authenticationService.gerarRespostaLogin(usuario)).thenReturn(loginResponse);
+        when(authenticationService.validarUsuarioAtivo(usuario, "Usuario nao encontrado"))
+                .thenReturn(AuthResult.success(null));
+        when(authenticationService.gerarRespostaLogin(usuario)).thenReturn(AuthResult.success(loginResponse));
 
         GoogleOAuthResolveResponseDTO response = googleOAuthService
                 .resolverLoginGoogle("google-sub", "usuario@teste.com", "Usuario", "https://img");
@@ -82,75 +86,73 @@ class GoogleOAuthServiceTest {
     }
 
     @Test
-    void deveRetornarCadastroPendenteQuandoNaoExisteConta() {
+    void devePersistirPendingQuandoNaoExisteContaNemPending() {
         when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
                 .thenReturn(Optional.empty());
-        when(usuarioService.buscarPorEmail("novo@teste.com")).thenReturn(null);
-        when(pendingRegistrationRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
+        when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
                 .thenReturn(Optional.empty());
+        when(usuarioService.buscarPorEmail("novo@teste.com")).thenReturn(null);
+
+        OAuth2PendingRegistration salvo = pendingFixture(42L, "novo@teste.com", "Novo Usuario", false);
+        when(pendingService.criarPendingGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img"))
+                .thenReturn(salvo);
 
         GoogleOAuthResolveResponseDTO response = googleOAuthService
                 .resolverLoginGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
 
-        assertEquals(GoogleOAuthService.STATUS_CADASTRO_PENDENTE, response.getStatus());
-        assertNotNull(response.getPendingToken());
-
-        ArgumentCaptor<OAuth2PendingRegistration> captor = ArgumentCaptor.forClass(OAuth2PendingRegistration.class);
-        verify(pendingRegistrationRepository).save(captor.capture());
-        assertEquals("novo@teste.com", captor.getValue().getEmail());
-        assertEquals(OAuthProvider.GOOGLE, captor.getValue().getProvider());
+        assertEquals(GoogleOAuthService.STATUS_PENDING_APPROVAL, response.getStatus());
+        assertEquals("novo@teste.com", response.getEmail());
+        verify(pendingService).criarPendingGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
     }
 
     @Test
-    void deveConcluirCadastroGoogleCriandoUsuarioEVinculo() {
-        CompleteGoogleRegistrationRequestDTO dto = new CompleteGoogleRegistrationRequestDTO();
-        dto.setPendingToken("pending-token");
-        dto.setCpf("12345678900");
-        dto.setContato("85999999999");
-        dto.setSenha("SenhaForte123!");
-        dto.setCargoId(1L);
+    void deveRetornarPendingApprovalQuandoPendingExisteNaoAprovada() {
+        OAuth2PendingRegistration pending = pendingFixture(42L, "novo@teste.com", "Novo Usuario", false);
 
+        when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.empty());
+        when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.of(pending));
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService
+                .resolverLoginGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
+
+        assertEquals(GoogleOAuthService.STATUS_PENDING_APPROVAL, response.getStatus());
+        verify(jwtUtil, never()).generatePendingRegistrationToken(eq(42L), anyString());
+        verify(pendingService, never()).criarPendingGoogle(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void deveRetornarCompletarCadastroComTokenQuandoPendingAprovada() {
+        OAuth2PendingRegistration pending = pendingFixture(42L, "novo@teste.com", "Novo Usuario", true);
+
+        when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.empty());
+        when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.of(pending));
+        when(jwtUtil.generatePendingRegistrationToken(42L, "novo@teste.com"))
+                .thenReturn("pending-jwt");
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService
+                .resolverLoginGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
+
+        assertEquals(GoogleOAuthService.STATUS_COMPLETAR_CADASTRO, response.getStatus());
+        assertEquals("pending-jwt", response.getPendingToken());
+        assertEquals("novo@teste.com", response.getEmail());
+    }
+
+    private OAuth2PendingRegistration pendingFixture(Long id, String email, String nome, boolean aprovado) {
         OAuth2PendingRegistration pending = new OAuth2PendingRegistration();
+        pending.setId(id);
         pending.setProvider(OAuthProvider.GOOGLE);
         pending.setProviderUserId("google-sub");
-        pending.setEmail("novo@teste.com");
-        pending.setNome("Novo Usuario");
+        pending.setEmail(email);
+        pending.setNome(nome);
         pending.setAvatarUrl("https://img");
-        pending.setTokenUnico("pending-token");
-        pending.setExpiraEm(LocalDateTime.now().plusMinutes(15));
+        pending.setExpiraEm(LocalDateTime.now().plusDays(7));
         pending.setConsumido(false);
-
-        Usuario novoUsuario = new Usuario();
-        novoUsuario.setId(2L);
-        novoUsuario.setEmail("novo@teste.com");
-        novoUsuario.setSituacao("ATIVO");
-
-        when(pendingRegistrationRepository.findByTokenUnicoAndConsumidoFalse("pending-token"))
-                .thenReturn(Optional.of(pending));
-        when(usuarioService.buscarPorEmail("novo@teste.com")).thenReturn(null);
-        when(usuarioService.criarViaGoogle("Novo Usuario", "novo@teste.com", "12345678900", "85999999999", "SenhaForte123!", 1L))
-                .thenReturn(novoUsuario);
-        when(authenticationService.gerarRespostaLogin(novoUsuario)).thenReturn(loginResponse);
-
-        LoginResponseDTO response = googleOAuthService.concluirCadastro(dto);
-
-        assertEquals("access-token", response.getAccessToken());
-        verify(usuarioOAuthRepository).save(any(UsuarioOAuth.class));
-        verify(pendingRegistrationRepository).save(any(OAuth2PendingRegistration.class));
-    }
-
-    @Test
-    void deveFalharQuandoCadastroPendenteExpirou() {
-        CompleteGoogleRegistrationRequestDTO dto = new CompleteGoogleRegistrationRequestDTO();
-        dto.setPendingToken("pending-token");
-
-        OAuth2PendingRegistration pending = new OAuth2PendingRegistration();
-        pending.setExpiraEm(LocalDateTime.now().minusMinutes(1));
-        pending.setConsumido(false);
-
-        when(pendingRegistrationRepository.findByTokenUnicoAndConsumidoFalse("pending-token"))
-                .thenReturn(Optional.of(pending));
-
-        assertThrows(RuntimeException.class, () -> googleOAuthService.concluirCadastro(dto));
+        pending.setAprovado(aprovado);
+        pending.setCriadoEm(LocalDateTime.now());
+        return pending;
     }
 }
