@@ -22,6 +22,9 @@ public class Relatorio {
     @Column(name = "data_envio")
     private LocalDate dataEnvio;
 
+    @Column(name = "descricao", columnDefinition = "TEXT")
+    private String descricao;
+
     public Long getIdRelatorio() { return idRelatorio; }
     public void setIdRelatorio(Long idRelatorio) { this.idRelatorio = idRelatorio; }
 
@@ -33,4 +36,7 @@ public class Relatorio {
 
     public LocalDate getDataEnvio() { return dataEnvio; }
     public void setDataEnvio(LocalDate dataEnvio) { this.dataEnvio = dataEnvio; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
 }

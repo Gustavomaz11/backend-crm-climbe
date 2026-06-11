@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE jasperReport PUBLIC "-//JasperReports//DTD Report Design//EN" "http://jasperreports.sourceforge.net/dtds/jasperreport.dtd">
+<jasperReport name="relatorio_template" pageWidth="595" pageHeight="842" columnWidth="515" leftMargin="40" rightMargin="40" topMargin="40" bottomMargin="40">
+    <parameter name="LOGO_STREAM" class="java.io.InputStream"/>
+    <parameter name="EMPRESA_NOME" class="java.lang.String"/>
+    <parameter name="DATA_RELATORIO" class="java.lang.String"/>
+    <parameter name="DESCRICAO" class="java.lang.String"/>
+
+    <title>
+        <band height="170">
+            <image>
+                <reportElement x="0" y="0" width="180" height="56"/>
+                <imageExpression><![CDATA[$P{LOGO_STREAM}]]></imageExpression>
+            </image>
+
+            <staticText>
+                <reportElement x="0" y="80" width="515" height="24"/>
+                <textElement>
+                    <font size="18" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Relatorio]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement x="0" y="116" width="160" height="18"/>
+                <textElement>
+                    <font size="11" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Empresa contratante]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="165" y="114" width="350" height="20"/>
+                <textElement>
+                    <font size="11"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{EMPRESA_NOME}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="144" width="160" height="18"/>
+                <textElement>
+                    <font size="11" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Data do relatorio]]></text>
+            </staticText>
+
+            <textField>
+                <reportElement x="165" y="142" width="180" height="20"/>
+                <textElement>
+                    <font size="11"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{DATA_RELATORIO}]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <detail>
+        <band height="520">
+            <staticText>
+                <reportElement x="0" y="0" width="515" height="20"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Descricao]]></text>
+            </staticText>
+
+            <textField isStretchWithOverflow="true">
+                <reportElement x="0" y="28" width="515" height="460"/>
+                <textElement verticalAlignment="Top">
+                    <font size="11"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{DESCRICAO}]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+</jasperReport>
