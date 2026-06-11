@@ -1,2 +1,2 @@
 ALTER TABLE relatorios
-    ADD COLUMN descricao TEXT NULL;
+    ADD COLUMN if not exists descricao TEXT NULL;
