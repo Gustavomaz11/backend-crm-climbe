@@ -1,4 +1,4 @@
-CREATE TABLE historico_aprovacao_propostas (
+CREATE TABLE IF NOT EXISTS historico_aprovacao_propostas (
     id_historico BIGINT AUTO_INCREMENT PRIMARY KEY,
     proposta_id BIGINT NOT NULL,
     usuario_id BIGINT NOT NULL,
