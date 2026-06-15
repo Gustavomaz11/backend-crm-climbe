@@ -69,6 +69,10 @@ public class AuthenticationService {
         return AuthResult.success(jwtUtil.generateAccessToken(usuarioId, email));
     }
 
+    public long getAccessTokenExpirationTime() {
+        return jwtUtil.getAccessTokenExpirationTime();
+    }
+
     public AuthResult<Void> validarUsuarioAtivo(Usuario usuario, String usuarioNaoEncontradoMessage) {
         if (usuario == null) {
             return AuthResult.failure(AuthStatus.USER_NOT_FOUND, usuarioNaoEncontradoMessage);

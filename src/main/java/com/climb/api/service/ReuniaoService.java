@@ -16,10 +16,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.climb.api.model.Empresa;
+import com.climb.api.model.ParticipanteReuniao;
 import com.climb.api.model.Reuniao;
+import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.ReuniaoListItemDTO;
+import com.climb.api.model.dto.ReuniaoRequestDTO;
+import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.ParticipanteReuniaoRepository;
 import com.climb.api.repository.ReuniaoRepository;
 import com.climb.api.repository.UsuarioRepository;
@@ -31,17 +37,20 @@ public class ReuniaoService {
     private static final Logger log = LoggerFactory.getLogger(ReuniaoService.class);
 
     private final ReuniaoRepository repository;
+    private final EmpresaRepository empresaRepository;
     private final GoogleCalendarService googleCalendarService;
     private final ParticipanteReuniaoRepository participanteReuniaoRepository;
     private final UsuarioRepository usuarioRepository;
     private final ReuniaoEmailService reuniaoEmailService;
 
     public ReuniaoService(ReuniaoRepository repository,
+                          EmpresaRepository empresaRepository,
                           GoogleCalendarService googleCalendarService,
                           ParticipanteReuniaoRepository participanteReuniaoRepository,
                           UsuarioRepository usuarioRepository,
                           ReuniaoEmailService reuniaoEmailService) {
         this.repository = repository;
+        this.empresaRepository = empresaRepository;
         this.googleCalendarService = googleCalendarService;
         this.participanteReuniaoRepository = participanteReuniaoRepository;
         this.usuarioRepository = usuarioRepository;
@@ -54,20 +63,20 @@ public class ReuniaoService {
 
         if (googleAccessToken == null || googleAccessToken.isBlank()) {
             List<ReuniaoListItemDTO> soBanco = reunioes.stream().map(ReuniaoListItemDTO::fromEntity).toList();
-            log.info("ReuniaoService.listar - sem token Google; só banco: {} DTOs", soBanco.size());
+            log.info("ReuniaoService.listar - sem token Google; so banco: {} DTOs", soBanco.size());
             return soBanco;
         }
 
         List<Reuniao> filtradas = reunioes.stream()
                 .filter(reuniao -> sincronizarEventoGoogle(reuniao, googleAccessToken))
                 .toList();
-        log.info("ReuniaoService.listar - após sync Google com banco: {} reuniões", filtradas.size());
+        log.info("ReuniaoService.listar - apos sync Google com banco: {} reunioes", filtradas.size());
 
         Set<String> idsGoogleJaNoClimb = filtradas.stream()
                 .map(Reuniao::getGoogleEventId)
                 .filter(id -> id != null && !id.isBlank())
                 .collect(Collectors.toCollection(HashSet::new));
-        log.info("ReuniaoService.listar - googleEventIds já no Climb: {}", idsGoogleJaNoClimb.size());
+        log.info("ReuniaoService.listar - googleEventIds ja no Climb: {}", idsGoogleJaNoClimb.size());
 
         List<ReuniaoListItemDTO> resultado = new ArrayList<>(filtradas.stream()
                 .map(ReuniaoListItemDTO::fromEntity)
@@ -95,7 +104,7 @@ public class ReuniaoService {
                 resultado.add(ReuniaoListItemDTO.fromGoogleEventExterno(ev));
                 add++;
             }
-            log.info("ReuniaoService.listar - Google: {} eventos (pós-filtro serviço); skip cancelados={}; skip dup/id vazio={}; adicionados={}",
+            log.info("ReuniaoService.listar - Google: {} eventos; skip cancelados={}; skip dup/id vazio={}; adicionados={}",
                     externos.size(), skipCancel, skipDup, add);
         } catch (Exception e) {
             log.warn("ReuniaoService.listar - falha mescla Calendar: {} - {}", e.getClass().getSimpleName(), e.getMessage());
@@ -110,23 +119,20 @@ public class ReuniaoService {
 
     public Reuniao buscarPorId(Long id) {
         return repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Reunião não encontrada"));
+                .orElseThrow(() -> new RuntimeException("Reuniao nao encontrada"));
     }
 
     public List<Reuniao> listarPorEmpresa(Long empresaId) {
         return repository.findByEmpresa_IdEmpresa(empresaId);
     }
 
-    public Reuniao criar(Reuniao reuniao, String accessToken) throws Exception {
-        if (reuniao.getTitulo() == null || reuniao.getTitulo().isEmpty()) {
-            throw new RuntimeException("Título é obrigatório");
-        }
-
-        if (reuniao.getEmpresa() == null) {
-            throw new RuntimeException("Empresa é obrigatória");
-        }
+    @Transactional
+    public Reuniao criar(ReuniaoRequestDTO request, String accessToken) throws Exception {
+        Reuniao reuniao = new Reuniao();
+        preencherReuniao(reuniao, request);
 
         Reuniao salva = repository.save(reuniao);
+        salvarParticipantes(salva, request.getParticipanteIds());
 
         if (accessToken == null || accessToken.isBlank()) {
             log.info("Reuniao {} criada sem integracao com Google Calendar por ausencia de token", salva.getIdReuniao());
@@ -139,31 +145,27 @@ public class ReuniaoService {
             salva = repository.save(salva);
             enviarFeedbackCriacao(salva, createdEvent);
         } catch (Exception e) {
-            log.warn("Falha ao criar evento no Google Calendar para reunião {}: {}", salva.getIdReuniao(), e.getMessage());
+            log.warn("Falha ao criar evento no Google Calendar para reuniao {}: {}", salva.getIdReuniao(), e.getMessage());
         }
 
         return salva;
     }
 
-    public Reuniao atualizar(Long id, Reuniao atualizada, String accessToken) {
+    @Transactional
+    public Reuniao atualizar(Long id, ReuniaoRequestDTO request, String accessToken) {
         Reuniao reuniao = buscarPorId(id);
-
-        reuniao.setTitulo(atualizada.getTitulo());
-        reuniao.setEmpresa(atualizada.getEmpresa());
-        reuniao.setData(atualizada.getData());
-        reuniao.setHora(atualizada.getHora());
-        reuniao.setPresencial(atualizada.getPresencial());
-        reuniao.setLocal(atualizada.getLocal());
-        reuniao.setPauta(atualizada.getPauta());
-        reuniao.setStatus(atualizada.getStatus());
+        preencherReuniao(reuniao, request);
 
         Reuniao salva = repository.save(reuniao);
+        if (request.getParticipanteIds() != null) {
+            salvarParticipantes(salva, request.getParticipanteIds());
+        }
 
         if (accessToken != null && !accessToken.isBlank() && salva.getGoogleEventId() != null) {
             try {
                 googleCalendarService.atualizarEvento(salva, accessToken);
             } catch (Exception e) {
-                log.warn("Falha ao atualizar evento no Google Calendar para reunião {}: {}", salva.getIdReuniao(), e.getMessage());
+                log.warn("Falha ao atualizar evento no Google Calendar para reuniao {}: {}", salva.getIdReuniao(), e.getMessage());
             }
         }
 
@@ -179,10 +181,61 @@ public class ReuniaoService {
             try {
                 googleCalendarService.deletarEvento(reuniao.getGoogleEventId(), accessToken);
             } catch (Exception e) {
-                log.warn("Falha ao excluir evento no Google Calendar para reunião {}: {}", reuniao.getIdReuniao(), e.getMessage());
+                log.warn("Falha ao excluir evento no Google Calendar para reuniao {}: {}", reuniao.getIdReuniao(), e.getMessage());
             }
         }
         repository.delete(reuniao);
+    }
+
+    private void preencherReuniao(Reuniao reuniao, ReuniaoRequestDTO request) {
+        if (request.getTitulo() == null || request.getTitulo().isBlank()) {
+            throw new RuntimeException("Titulo e obrigatorio");
+        }
+
+        if (request.getEmpresaId() == null) {
+            throw new RuntimeException("Empresa e obrigatoria");
+        }
+
+        Empresa empresa = empresaRepository.findById(request.getEmpresaId())
+                .orElseThrow(() -> new RuntimeException("Empresa nao encontrada"));
+
+        reuniao.setTitulo(request.getTitulo());
+        reuniao.setEmpresa(empresa);
+        reuniao.setData(request.getData());
+        reuniao.setHora(request.getHora());
+        reuniao.setPresencial(request.getPresencial());
+        reuniao.setLocal(request.getLocal());
+        reuniao.setPauta(request.getPauta());
+        reuniao.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : "AGENDADA");
+    }
+
+    private void salvarParticipantes(Reuniao reuniao, List<Long> participanteIds) {
+        List<ParticipanteReuniao> atuais = participanteReuniaoRepository.findByReuniao_IdReuniao(reuniao.getIdReuniao());
+        if (!atuais.isEmpty()) {
+            participanteReuniaoRepository.deleteAll(atuais);
+        }
+
+        if (participanteIds == null || participanteIds.isEmpty()) {
+            return;
+        }
+
+        List<Long> idsUnicos = participanteIds.stream()
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        if (idsUnicos.isEmpty()) {
+            return;
+        }
+
+        List<Usuario> usuarios = usuarioRepository.findAllById(idsUnicos);
+        List<ParticipanteReuniao> participantes = usuarios.stream().map(usuario -> {
+            ParticipanteReuniao participante = new ParticipanteReuniao();
+            participante.setReuniao(reuniao);
+            participante.setUsuario(usuario);
+            return participante;
+        }).toList();
+
+        participanteReuniaoRepository.saveAll(participantes);
     }
 
     private boolean sincronizarEventoGoogle(Reuniao reuniao, String accessToken) {
@@ -199,7 +252,7 @@ public class ReuniaoService {
             log.info("Reuniao {} removida localmente porque o evento Google foi excluido", reuniao.getIdReuniao());
             return false;
         } catch (Exception e) {
-            log.warn("Falha ao sincronizar evento Google da reunião {}: {}", reuniao.getIdReuniao(), e.getMessage());
+            log.warn("Falha ao sincronizar evento Google da reuniao {}: {}", reuniao.getIdReuniao(), e.getMessage());
             return true;
         }
     }
