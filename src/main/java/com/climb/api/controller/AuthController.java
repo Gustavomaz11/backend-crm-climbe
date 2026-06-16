@@ -9,6 +9,7 @@ import com.climb.api.model.dto.GoogleAuthorizationUrlResponseDTO;
 import com.climb.api.model.dto.LoginRequestDTO;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.RefreshTokenRequestDTO;
+import com.climb.api.model.dto.RefreshTokenResponseDTO;
 import com.climb.api.service.AuthenticationService;
 import com.climb.api.service.GoogleOAuthService;
 import com.climb.api.util.LogSanitizer;
@@ -51,10 +52,14 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<String>> refresh(@RequestBody RefreshTokenRequestDTO dto) {
+    public ResponseEntity<ApiResponse<RefreshTokenResponseDTO>> refresh(@RequestBody RefreshTokenRequestDTO dto) {
         AuthResult<String> result = authenticationService.refreshAccessToken(dto.getRefreshToken());
         if (result.isSuccess()) {
-            return ResponseEntity.ok(ApiResponse.ok(result.data(), "Token renovado com sucesso"));
+            RefreshTokenResponseDTO response = new RefreshTokenResponseDTO(
+                    result.data(),
+                    authenticationService.getAccessTokenExpirationTime()
+            );
+            return ResponseEntity.ok(ApiResponse.ok(response, "Token renovado com sucesso"));
         }
         return ResponseEntity.status(httpStatusFor(result.status()))
                 .body(ApiResponse.error(result.message()));

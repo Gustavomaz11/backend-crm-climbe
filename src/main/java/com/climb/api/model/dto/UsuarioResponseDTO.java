@@ -11,4 +11,5 @@ public class UsuarioResponseDTO {
     private String contato;
     private String situacao;
     private String cargoNome;
+    private String fotoPerfil;
 }

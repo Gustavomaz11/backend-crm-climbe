@@ -69,6 +69,10 @@ public class AuthenticationService {
         return AuthResult.success(jwtUtil.generateAccessToken(usuarioId, email));
     }
 
+    public long getAccessTokenExpirationTime() {
+        return jwtUtil.getAccessTokenExpirationTime();
+    }
+
     public AuthResult<Void> validarUsuarioAtivo(Usuario usuario, String usuarioNaoEncontradoMessage) {
         if (usuario == null) {
             return AuthResult.failure(AuthStatus.USER_NOT_FOUND, usuarioNaoEncontradoMessage);
@@ -108,7 +112,9 @@ public class AuthenticationService {
         String accessToken = jwtUtil.generateAccessToken(usuario.getId(), usuario.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(usuario.getId(), usuario.getEmail());
         UsuarioResponseDTO usuarioDTO = usuarioMapper.toResponse(usuario);
+        usuarioDTO.setFotoPerfil(usuarioService.buscarFotoPerfil(usuario));
         long expiresIn = jwtUtil.getAccessTokenExpirationTime();
         return new LoginResponseDTO(accessToken, refreshToken, usuarioDTO, expiresIn);
     }
+
 }

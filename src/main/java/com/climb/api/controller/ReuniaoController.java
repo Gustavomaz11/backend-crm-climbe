@@ -2,6 +2,7 @@ package com.climb.api.controller;
 
 import com.climb.api.model.Reuniao;
 import com.climb.api.model.dto.ReuniaoListItemDTO;
+import com.climb.api.model.dto.ReuniaoRequestDTO;
 import com.climb.api.service.ReuniaoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,10 +26,10 @@ public class ReuniaoController {
     public List<ReuniaoListItemDTO> listar(
             @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) {
         boolean comGoogle = googleAccessToken != null && !googleAccessToken.isBlank();
-        log.info("GET /reunioes — header Google: presente={}, tamanho={}",
+        log.info("GET /reunioes - header Google: presente={}, tamanho={}",
                 comGoogle, comGoogle ? googleAccessToken.length() : 0);
         List<ReuniaoListItemDTO> out = service.listar(googleAccessToken);
-        log.info("GET /reunioes — retornando {} itens", out.size());
+        log.info("GET /reunioes - retornando {} itens", out.size());
         return out;
     }
 
@@ -44,7 +45,7 @@ public class ReuniaoController {
 
     @PostMapping
     public Reuniao criar(
-            @RequestBody Reuniao reuniao,
+            @RequestBody ReuniaoRequestDTO reuniao,
             @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) throws Exception {
         return service.criar(reuniao, googleAccessToken);
     }
@@ -52,7 +53,7 @@ public class ReuniaoController {
     @PutMapping("/{id}")
     public Reuniao atualizar(
             @PathVariable Long id,
-            @RequestBody Reuniao atualizada,
+            @RequestBody ReuniaoRequestDTO atualizada,
             @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) {
         return service.atualizar(id, atualizada, googleAccessToken);
     }

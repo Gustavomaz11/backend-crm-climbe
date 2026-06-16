@@ -75,12 +75,15 @@ class AuthControllerTest {
 
         when(authenticationService.refreshAccessToken(eq("refresh-token")))
                 .thenReturn(AuthResult.success("novo-access-token"));
+        when(authenticationService.getAccessTokenExpirationTime())
+                .thenReturn(900000L);
 
         mockMvc.perform(post("/auth/refresh")
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").value("novo-access-token"));
+                .andExpect(jsonPath("$.data.accessToken").value("novo-access-token"))
+                .andExpect(jsonPath("$.data.expiresIn").value(900000));
     }
 
     private LoginResponseDTO criarLoginResponse() {
