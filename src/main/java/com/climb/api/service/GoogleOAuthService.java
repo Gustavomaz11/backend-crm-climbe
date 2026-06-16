@@ -222,6 +222,8 @@ public class GoogleOAuthService {
             usuario.setNomeCompleto(exchangeCode.getUserName());
             usuario.setSituacao(exchangeCode.getUserStatus());
             usuario.setCargoNome(exchangeCode.getUserRole());
+            Usuario usuarioEntity = usuarioService.buscarPorId(exchangeCode.getUserId());
+            usuario.setFotoPerfil(usuarioService.buscarFotoPerfil(usuarioEntity));
         }
 
         log.info("GoogleOAuthService.exchangeCode — sucesso: userId={}, googleAccessToken={}, appAccessToken length={}",
@@ -337,8 +339,16 @@ public class GoogleOAuthService {
 
         Usuario usuarioExistente = usuarioService.buscarPorEmail(email);
         if (usuarioExistente != null) {
-            return montarResolveResponse(STATUS_GOOGLE_NOT_LINKED, email, nome, avatarUrl,
-                    "Ja existe um usuario com esse e-mail. Faca login normal para vincular a conta Google.");
+            AuthResult<Void> situacao = authenticationService.validarUsuarioAtivo(
+                    usuarioExistente,
+                    "Usuario nao encontrado");
+
+            if (!situacao.isSuccess()) {
+                return resolveResponseComEmail(STATUS_PENDING_APPROVAL, email, situacao.message());
+            }
+
+            vincularConta(usuarioExistente.getId(), providerUserId, email, nome, avatarUrl);
+            return resolverUsuarioVinculado(usuarioExistente, email);
         }
 
         OAuth2PendingRegistration novoPending = pendingService

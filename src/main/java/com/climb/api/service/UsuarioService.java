@@ -62,12 +62,12 @@ public class UsuarioService {
     public List<UsuarioResponseDTO> listar() {
         return repository.findAll()
                 .stream()
-                .map(usuarioMapper::toResponse)
+                .map(this::toResponse)
                 .toList();
     }
 
     public UsuarioResponseDTO buscarPorIdDTO(Long id) {
-        return usuarioMapper.toResponse(buscarPorId(id));
+        return toResponse(buscarPorId(id));
     }
 
     public Usuario buscarPorEmail(String email) {
@@ -123,7 +123,7 @@ public class UsuarioService {
         usuario.setSituacao("ESPERANDO_APROVACAO");
         usuario.setCargo(cargo);
 
-        return usuarioMapper.toResponse(repository.save(usuario));
+        return toResponse(repository.save(usuario));
     }
 
     public String criarSolicitacaoAcesso(UsuarioRequestDTO dto) {
@@ -156,7 +156,7 @@ public class UsuarioService {
             usuario.setSenhaHash(passwordEncoder.encode(dto.getSenha()));
         }
 
-        return usuarioMapper.toResponse(repository.save(usuario));
+        return toResponse(repository.save(usuario));
     }
 
     public void deletar(Long id) {
@@ -171,14 +171,14 @@ public class UsuarioService {
         }
 
         usuario.setSituacao("ATIVO");
-        return usuarioMapper.toResponse(repository.save(usuario));
+        return toResponse(repository.save(usuario));
     }
 
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {
         return repository.findAll()
                 .stream()
                 .filter(u -> "ESPERANDO_APROVACAO".equals(u.getSituacao()))
-                .map(usuarioMapper::toResponse)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -234,7 +234,24 @@ public class UsuarioService {
         vinculo.setVinculadoEm(LocalDateTime.now());
         usuarioOAuthRepository.save(vinculo);
 
-        return usuarioMapper.toResponse(salvo);
+        return toResponse(salvo);
+    }
+
+    public UsuarioResponseDTO toResponse(Usuario usuario) {
+        UsuarioResponseDTO dto = usuarioMapper.toResponse(usuario);
+        dto.setFotoPerfil(buscarFotoPerfil(usuario));
+        return dto;
+    }
+
+    public String buscarFotoPerfil(Usuario usuario) {
+        if (usuario == null || usuario.getId() == null) {
+            return null;
+        }
+
+        return usuarioOAuthRepository
+                .findByUsuarioIdAndProvider(usuario.getId(), OAuthProvider.GOOGLE)
+                .map(UsuarioOAuth::getAvatarUrl)
+                .orElse(null);
     }
 
     Cargo buscarCargoOuFalhar(Long cargoId) {

@@ -112,7 +112,9 @@ public class AuthenticationService {
         String accessToken = jwtUtil.generateAccessToken(usuario.getId(), usuario.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(usuario.getId(), usuario.getEmail());
         UsuarioResponseDTO usuarioDTO = usuarioMapper.toResponse(usuario);
+        usuarioDTO.setFotoPerfil(usuarioService.buscarFotoPerfil(usuario));
         long expiresIn = jwtUtil.getAccessTokenExpirationTime();
         return new LoginResponseDTO(accessToken, refreshToken, usuarioDTO, expiresIn);
     }
+
 }

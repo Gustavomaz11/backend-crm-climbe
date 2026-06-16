@@ -14,10 +14,13 @@ import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
+import com.climb.api.model.dto.AuthResult;
+import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.UsuarioPendenteResponseDTO;
 import com.climb.api.model.dto.UsuarioRequestDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 import com.climb.api.service.OAuth2PendingService;
+import com.climb.api.service.AuthenticationService;
 import com.climb.api.service.RbacService;
 import com.climb.api.service.UsuarioService;
 
@@ -28,13 +31,16 @@ public class UsuarioController {
     private final UsuarioService service;
     private final RbacService rbacService;
     private final OAuth2PendingService pendingService;
+    private final AuthenticationService authenticationService;
 
     public UsuarioController(UsuarioService service,
                              RbacService rbacService,
-                             OAuth2PendingService pendingService) {
+                             OAuth2PendingService pendingService,
+                             AuthenticationService authenticationService) {
         this.service = service;
         this.rbacService = rbacService;
         this.pendingService = pendingService;
+        this.authenticationService = authenticationService;
     }
 
     @GetMapping
@@ -115,7 +121,7 @@ public class UsuarioController {
     }
 
     @PostMapping("/completar-cadastro")
-    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> completarCadastro(
+    public ResponseEntity<ApiResponse<LoginResponseDTO>> completarCadastro(
             @RequestBody CompletarCadastroRequestDTO dto) {
         Object details = SecurityContextHolder.getContext().getAuthentication().getDetails();
         if (!(details instanceof PendingPrincipal pp)) {
@@ -124,7 +130,12 @@ public class UsuarioController {
         }
         try {
             UsuarioResponseDTO resultado = service.completarCadastroViaPending(pp.pendingId(), dto);
-            return ResponseEntity.ok(ApiResponse.ok(resultado, "Cadastro concluído com sucesso"));
+            AuthResult<LoginResponseDTO> login = authenticationService.autenticarComGoogle(resultado.getEmail());
+            if (!login.isSuccess()) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.error(login.message()));
+            }
+            return ResponseEntity.ok(ApiResponse.ok(login.data(), "Cadastro concluído com sucesso"));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }

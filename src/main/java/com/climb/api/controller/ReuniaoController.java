@@ -26,10 +26,10 @@ public class ReuniaoController {
     public List<ReuniaoListItemDTO> listar(
             @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) {
         boolean comGoogle = googleAccessToken != null && !googleAccessToken.isBlank();
-        log.info("GET /reunioes — header Google: presente={}, tamanho={}",
+        log.info("GET /reunioes - header Google: presente={}, tamanho={}",
                 comGoogle, comGoogle ? googleAccessToken.length() : 0);
         List<ReuniaoListItemDTO> out = service.listar(googleAccessToken);
-        log.info("GET /reunioes — retornando {} itens", out.size());
+        log.info("GET /reunioes - retornando {} itens", out.size());
         return out;
     }
 

@@ -184,6 +184,8 @@ public class ReuniaoService {
                 log.warn("Falha ao excluir evento no Google Calendar para reuniao {}: {}", reuniao.getIdReuniao(), e.getMessage());
             }
         }
+        participanteReuniaoRepository.deleteAll(
+                participanteReuniaoRepository.findByReuniao_IdReuniao(reuniao.getIdReuniao()));
         repository.delete(reuniao);
     }
 
@@ -248,6 +250,8 @@ public class ReuniaoService {
                 return true;
             }
 
+            participanteReuniaoRepository.deleteAll(
+                    participanteReuniaoRepository.findByReuniao_IdReuniao(reuniao.getIdReuniao()));
             repository.delete(reuniao);
             log.info("Reuniao {} removida localmente porque o evento Google foi excluido", reuniao.getIdReuniao());
             return false;
@@ -310,3 +314,4 @@ public class ReuniaoService {
                 });
     }
 }
+
