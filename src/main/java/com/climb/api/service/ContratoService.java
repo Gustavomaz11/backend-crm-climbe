@@ -89,7 +89,9 @@ public class ContratoService {
     }
 
     public Contrato criar(Contrato contrato) {
-        contrato.setProposta(propostaRepository.findById(obterPropostaId(contrato))
+        Long propostaId = obterPropostaId(contrato);
+        validarPropostaDisponivelParaNovoContrato(propostaId);
+        contrato.setProposta(propostaRepository.findById(propostaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposta nao encontrada")));
         sincronizarCamposDaProposta(contrato);
         Contrato salvo = repository.save(contrato);
@@ -109,6 +111,9 @@ public class ContratoService {
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario nao encontrado"));
         Proposta proposta = buscarPropostaOpcionalAprovada(propostaId, empresaId);
+        if (proposta != null) {
+            validarPropostaDisponivelParaNovoContrato(proposta.getIdProposta());
+        }
 
         String prefixo = "contratos/empresa-" + empresa.getIdEmpresa();
         String url = arquivoStorageService.salvar(arquivo, prefixo).url();
@@ -134,6 +139,8 @@ public class ContratoService {
         contrato.setDataFim(atualizado.getDataFim());
         contrato.setStatus(atualizado.getStatus());
         if (atualizado.getProposta() != null) {
+            Long propostaId = obterPropostaId(atualizado);
+            validarPropostaDisponivelParaContratoExistente(propostaId, id);
             contrato.setProposta(atualizado.getProposta());
             sincronizarCamposDaProposta(contrato);
         }
@@ -263,6 +270,18 @@ public class ContratoService {
         }
 
         return proposta;
+    }
+
+    private void validarPropostaDisponivelParaNovoContrato(Long propostaId) {
+        if (propostaId != null && repository.existsByProposta_IdProposta(propostaId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta proposta já está vinculada a outro contrato");
+        }
+    }
+
+    private void validarPropostaDisponivelParaContratoExistente(Long propostaId, Long contratoId) {
+        if (propostaId != null && repository.existsByProposta_IdPropostaAndIdContratoNot(propostaId, contratoId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta proposta já está vinculada a outro contrato");
+        }
     }
 
     private Map<Long, Usuario> buscarUsuariosDoHistorico(List<HistoricoAprovacaoContrato> historico) {

@@ -13,4 +13,8 @@ public interface ContratoRepository extends JpaRepository<Contrato, Long> {
 
     List<Contrato> findByDataFimBetween(LocalDate inicio, LocalDate fim);
 
+    boolean existsByProposta_IdProposta(Long propostaId);
+
+    boolean existsByProposta_IdPropostaAndIdContratoNot(Long propostaId, Long idContrato);
+
 }
