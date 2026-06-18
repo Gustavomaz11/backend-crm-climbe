@@ -10,7 +10,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.net.http.HttpResponse;
 import java.util.List;
 
 @Service
@@ -30,7 +29,7 @@ public class EmpresaService {
 
     public EmpresaResponseDTO buscarPorId(Long id) {
         Empresa empresa = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
         return empresaMapper.toResponseDto(empresa);
     }
 
@@ -38,7 +37,7 @@ public class EmpresaService {
 
         if (repository.findByCnpj(empresaRequestDto.cnpj()).isPresent()) {
                 throw new ResponseStatusException(
-                    HttpStatus.ALREADY_REPORTED, "CNPJ já cadastrado"
+                    HttpStatus.CONFLICT, "CNPJ já cadastrado"
                 );
         }
 
@@ -49,11 +48,11 @@ public class EmpresaService {
     public EmpresaResponseDTO atualizar(Long id, EmpresaRequestDTO atualizada) {
 
         Empresa empresa = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
 
         repository.findByCnpj(atualizada.cnpj()).ifPresent(e -> {
             if (!e.getIdEmpresa().equals(id)) {
-                throw new RuntimeException("CNPJ já em uso");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "CNPJ já em uso");
             }
         });
 
@@ -77,7 +76,7 @@ public class EmpresaService {
 
     public void deletar(Long id) {
         Empresa empresa = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
         repository.delete(empresa);
     }
 }
