@@ -102,6 +102,22 @@ public class DocumentoService {
         return documentoMapper.toResponseDto(documentoRepository.save(documento));
     }
 
+    public DocumentoResponseDTO reenviarSolicitacao(Long id) {
+        Documento documento = buscarDocumento(id);
+
+        if (StringUtils.hasText(documento.getUrl())) {
+            throw new IllegalArgumentException("Não é possível reenviar uma solicitação que já possui arquivo enviado.");
+        }
+
+        documento.setEmailDestinatario(normalizarEmail(documento.getEmailDestinatario()));
+        documento.setTokenUpload(gerarTokenUpload());
+        documento.setTokenExpiraEm(LocalDateTime.now().plusDays(DIAS_EXPIRACAO_UPLOAD));
+
+        Documento salvo = documentoRepository.save(documento);
+        enviarEmailSolicitacao(salvo);
+        return documentoMapper.toResponseDto(salvo);
+    }
+
     public void deletar(Long id) {
         if (!documentoRepository.existsById(id)) {
             throw new EntityNotFoundException("Documento não encontrado: " + id);

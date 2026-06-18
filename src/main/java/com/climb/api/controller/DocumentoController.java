@@ -102,6 +102,20 @@ public class DocumentoController {
         return ResponseEntity.ok(atualizado);
     }
 
+    @Operation(
+            summary = "Reenviar solicitação de documento",
+            description = "Renova o link público de anexo e reenvia o e-mail ao destinatário da solicitação."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Solicitação reenviada com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
+    @PatchMapping("/{id}/reenviar")
+    public ResponseEntity<DocumentoResponseDTO> reenviarSolicitacao(@PathVariable Long id) {
+        DocumentoResponseDTO atualizado = documentoService.reenviarSolicitacao(id);
+        return ResponseEntity.ok(atualizado);
+    }
+
     @Operation(summary = "Gerar URL temporária de download do documento")
     @GetMapping("/{id}/download-url")
     public ResponseEntity<String> gerarUrlDownload(@PathVariable Long id) {
