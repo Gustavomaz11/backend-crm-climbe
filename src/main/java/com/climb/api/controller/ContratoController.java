@@ -86,6 +86,11 @@ public class ContratoController {
         return service.aprovar(id, getAuthenticatedUserId(), body.get("status"));
     }
 
+    @PatchMapping("/{id}/desvincular-proposta")
+    public Contrato desvincularProposta(@PathVariable Long id) {
+        return service.desvincularProposta(id, getAuthenticatedUserId());
+    }
+
     @GetMapping("/{id}/historico")
     public ResponseEntity<ApiResponse<List<HistoricoAprovacaoContratoResponseDTO>>> historico(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(service.listarHistorico(id)));

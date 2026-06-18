@@ -222,6 +222,27 @@ public class ContratoService {
         return salvo;
     }
 
+    @Transactional
+    public Contrato desvincularProposta(Long id, Long usuarioId) {
+        if (usuarioId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não autenticado");
+        }
+        if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para editar contratos");
+        }
+
+        Contrato contrato = buscarPorId(id);
+        if (contrato.getProposta() == null) {
+            return contrato;
+        }
+
+        Contrato anterior = snapshot(contrato);
+        contrato.setProposta(null);
+        Contrato salvo = repository.save(contrato);
+        contratoNotificacaoService.notificarContratoAtualizado(anterior, salvo);
+        return salvo;
+    }
+
     public List<HistoricoAprovacaoContratoResponseDTO> listarHistorico(Long contratoId) {
         if (contratoId == null || !repository.existsById(contratoId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato nao encontrado");
