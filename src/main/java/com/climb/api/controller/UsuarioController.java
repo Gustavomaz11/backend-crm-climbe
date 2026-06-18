@@ -108,6 +108,12 @@ public class UsuarioController {
         return service.aprovarUsuario(id);
     }
 
+    @PostMapping("/{id}/recusar")
+    public UsuarioResponseDTO recusarUsuario(@PathVariable Long id) {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        return service.recusarUsuario(id);
+    }
+
     @PostMapping("/pendentes-google/{pendingId}/aprovar")
     public ResponseEntity<ApiResponse<Void>> aprovarPendingGoogle(@PathVariable Long pendingId) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
@@ -115,6 +121,17 @@ public class UsuarioController {
         try {
             pendingService.aprovar(pendingId, aprovadorId);
             return ResponseEntity.ok(ApiResponse.ok(null, "Cadastro Google aprovado"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/pendentes-google/{pendingId}/recusar")
+    public ResponseEntity<ApiResponse<Void>> recusarPendingGoogle(@PathVariable Long pendingId) {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        try {
+            pendingService.recusar(pendingId);
+            return ResponseEntity.ok(ApiResponse.ok(null, "Cadastro Google recusado"));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }

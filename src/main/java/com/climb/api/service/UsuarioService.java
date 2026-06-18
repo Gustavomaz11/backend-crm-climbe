@@ -174,6 +174,17 @@ public class UsuarioService {
         return toResponse(repository.save(usuario));
     }
 
+    public UsuarioResponseDTO recusarUsuario(Long id) {
+        Usuario usuario = buscarPorId(id);
+
+        if (!"ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
+            throw new RuntimeException("Usuário não está aguardando aprovação");
+        }
+
+        usuario.setSituacao("INATIVO");
+        return toResponse(repository.save(usuario));
+    }
+
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {
         return repository.findAll()
                 .stream()

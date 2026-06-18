@@ -70,6 +70,20 @@ public class OAuth2PendingService {
         repository.save(pending);
     }
 
+    @Transactional
+    public void recusar(Long pendingId) {
+        OAuth2PendingRegistration pending = repository.findById(pendingId)
+                .orElseThrow(() -> new RuntimeException("Cadastro pendente nao encontrado"));
+
+        if (Boolean.TRUE.equals(pending.getConsumido())) {
+            throw new RuntimeException("Cadastro pendente ja foi concluido");
+        }
+
+        pending.setConsumido(true);
+        pending.setAprovado(false);
+        repository.save(pending);
+    }
+
     public Optional<OAuth2PendingRegistration> findAtivoPorProvider(OAuthProvider provider, String providerUserId) {
         return repository.findByProviderAndProviderUserIdAndConsumidoFalse(provider, providerUserId);
     }
