@@ -59,7 +59,7 @@ public class GoogleOAuthService {
     private static final int EXCHANGE_CODE_EXPIRATION_SECONDS = 60;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    private static final String MSG_PENDING_APPROVAL = "Sua solicitacao esta aguardando aprovacao do administrador";
+    private static final String MSG_PENDING_APPROVAL = "Sua solicitação está aguardando aprovação do administrador";
     private static final String MSG_DEACTIVATED = "Sua conta foi desativada. Entre em contato com o administrador";
     private static final String MSG_COMPLETAR_CADASTRO = "Cadastro aprovado. Complete seu perfil para concluir o acesso";
 

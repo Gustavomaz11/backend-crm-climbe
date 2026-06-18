@@ -81,10 +81,10 @@ public class AuthenticationService {
         return switch (String.valueOf(usuario.getSituacao())) {
             case "CADASTRO_PENDENTE" -> AuthResult.failure(
                     AuthStatus.PENDING_APPROVAL,
-                    "Sua conta esta aguardando aprovacao do administrador");
+                    "Sua conta está aguardando aprovação do administrador");
             case "ESPERANDO_APROVACAO" -> AuthResult.failure(
                     AuthStatus.PENDING_APPROVAL,
-                    "Sua solicitacao de acesso esta pendente de aprovacao do administrador");
+                    "Sua solicitação de acesso está pendente de aprovação do administrador");
             case "COMPLETAR_CADASTRO" -> AuthResult.failure(
                     AuthStatus.COMPLETAR_CADASTRO,
                     "Sua conta foi aprovada. Complete seu cadastro para acessar o sistema");

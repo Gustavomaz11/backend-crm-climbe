@@ -42,6 +42,7 @@ public class SecurityConfig {
                                 "/hello", "/error", "/actuator/health", "/actuator/info"
                         ).permitAll()
                         .requestMatchers("/documentos/public/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/cargos").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/usuarios").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
