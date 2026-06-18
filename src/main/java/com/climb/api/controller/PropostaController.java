@@ -12,8 +12,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import com.climb.api.service.PropostaService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -43,6 +45,18 @@ public class PropostaController {
         }
     }
 
+    @GetMapping("/{id}/download-url")
+    public ResponseEntity<ApiResponse<String>> gerarUrlDownload(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(ApiResponse.ok(service.gerarUrlDownload(id)));
+        } catch (RuntimeException e) {
+            if ("Proposta não encontrada".equals(e.getMessage())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     @GetMapping("/status/{status}")
     public ResponseEntity<ApiResponse<List<PropostaResponseDTO>>> listarPorStatus(@PathVariable PropostaStatus status) {
         try {
@@ -56,6 +70,20 @@ public class PropostaController {
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> criar(@Valid @RequestBody PropostaRequestDTO proposta) {
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criar(proposta)));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<PropostaResponseDTO>> criarComUpload(
+            @RequestParam(value = "empresaId", required = false) Long empresaId,
+            @RequestParam("arquivo") MultipartFile arquivo) {
+        try {
+            Long usuarioId = getAuthenticatedUserId();
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criarComArquivo(empresaId, usuarioId, arquivo)));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(e.getMessage()));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
@@ -128,5 +156,25 @@ public class PropostaController {
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(e.getMessage()));
         }
+    }
+
+    private Long getAuthenticatedUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getDetails() == null) {
+            throw new IllegalStateException("Usuário não autenticado");
+        }
+
+        Object details = auth.getDetails();
+        if (details instanceof Long userId) {
+            return userId;
+        }
+        if (details instanceof Integer userId) {
+            return userId.longValue();
+        }
+        if (details instanceof String userId) {
+            return Long.parseLong(userId);
+        }
+
+        throw new IllegalStateException("Usuário não autenticado");
     }
 }

@@ -4,10 +4,8 @@ import com.climb.api.model.Empresa;
 import com.climb.api.model.HistoricoAprovacaoProposta;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.Proposta;
-import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.enums.PropostaStatus;
-import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.dto.PropostaAprovacaoRequestDTO;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
@@ -15,13 +13,18 @@ import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
 import com.climb.api.repository.PropostaRepository;
 import com.climb.api.repository.UsuarioRepository;
-import com.climb.api.service.RbacService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import com.climb.api.model.dto.HistoricoAprovacaoPropostaResponseDTO;
 
 @Service
@@ -32,17 +35,20 @@ public class PropostaService {
     private final UsuarioRepository usuarioRepository;
     private final HistoricoAprovacaoPropostaRepository historicoRepository;
     private final RbacService rbacService;
+    private final CloudflareR2ArquivoStorageService arquivoStorageService;
 
     public PropostaService(PropostaRepository repository,
                            EmpresaRepository empresaRepository,
                            UsuarioRepository usuarioRepository,
                            HistoricoAprovacaoPropostaRepository historicoRepository,
-                           RbacService rbacService) {
+                           RbacService rbacService,
+                           CloudflareR2ArquivoStorageService arquivoStorageService) {
         this.repository = repository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
         this.historicoRepository = historicoRepository;
         this.rbacService = rbacService;
+        this.arquivoStorageService = arquivoStorageService;
     }
 
     public List<HistoricoAprovacaoPropostaResponseDTO> listarHistorico(Long propostaId) {
@@ -50,17 +56,37 @@ public class PropostaService {
             throw new RuntimeException("Proposta não encontrada");
         }
 
-        return historicoRepository.findByPropostaIdOrderByDataAlteracaoDesc(propostaId)
+        List<HistoricoAprovacaoProposta> historico = historicoRepository.findByPropostaIdOrderByDataAlteracaoDesc(propostaId);
+        Map<Long, Usuario> usuariosPorId = buscarUsuariosDoHistorico(historico);
+
+        return historico
                 .stream()
                 .map(h -> new HistoricoAprovacaoPropostaResponseDTO(
                         h.getIdHistorico(),
                         h.getPropostaId(),
                         h.getUsuarioId(),
+                        usuariosPorId.get(h.getUsuarioId()) != null ? usuariosPorId.get(h.getUsuarioId()).getNomeCompleto() : null,
                         h.getStatusAnterior(),
                         h.getStatusNovo(),
                         h.getDataAlteracao()
                 ))
                 .toList();
+    }
+
+    private Map<Long, Usuario> buscarUsuariosDoHistorico(List<HistoricoAprovacaoProposta> historico) {
+        List<Long> usuarioIds = historico.stream()
+                .map(HistoricoAprovacaoProposta::getUsuarioId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (usuarioIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return usuarioRepository.findAllById(usuarioIds)
+                .stream()
+                .collect(Collectors.toMap(Usuario::getId, Function.identity()));
     }
 
     private PropostaResponseDTO toResponseDTO(Proposta proposta) {
@@ -97,6 +123,17 @@ public class PropostaService {
         return toResponseDTO(proposta);
     }
 
+    public String gerarUrlDownload(Long id) {
+        Proposta proposta = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Proposta não encontrada"));
+
+        if (!StringUtils.hasText(proposta.getUrl())) {
+            throw new RuntimeException("Arquivo da proposta não encontrado");
+        }
+
+        return arquivoStorageService.gerarUrlTemporariaDownload(proposta.getUrl());
+    }
+
     public List<PropostaResponseDTO> listarPorStatus(PropostaStatus status) {
         if (status == null) {
             throw new RuntimeException("Status é obrigatório");
@@ -113,6 +150,7 @@ public class PropostaService {
         if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
         }
+        validarEmpresaObrigatoria(dto.empresaId());
         validarStatusParaCriacao(dto.status());
 
         Proposta proposta = new Proposta();
@@ -121,6 +159,28 @@ public class PropostaService {
         proposta.setStatus(dto.status());
         proposta.setUrl(dto.url());
         proposta.setDataCriacao(dto.dataCriacao() != null ? dto.dataCriacao() : LocalDate.now());
+
+        return toResponseDTO(repository.save(proposta));
+    }
+
+    public PropostaResponseDTO criarComArquivo(Long empresaId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo) {
+        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRUD)) {
+            throw new RuntimeException("Usuário não tem permissão para criar propostas");
+        }
+        validarEmpresaObrigatoria(empresaId);
+
+        Empresa empresa = buscarEmpresa(empresaId);
+        Usuario usuario = buscarUsuario(usuarioId);
+
+        String prefixo = "propostas/empresa-" + empresa.getIdEmpresa();
+        String url = arquivoStorageService.salvar(arquivo, prefixo).url();
+
+        Proposta proposta = new Proposta();
+        proposta.setEmpresa(empresa);
+        proposta.setUsuario(usuario);
+        proposta.setStatus(PropostaStatus.PENDENTE);
+        proposta.setUrl(url);
+        proposta.setDataCriacao(LocalDate.now());
 
         return toResponseDTO(repository.save(proposta));
     }
@@ -148,8 +208,8 @@ public class PropostaService {
             return toResponseDTO(proposta);
         }
 
-        if (statusAnterior == PropostaStatus.REJEITADA && dto.status() == PropostaStatus.APROVADA) {
-            throw new RuntimeException("Não é permitido reverter uma proposta rejeitada para aprovada");
+        if (statusAnterior == PropostaStatus.APROVADA || statusAnterior == PropostaStatus.REJEITADA) {
+            throw new RuntimeException("Não é permitido alterar o status de uma proposta já aprovada ou rejeitada");
         }
 
         proposta.setStatus(dto.status());
@@ -171,6 +231,7 @@ public class PropostaService {
         if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para editar propostas");
         }
+        validarEmpresaObrigatoria(dto.empresaId());
         validarStatusParaAtualizacao(dto.status());
 
         Proposta proposta = repository.findById(id)
@@ -225,5 +286,11 @@ public class PropostaService {
         
         // Ao atualizar uma proposta, permite qualquer status válido
         // Validação mais específica pode ser adicionada conforme as regras de negócio evoluem
+    }
+
+    private void validarEmpresaObrigatoria(Long empresaId) {
+        if (empresaId == null || empresaId <= 0) {
+            throw new RuntimeException("Selecione uma empresa para a proposta");
+        }
     }
 }

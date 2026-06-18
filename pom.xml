@@ -21,10 +21,18 @@
 		<flyway.version>11.15.0</flyway.version>
 		<lombok.version>1.18.42</lombok.version>
 		<org.mapstruct.version>1.5.5.Final</org.mapstruct.version>
+		<aws.sdk.version>2.25.69</aws.sdk.version>
         <spring-ai.version>2.0.0-M5</spring-ai.version>
     </properties>
     <dependencyManagement>
         <dependencies>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws.sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
@@ -71,6 +79,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
 		</dependency>
 
 		<dependency>

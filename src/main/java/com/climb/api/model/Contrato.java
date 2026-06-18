@@ -13,7 +13,7 @@ public class Contrato {
     private Long idContrato;
 
     @OneToOne
-    @JoinColumn(name = "proposta_id", nullable = false, unique = true)
+    @JoinColumn(name = "proposta_id", unique = true)
     private Proposta proposta;
 
     @ManyToOne

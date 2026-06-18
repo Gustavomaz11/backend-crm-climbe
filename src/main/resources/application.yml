@@ -15,12 +15,20 @@ management:
         include: health,info,metrics
 
 app:
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   mail:
     from: ${APP_MAIL_FROM:no-reply@climb.com}
   reports:
     output-dir: ${REPORTS_OUTPUT_DIR:uploads/relatorios}
   contract-storage:
     directory: ${CONTRACT_STORAGE_DIRECTORY:uploads/contratos}
+  cloudflare-r2:
+    endpoint: ${CLOUDFLARE_R2_ENDPOINT:https://78391a8e1b5fc95288f3b462a0958f65.r2.cloudflarestorage.com}
+    access-key: ${CLOUDFLARE_R2_ACCESS_KEY:}
+    secret-key: ${CLOUDFLARE_R2_SECRET_KEY:}
+    bucket: ${CLOUDFLARE_R2_BUCKET:climb-arquivos}
+    public-url: ${CLOUDFLARE_R2_PUBLIC_URL:https://78391a8e1b5fc95288f3b462a0958f65.r2.cloudflarestorage.com/climb-arquivos}
+    region: ${CLOUDFLARE_R2_REGION:auto}
   contract-notifications:
     expiration-warning-days: ${CONTRACT_EXPIRATION_WARNING_DAYS:30}
     expiration-cron: "${CONTRACT_EXPIRATION_CRON:0 0 8 * * *}"

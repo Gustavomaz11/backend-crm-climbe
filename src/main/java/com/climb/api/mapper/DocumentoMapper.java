@@ -26,6 +26,11 @@ public interface DocumentoMapper {
     @Mapping(target = "analista",    ignore = true)
     @Mapping(target = "url",         ignore = true)
     @Mapping(target = "validado",    ignore = true)
+    @Mapping(target = "emailDestinatario", ignore = true)
+    @Mapping(target = "tokenUpload", ignore = true)
+    @Mapping(target = "tokenExpiraEm", ignore = true)
+    @Mapping(target = "dataSolicitacao", ignore = true)
+    @Mapping(target = "dataEnvio", ignore = true)
     Documento toEntity(DocumentoSolicitacaoRequestDTO dto);
 
     List<DocumentoResponseDTO> toResponseDto(List<Documento> documentos);

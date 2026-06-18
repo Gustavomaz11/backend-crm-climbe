@@ -2,6 +2,7 @@ package com.climb.api.controller;
 
 import com.climb.api.model.dto.DocumentoResponseDTO;
 import com.climb.api.model.dto.DocumentoSolicitacaoRequestDTO;
+import com.climb.api.model.dto.DocumentoUploadInfoResponseDTO;
 import com.climb.api.model.dto.DocumentoValidacaoRequestDTO;
 import com.climb.api.service.DocumentoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +11,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -58,6 +61,12 @@ public class DocumentoController {
         return ResponseEntity.ok(documento);
     }
 
+    @Operation(summary = "Buscar dados públicos de solicitação por token")
+    @GetMapping("/public/{token}")
+    public ResponseEntity<DocumentoUploadInfoResponseDTO> buscarPorToken(@PathVariable String token) {
+        return ResponseEntity.ok(documentoService.buscarSolicitacaoPorToken(token));
+    }
+
     @Operation(
             summary = "Solicitar documento",
             description = "O usuário interno solicita um documento para a empresa. O status inicial é definido automaticamente como PENDENTE."
@@ -68,7 +77,7 @@ public class DocumentoController {
     })
     @PostMapping("/solicitar")
     public ResponseEntity<DocumentoResponseDTO> solicitar(@Valid @RequestBody DocumentoSolicitacaoRequestDTO dto) {
-        DocumentoResponseDTO criado = documentoService.solicitar(dto);
+        DocumentoResponseDTO criado = documentoService.solicitar(dto, getAuthenticatedUserId());
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
                 .replacePath("/documentos/{id}")
@@ -93,6 +102,12 @@ public class DocumentoController {
         return ResponseEntity.ok(atualizado);
     }
 
+    @Operation(summary = "Gerar URL temporária de download do documento")
+    @GetMapping("/{id}/download-url")
+    public ResponseEntity<String> gerarUrlDownload(@PathVariable Long id) {
+        return ResponseEntity.ok(documentoService.gerarUrlDownload(id));
+    }
+
     @Operation(summary = "Deletar documento")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Documento deletado com sucesso"),
@@ -102,5 +117,25 @@ public class DocumentoController {
     public ResponseEntity<Void> deletar(@PathVariable Long id) {
         documentoService.deletar(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private Long getAuthenticatedUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getDetails() == null) {
+            throw new IllegalStateException("Usuário não autenticado");
+        }
+
+        Object details = auth.getDetails();
+        if (details instanceof Long userId) {
+            return userId;
+        }
+        if (details instanceof Integer userId) {
+            return userId.longValue();
+        }
+        if (details instanceof String userId) {
+            return Long.parseLong(userId);
+        }
+
+        throw new IllegalStateException("Usuário não autenticado");
     }
 }

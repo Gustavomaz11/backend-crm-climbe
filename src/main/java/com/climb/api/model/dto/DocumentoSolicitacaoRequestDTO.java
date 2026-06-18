@@ -7,9 +7,11 @@ public record DocumentoSolicitacaoRequestDTO(
         @NotNull(message = "O ID da empresa é obrigatório")
         Long empresaId,
 
-        @NotBlank(message = "O tipo do documento é obrigatório")
+        @NotBlank(message = "O título do documento é obrigatório")
+        String titulo,
+
         String tipoDocumento,
 
-        @NotNull(message = "O ID do analista é obrigatório")
-        Long analistaId
+        @NotBlank(message = "O e-mail do destinatário é obrigatório")
+        String emailDestinatario
 ) {}

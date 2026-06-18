@@ -41,4 +41,21 @@ public class DocumentoUploadController {
         DocumentoResponseDTO atualizado = documentoService.enviar(id, arquivo);
         return ResponseEntity.ok(atualizado);
     }
+
+    @Operation(
+            summary = "Enviar arquivo do documento por link público",
+            description = "Recebe o arquivo usando o token enviado por e-mail e atualiza a solicitação para EM_ANALISE."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Arquivo enviado com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Solicitação não encontrada", content = @Content),
+            @ApiResponse(responseCode = "415", description = "Tipo de mídia não suportado", content = @Content)
+    })
+    @PatchMapping(value = "/public/{token}/enviar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DocumentoResponseDTO> enviarPorToken(
+            @Parameter(description = "Token enviado por e-mail") @PathVariable String token,
+            @Parameter(description = "Arquivo do documento") @RequestParam("arquivo") MultipartFile arquivo) {
+        DocumentoResponseDTO atualizado = documentoService.enviarPorToken(token, arquivo);
+        return ResponseEntity.ok(atualizado);
+    }
 }

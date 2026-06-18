@@ -2,9 +2,9 @@ package com.climb.api.model.dto;
 
 import java.time.LocalDateTime;
 
-public record HistoricoAprovacaoPropostaResponseDTO(
+public record HistoricoAprovacaoContratoResponseDTO(
         Long idHistorico,
-        Long propostaId,
+        Long contratoId,
         Long usuarioId,
         String usuarioNome,
         String statusAnterior,
