@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -95,6 +96,7 @@ public class PropostaService {
                 proposta.getEmpresa() != null ? proposta.getEmpresa().getIdEmpresa() : null,
                 proposta.getUsuario() != null ? proposta.getUsuario().getId() : null,
                 proposta.getUrl(),
+                proposta.getValuation(),
                 proposta.getStatus(),
                 proposta.getDataCriacao()
         );
@@ -151,6 +153,7 @@ public class PropostaService {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
         }
         validarEmpresaObrigatoria(dto.empresaId());
+        validarValuation(dto.valuation());
         validarStatusParaCriacao(dto.status());
 
         Proposta proposta = new Proposta();
@@ -158,16 +161,18 @@ public class PropostaService {
         proposta.setUsuario(buscarUsuario(dto.usuarioId()));
         proposta.setStatus(dto.status());
         proposta.setUrl(dto.url());
+        proposta.setValuation(dto.valuation());
         proposta.setDataCriacao(dto.dataCriacao() != null ? dto.dataCriacao() : LocalDate.now());
 
         return toResponseDTO(repository.save(proposta));
     }
 
-    public PropostaResponseDTO criarComArquivo(Long empresaId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo) {
+    public PropostaResponseDTO criarComArquivo(Long empresaId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo, BigDecimal valuation) {
         if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
         }
         validarEmpresaObrigatoria(empresaId);
+        validarValuation(valuation);
 
         Empresa empresa = buscarEmpresa(empresaId);
         Usuario usuario = buscarUsuario(usuarioId);
@@ -180,6 +185,7 @@ public class PropostaService {
         proposta.setUsuario(usuario);
         proposta.setStatus(PropostaStatus.PENDENTE);
         proposta.setUrl(url);
+        proposta.setValuation(valuation);
         proposta.setDataCriacao(LocalDate.now());
 
         return toResponseDTO(repository.save(proposta));
@@ -232,6 +238,7 @@ public class PropostaService {
             throw new RuntimeException("Usuário não tem permissão para editar propostas");
         }
         validarEmpresaObrigatoria(dto.empresaId());
+        validarValuation(dto.valuation());
         validarStatusParaAtualizacao(dto.status());
 
         Proposta proposta = repository.findById(id)
@@ -241,6 +248,7 @@ public class PropostaService {
         proposta.setUsuario(buscarUsuario(dto.usuarioId()));
         proposta.setStatus(dto.status());
         proposta.setUrl(dto.url());
+        proposta.setValuation(dto.valuation());
         proposta.setDataCriacao(dto.dataCriacao() != null ? dto.dataCriacao() : proposta.getDataCriacao());
 
         return toResponseDTO(repository.save(proposta));
@@ -291,6 +299,12 @@ public class PropostaService {
     private void validarEmpresaObrigatoria(Long empresaId) {
         if (empresaId == null || empresaId <= 0) {
             throw new RuntimeException("Selecione uma empresa para a proposta");
+        }
+    }
+
+    private void validarValuation(BigDecimal valuation) {
+        if (valuation == null || valuation.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Informe o valuation da proposta");
         }
     }
 }

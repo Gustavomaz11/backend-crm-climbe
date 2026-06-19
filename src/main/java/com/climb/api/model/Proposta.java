@@ -2,6 +2,7 @@ package com.climb.api.model;
 
 import com.climb.api.model.enums.PropostaStatus;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -28,6 +29,9 @@ public class Proposta {
     @Column(name = "url")
     private String url;
 
+    @Column(name = "valuation", precision = 15, scale = 2)
+    private BigDecimal valuation;
+
     @Column(name = "data_criacao")
     private LocalDate dataCriacao;
 
@@ -45,6 +49,9 @@ public class Proposta {
 
     public String getUrl() { return url; }
     public void setUrl(String url) { this.url = url; }
+
+    public BigDecimal getValuation() { return valuation; }
+    public void setValuation(BigDecimal valuation) { this.valuation = valuation; }
 
     public LocalDate getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDate dataCriacao) { this.dataCriacao = dataCriacao; }

@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -78,10 +79,11 @@ public class PropostaController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> criarComUpload(
             @RequestParam(value = "empresaId", required = false) Long empresaId,
+            @RequestParam(value = "valuation", required = false) BigDecimal valuation,
             @RequestParam("arquivo") MultipartFile arquivo) {
         try {
             Long usuarioId = getAuthenticatedUserId();
-            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criarComArquivo(empresaId, usuarioId, arquivo)));
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criarComArquivo(empresaId, usuarioId, arquivo, valuation)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(e.getMessage()));
         } catch (RuntimeException e) {
