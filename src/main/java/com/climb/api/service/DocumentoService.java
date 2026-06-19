@@ -98,20 +98,35 @@ public class DocumentoService {
 
     public DocumentoResponseDTO validar(Long id, DocumentoValidacaoRequestDTO dto) {
         Documento documento = buscarDocumento(id);
-        documento.setValidado(dto.validado());
+        validarStatusDeAnalise(documento, dto.validado());
+
+        if (dto.validado() == DocumentoStatus.REPROVADO) {
+            documento.setValidado(DocumentoStatus.PENDENTE);
+            renovarLinkUpload(documento);
+            Documento salvo = documentoRepository.save(documento);
+            enviarEmailDocumentoReprovado(salvo);
+            return documentoMapper.toResponseDto(salvo);
+        }
+
+        documento.setValidado(DocumentoStatus.APROVADO);
+        documento.setTokenUpload(null);
+        documento.setTokenExpiraEm(null);
         return documentoMapper.toResponseDto(documentoRepository.save(documento));
     }
 
     public DocumentoResponseDTO reenviarSolicitacao(Long id) {
         Documento documento = buscarDocumento(id);
 
-        if (StringUtils.hasText(documento.getUrl())) {
+        if (
+                StringUtils.hasText(documento.getUrl()) &&
+                documento.getValidado() != DocumentoStatus.PENDENTE &&
+                documento.getValidado() != DocumentoStatus.REPROVADO
+        ) {
             throw new IllegalArgumentException("Não é possível reenviar uma solicitação que já possui arquivo enviado.");
         }
 
-        documento.setEmailDestinatario(normalizarEmail(documento.getEmailDestinatario()));
-        documento.setTokenUpload(gerarTokenUpload());
-        documento.setTokenExpiraEm(LocalDateTime.now().plusDays(DIAS_EXPIRACAO_UPLOAD));
+        documento.setValidado(DocumentoStatus.PENDENTE);
+        renovarLinkUpload(documento);
 
         Documento salvo = documentoRepository.save(documento);
         enviarEmailSolicitacao(salvo);
@@ -179,6 +194,34 @@ public class DocumentoService {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
+    private void renovarLinkUpload(Documento documento) {
+        documento.setEmailDestinatario(normalizarEmail(documento.getEmailDestinatario()));
+        documento.setTokenUpload(gerarTokenUpload());
+        documento.setTokenExpiraEm(LocalDateTime.now().plusDays(DIAS_EXPIRACAO_UPLOAD));
+    }
+
+    private void validarStatusDeAnalise(Documento documento, DocumentoStatus statusNovo) {
+        if (statusNovo == null) {
+            throw new IllegalArgumentException("O status é obrigatório.");
+        }
+
+        if (statusNovo != DocumentoStatus.APROVADO && statusNovo != DocumentoStatus.REPROVADO) {
+            throw new IllegalArgumentException("Status inválido. Use APROVADO ou REPROVADO.");
+        }
+
+        if (!StringUtils.hasText(documento.getUrl())) {
+            throw new IllegalArgumentException("O documento precisa ter um arquivo anexado antes da análise.");
+        }
+
+        if (documento.getValidado() == DocumentoStatus.APROVADO || documento.getValidado() == DocumentoStatus.REPROVADO) {
+            throw new IllegalArgumentException("Este documento já foi analisado.");
+        }
+
+        if (documento.getValidado() != DocumentoStatus.EM_ANALISE) {
+            throw new IllegalArgumentException("Somente documentos em análise podem ser aprovados ou reprovados.");
+        }
+    }
+
     private String montarLinkUpload(Documento documento) {
         return frontendUrl.replaceAll("/+$", "") + "/documentos/enviar/" + documento.getTokenUpload();
     }
@@ -192,6 +235,23 @@ public class DocumentoService {
                 A Climb solicitou o envio do documento "%s" para %s.
 
                 Acesse o link abaixo para anexar o arquivo:
+                %s
+
+                Este link expira em %d dias.
+                """.formatted(documento.getTitulo(), nomeEmpresa, montarLinkUpload(documento), DIAS_EXPIRACAO_UPLOAD);
+
+        emailService.enviarEmail(documento.getEmailDestinatario(), assunto, corpo);
+    }
+
+    private void enviarEmailDocumentoReprovado(Documento documento) {
+        String nomeEmpresa = documento.getEmpresa() != null ? documento.getEmpresa().getNomeFantasia() : "sua empresa";
+        String assunto = "Reenvio necessário - " + documento.getTitulo();
+        String corpo = """
+                Ola,
+
+                O documento "%s" enviado para %s foi reprovado na análise.
+
+                Para evitar uma nova solicitação, utilize o link abaixo para anexar uma versão corrigida:
                 %s
 
                 Este link expira em %d dias.
