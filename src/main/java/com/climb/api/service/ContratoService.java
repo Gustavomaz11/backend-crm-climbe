@@ -9,6 +9,7 @@ import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.HistoricoAprovacaoContratoResponseDTO;
 import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.repository.ContratoRepository;
+import com.climb.api.repository.ContratoKanbanTaskRepository;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoContratoRepository;
 import com.climb.api.repository.PropostaRepository;
@@ -32,6 +33,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,6 +49,7 @@ public class ContratoService {
     public static final String STATUS_REJEITADO = "REJEITADO";
 
     private final ContratoRepository repository;
+    private final ContratoKanbanTaskRepository taskRepository;
     private final PropostaRepository propostaRepository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
@@ -57,6 +60,7 @@ public class ContratoService {
     private final int diasAvisoVencimento;
 
     public ContratoService(ContratoRepository repository,
+                           ContratoKanbanTaskRepository taskRepository,
                            PropostaRepository propostaRepository,
                            EmpresaRepository empresaRepository,
                            UsuarioRepository usuarioRepository,
@@ -66,6 +70,7 @@ public class ContratoService {
                            RbacService rbacService,
                            @Value("${app.contract-notifications.expiration-warning-days:30}") int diasAvisoVencimento) {
         this.repository = repository;
+        this.taskRepository = taskRepository;
         this.propostaRepository = propostaRepository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
@@ -94,17 +99,25 @@ public class ContratoService {
         contrato.setProposta(propostaRepository.findById(propostaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposta nao encontrada")));
         sincronizarCamposDaProposta(contrato);
+        normalizarResponsavelEParticipantes(contrato);
         Contrato salvo = repository.save(contrato);
         contratoNotificacaoService.notificarContratoCriado(salvo);
         return salvo;
     }
 
-    public Contrato criarComArquivo(Long empresaId, Long propostaId, Long usuarioId, MultipartFile arquivo) {
+    public Contrato criarComArquivo(Long empresaId,
+                                    Long propostaId,
+                                    Long usuarioId,
+                                    Long responsavelId,
+                                    List<Long> participanteIds,
+                                    MultipartFile arquivo) {
         if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para criar contratos");
         }
 
         validarEmpresaObrigatoria(empresaId);
+        validarResponsavelObrigatorio(responsavelId);
+        validarParticipantesObrigatorios(participanteIds);
 
         Empresa empresa = empresaRepository.findById(empresaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa nao encontrada"));
@@ -114,6 +127,8 @@ public class ContratoService {
         if (proposta != null) {
             validarPropostaDisponivelParaNovoContrato(proposta.getIdProposta());
         }
+        Usuario responsavel = buscarUsuarioOuFalhar(responsavelId, "Responsável do contrato não encontrado");
+        Set<Usuario> participantes = buscarParticipantes(participanteIds);
 
         String prefixo = "contratos/empresa-" + empresa.getIdEmpresa();
         String url = arquivoStorageService.salvar(arquivo, prefixo).url();
@@ -126,6 +141,9 @@ public class ContratoService {
         contrato.setDataInicio(LocalDate.now());
         contrato.setStatus(STATUS_PENDENTE);
         contrato.setUrlPdf(url);
+        contrato.setResponsavel(responsavel);
+        contrato.setParticipantes(participantes);
+        normalizarParticipantes(contrato);
 
         Contrato salvo = repository.save(contrato);
         contratoNotificacaoService.notificarContratoCriado(salvo);
@@ -138,12 +156,30 @@ public class ContratoService {
         contrato.setDataInicio(atualizado.getDataInicio());
         contrato.setDataFim(atualizado.getDataFim());
         contrato.setStatus(atualizado.getStatus());
+        atualizarResponsavelEParticipantes(contrato, atualizado);
         if (atualizado.getProposta() != null) {
             Long propostaId = obterPropostaId(atualizado);
             validarPropostaDisponivelParaContratoExistente(propostaId, id);
             contrato.setProposta(atualizado.getProposta());
             sincronizarCamposDaProposta(contrato);
         }
+        Contrato salvo = repository.save(contrato);
+        contratoNotificacaoService.notificarContratoAtualizado(anterior, salvo);
+        return salvo;
+    }
+
+    @Transactional
+    public Contrato atualizarResponsaveis(Long id, Long usuarioId, Long responsavelId, List<Long> participanteIds) {
+        if (usuarioId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não autenticado");
+        }
+        if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para editar contratos");
+        }
+
+        Contrato contrato = buscarPorId(id);
+        Contrato anterior = snapshot(contrato);
+        aplicarResponsavelEParticipantes(contrato, responsavelId, participanteIds);
         Contrato salvo = repository.save(contrato);
         contratoNotificacaoService.notificarContratoAtualizado(anterior, salvo);
         return salvo;
@@ -334,6 +370,8 @@ public class ContratoService {
         snapshot.setIdContrato(contrato.getIdContrato());
         snapshot.setProposta(contrato.getProposta());
         snapshot.setUsuario(contrato.getUsuario());
+        snapshot.setResponsavel(contrato.getResponsavel());
+        snapshot.setParticipantes(new HashSet<>(contrato.getParticipantes()));
         snapshot.setEmpresa(contrato.getEmpresa());
         snapshot.setEmpresaNomeFantasia(contrato.getEmpresaNomeFantasia());
         snapshot.setDataInicio(contrato.getDataInicio());
@@ -383,6 +421,125 @@ public class ContratoService {
     private void validarEmpresaObrigatoria(Long empresaId) {
         if (empresaId == null || empresaId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione uma empresa para o contrato");
+        }
+    }
+
+    private void normalizarResponsavelEParticipantes(Contrato contrato) {
+        if (contrato.getResponsavel() != null && contrato.getResponsavel().getId() != null) {
+            contrato.setResponsavel(usuarioRepository.findById(contrato.getResponsavel().getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Responsável do contrato não encontrado")));
+        }
+        if (contrato.getResponsavel() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Responsável do contrato é obrigatório");
+        }
+        validarParticipantesObrigatorios(contrato.getParticipantes() == null
+                ? null
+                : contrato.getParticipantes().stream().map(Usuario::getId).toList());
+        normalizarParticipantes(contrato);
+    }
+
+    private void atualizarResponsavelEParticipantes(Contrato contrato, Contrato atualizado) {
+        if (atualizado.getResponsavel() != null && atualizado.getResponsavel().getId() != null) {
+            List<Long> participanteIds = atualizado.getParticipantes() == null
+                    ? contrato.getParticipantes().stream().map(Usuario::getId).toList()
+                    : atualizado.getParticipantes().stream()
+                    .map(Usuario::getId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            aplicarResponsavelEParticipantes(contrato, atualizado.getResponsavel().getId(), participanteIds);
+            return;
+        }
+        if (atualizado.getParticipantes() != null && !atualizado.getParticipantes().isEmpty()) {
+            aplicarResponsavelEParticipantes(
+                    contrato,
+                    contrato.getResponsavel() != null ? contrato.getResponsavel().getId() : null,
+                    atualizado.getParticipantes().stream()
+                            .map(Usuario::getId)
+                            .filter(Objects::nonNull)
+                            .distinct()
+                            .toList()
+            );
+            return;
+        }
+        normalizarParticipantes(contrato);
+    }
+
+    private void normalizarParticipantes(Contrato contrato) {
+        if (contrato.getParticipantes() == null) {
+            contrato.setParticipantes(new HashSet<>());
+        }
+        if (contrato.getUsuario() != null) {
+            contrato.getParticipantes().add(contrato.getUsuario());
+        }
+        if (contrato.getResponsavel() != null) {
+            contrato.getParticipantes().add(contrato.getResponsavel());
+        }
+    }
+
+    private void validarResponsavelObrigatorio(Long responsavelId) {
+        if (responsavelId == null || responsavelId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um responsável para o contrato");
+        }
+    }
+
+    private void validarParticipantesObrigatorios(List<Long> participanteIds) {
+        if (participanteIds == null || participanteIds.stream().filter(Objects::nonNull).distinct().findAny().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione ao menos um ator para o contrato");
+        }
+    }
+
+    private Set<Usuario> buscarParticipantes(List<Long> participanteIds) {
+        return participanteIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(usuarioId -> buscarUsuarioOuFalhar(usuarioId, "Ator do contrato não encontrado"))
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private Usuario buscarUsuarioOuFalhar(Long usuarioId, String mensagem) {
+        return usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, mensagem));
+    }
+
+    private void aplicarResponsavelEParticipantes(Contrato contrato, Long responsavelId, List<Long> participanteIds) {
+        validarResponsavelObrigatorio(responsavelId);
+        validarParticipantesObrigatorios(participanteIds);
+
+        Usuario responsavel = buscarUsuarioOuFalhar(responsavelId, "Responsável do contrato não encontrado");
+        Set<Usuario> participantes = buscarParticipantes(participanteIds);
+        if (contrato.getUsuario() != null) {
+            participantes.add(contrato.getUsuario());
+        }
+        participantes.add(responsavel);
+
+        validarParticipantesRemovidosSemTasks(contrato, participantes);
+
+        contrato.setResponsavel(responsavel);
+        contrato.setParticipantes(participantes);
+    }
+
+    private void validarParticipantesRemovidosSemTasks(Contrato contrato, Set<Usuario> novosParticipantes) {
+        if (contrato.getIdContrato() == null || contrato.getParticipantes() == null) {
+            return;
+        }
+
+        Set<Long> novosIds = novosParticipantes.stream()
+                .map(Usuario::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        List<Usuario> removidos = contrato.getParticipantes().stream()
+                .filter(participante -> participante.getId() != null && !novosIds.contains(participante.getId()))
+                .toList();
+
+        for (Usuario removido : removidos) {
+            if (taskRepository.existsByContrato_IdContratoAndResponsavel_Id(contrato.getIdContrato(), removido.getId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Não é possível remover " + removido.getNomeCompleto() + " porque há tarefas vinculadas a este participante"
+                );
+            }
         }
     }
 }

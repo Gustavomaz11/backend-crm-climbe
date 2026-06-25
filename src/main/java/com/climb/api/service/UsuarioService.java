@@ -11,6 +11,8 @@ import com.climb.api.mapper.UsuarioMapper;
 import com.climb.api.model.Cargo;
 import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.OAuthProvider;
+import com.climb.api.model.Permissao;
+import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.UsuarioOAuth;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
@@ -18,6 +20,7 @@ import com.climb.api.model.dto.UsuarioRequestDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 import com.climb.api.repository.CargoRepository;
 import com.climb.api.repository.OAuth2PendingRegistrationRepository;
+import com.climb.api.repository.PermissaoRepository;
 import com.climb.api.repository.UsuarioOAuthRepository;
 import com.climb.api.repository.UsuarioRepository;
 
@@ -37,6 +40,7 @@ public class UsuarioService {
     private final UsuarioMapper usuarioMapper;
     private final OAuth2PendingRegistrationRepository pendingRepository;
     private final UsuarioOAuthRepository usuarioOAuthRepository;
+    private final PermissaoRepository permissaoRepository;
 
     public UsuarioService(UsuarioRepository repository,
                           EmailService emailService,
@@ -44,7 +48,8 @@ public class UsuarioService {
                           CargoRepository cargoRepository,
                           UsuarioMapper usuarioMapper,
                           OAuth2PendingRegistrationRepository pendingRepository,
-                          UsuarioOAuthRepository usuarioOAuthRepository) {
+                          UsuarioOAuthRepository usuarioOAuthRepository,
+                          PermissaoRepository permissaoRepository) {
         this.repository = repository;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
@@ -52,6 +57,7 @@ public class UsuarioService {
         this.usuarioMapper = usuarioMapper;
         this.pendingRepository = pendingRepository;
         this.usuarioOAuthRepository = usuarioOAuthRepository;
+        this.permissaoRepository = permissaoRepository;
     }
 
     public Usuario buscarPorId(Long id) {
@@ -95,6 +101,7 @@ public class UsuarioService {
         usuario.setSituacao("ESPERANDO_APROVACAO");
         usuario.setCargo(cargo);
         usuario.setSenhaHash(passwordEncoder.encode(senha));
+        atribuirPermissaoPadraoAgendamento(usuario);
 
         Usuario salvo = repository.save(usuario);
         emailService.enviarEmailBoasVindas(salvo.getEmail(), salvo.getNomeCompleto());
@@ -122,6 +129,7 @@ public class UsuarioService {
         usuario.setSenhaHash(passwordEncoder.encode(dto.getSenha()));
         usuario.setSituacao("ESPERANDO_APROVACAO");
         usuario.setCargo(cargo);
+        atribuirPermissaoPadraoAgendamento(usuario);
 
         return toResponse(repository.save(usuario));
     }
@@ -171,6 +179,7 @@ public class UsuarioService {
         }
 
         usuario.setSituacao("ATIVO");
+        atribuirPermissaoPadraoAgendamento(usuario);
         return toResponse(repository.save(usuario));
     }
 
@@ -232,6 +241,7 @@ public class UsuarioService {
         usuario.setCargo(cargo);
         usuario.setSituacao("ATIVO");
         usuario.setSenhaHash("GOOGLE_OAUTH_" + UUID.randomUUID());
+        atribuirPermissaoPadraoAgendamento(usuario);
 
         Usuario salvo = repository.save(usuario);
 
@@ -268,6 +278,15 @@ public class UsuarioService {
     Cargo buscarCargoOuFalhar(Long cargoId) {
         return cargoRepository.findById(cargoId)
                 .orElseThrow(() -> new RuntimeException("Cargo não encontrado"));
+    }
+
+    private void atribuirPermissaoPadraoAgendamento(Usuario usuario) {
+        Permissao permissao = permissaoRepository
+                .findByCodigo(PermissaoCodigo.REUNIAO_AGENDAMENTO.name())
+                .orElse(null);
+        if (permissao != null) {
+            usuario.getPermissoes().add(permissao);
+        }
     }
 
     private void validarCpfEmailDisponiveis(String cpf, String email, Long usuarioIdAtual) {

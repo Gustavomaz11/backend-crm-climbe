@@ -2,6 +2,8 @@ package com.climb.api.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "contratos")
@@ -19,6 +21,18 @@ public class Contrato {
     @ManyToOne
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
+
+    @ManyToOne
+    @JoinColumn(name = "id_responsavel")
+    private Usuario responsavel;
+
+    @ManyToMany
+    @JoinTable(
+            name = "contrato_participantes",
+            joinColumns = @JoinColumn(name = "contrato_id"),
+            inverseJoinColumns = @JoinColumn(name = "usuario_id")
+    )
+    private Set<Usuario> participantes = new HashSet<>();
 
     @ManyToOne
     @JoinColumn(name = "empresa_id", nullable = false)
@@ -47,6 +61,12 @@ public class Contrato {
 
     public Usuario getUsuario() { return usuario; }
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+
+    public Usuario getResponsavel() { return responsavel; }
+    public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
+
+    public Set<Usuario> getParticipantes() { return participantes; }
+    public void setParticipantes(Set<Usuario> participantes) { this.participantes = participantes; }
 
     public Empresa getEmpresa() { return empresa; }
     public void setEmpresa(Empresa empresa) { this.empresa = empresa; }
