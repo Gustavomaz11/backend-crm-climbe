@@ -1,15 +1,11 @@
 package com.climb.api.service;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +13,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.climb.api.model.Empresa;
 import com.climb.api.model.ParticipanteReuniao;
@@ -57,82 +55,50 @@ public class ReuniaoService {
         this.reuniaoEmailService = reuniaoEmailService;
     }
 
-    public List<ReuniaoListItemDTO> listar(String googleAccessToken) {
-        List<Reuniao> reunioes = repository.findAll();
-        log.info("ReuniaoService.listar - linhas no banco: {}", reunioes.size());
+    public List<ReuniaoListItemDTO> listar(Long usuarioId, String googleAccessToken) {
+        exigirUsuarioAutenticado(usuarioId);
+        List<Reuniao> reunioes = repository.findVisiveisParaUsuario(usuarioId);
+        log.info("ReuniaoService.listar - usuario {} - linhas visiveis no banco: {}", usuarioId, reunioes.size());
 
-        if (googleAccessToken == null || googleAccessToken.isBlank()) {
-            List<ReuniaoListItemDTO> soBanco = reunioes.stream().map(ReuniaoListItemDTO::fromEntity).toList();
-            log.info("ReuniaoService.listar - sem token Google; so banco: {} DTOs", soBanco.size());
-            return soBanco;
+        List<Reuniao> visiveis = reunioes;
+        if (googleAccessToken != null && !googleAccessToken.isBlank()) {
+            visiveis = reunioes.stream()
+                    .filter(reuniao -> sincronizarEventoGoogle(reuniao, googleAccessToken))
+                    .toList();
+            log.info("ReuniaoService.listar - apos sync Google com banco: {} reunioes", visiveis.size());
         }
 
-        List<Reuniao> filtradas = reunioes.stream()
-                .filter(reuniao -> sincronizarEventoGoogle(reuniao, googleAccessToken))
-                .toList();
-        log.info("ReuniaoService.listar - apos sync Google com banco: {} reunioes", filtradas.size());
-
-        Set<String> idsGoogleJaNoClimb = filtradas.stream()
-                .map(Reuniao::getGoogleEventId)
-                .filter(id -> id != null && !id.isBlank())
-                .collect(Collectors.toCollection(HashSet::new));
-        log.info("ReuniaoService.listar - googleEventIds ja no Climb: {}", idsGoogleJaNoClimb.size());
-
-        List<ReuniaoListItemDTO> resultado = new ArrayList<>(filtradas.stream()
+        List<ReuniaoListItemDTO> resultado = new ArrayList<>(visiveis.stream()
                 .map(ReuniaoListItemDTO::fromEntity)
                 .toList());
-        int antesExternos = resultado.size();
-
-        try {
-            Instant min = Instant.now().minus(90, ChronoUnit.DAYS);
-            Instant max = Instant.now().plus(365, ChronoUnit.DAYS);
-            log.info("ReuniaoService.listar - janela Calendar: {} .. {}", min, max);
-            List<Event> externos = googleCalendarService.listarEventosPrimarios(googleAccessToken, min, max);
-            int add = 0;
-            int skipCancel = 0;
-            int skipDup = 0;
-            for (Event ev : externos) {
-                if (ev == null || "cancelled".equalsIgnoreCase(ev.getStatus())) {
-                    skipCancel++;
-                    continue;
-                }
-                String gid = ev.getId();
-                if (gid == null || idsGoogleJaNoClimb.contains(gid)) {
-                    skipDup++;
-                    continue;
-                }
-                resultado.add(ReuniaoListItemDTO.fromGoogleEventExterno(ev));
-                add++;
-            }
-            log.info("ReuniaoService.listar - Google: {} eventos; skip cancelados={}; skip dup/id vazio={}; adicionados={}",
-                    externos.size(), skipCancel, skipDup, add);
-        } catch (Exception e) {
-            log.warn("ReuniaoService.listar - falha mescla Calendar: {} - {}", e.getClass().getSimpleName(), e.getMessage());
-        }
-
         resultado.sort(Comparator
                 .comparing(ReuniaoListItemDTO::getData, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(ReuniaoListItemDTO::getHora, Comparator.nullsLast(Comparator.naturalOrder())));
-        log.info("ReuniaoService.listar - total resposta: {} ({} do banco + externos)", resultado.size(), antesExternos);
+        log.info("ReuniaoService.listar - total resposta filtrada por participantes: {}", resultado.size());
         return resultado;
     }
 
-    public Reuniao buscarPorId(Long id) {
-        return repository.findById(id)
+    public Reuniao buscarPorId(Long id, Long usuarioId) {
+        exigirUsuarioAutenticado(usuarioId);
+        Reuniao reuniao = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Reuniao nao encontrada"));
+        exigirParticipante(reuniao.getIdReuniao(), usuarioId);
+        return reuniao;
     }
 
-    public List<Reuniao> listarPorEmpresa(Long empresaId) {
-        return repository.findByEmpresa_IdEmpresa(empresaId);
+    public List<Reuniao> listarPorEmpresa(Long empresaId, Long usuarioId) {
+        exigirUsuarioAutenticado(usuarioId);
+        return repository.findByEmpresaVisiveisParaUsuario(empresaId, usuarioId);
     }
 
     @Transactional
-    public Reuniao criar(ReuniaoRequestDTO request, String accessToken) throws Exception {
+    public Reuniao criar(ReuniaoRequestDTO request, Long usuarioId, String accessToken) throws Exception {
+        exigirUsuarioAutenticado(usuarioId);
         Reuniao reuniao = new Reuniao();
         preencherReuniao(reuniao, request);
 
         Reuniao salva = repository.save(reuniao);
-        salvarParticipantes(salva, request.getParticipanteIds());
+        salvarParticipantes(salva, incluirUsuarioAutenticado(request.getParticipanteIds(), usuarioId));
 
         if (accessToken == null || accessToken.isBlank()) {
             log.info("Reuniao {} criada sem integracao com Google Calendar por ausencia de token", salva.getIdReuniao());
@@ -152,8 +118,11 @@ public class ReuniaoService {
     }
 
     @Transactional
-    public Reuniao atualizar(Long id, ReuniaoRequestDTO request, String accessToken) {
-        Reuniao reuniao = buscarPorId(id);
+    public Reuniao atualizar(Long id, Long usuarioId, ReuniaoRequestDTO request, String accessToken) {
+        exigirUsuarioAutenticado(usuarioId);
+        Reuniao reuniao = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reuniao nao encontrada"));
+        exigirParticipante(reuniao.getIdReuniao(), usuarioId);
         preencherReuniao(reuniao, request);
 
         Reuniao salva = repository.save(reuniao);
@@ -172,8 +141,11 @@ public class ReuniaoService {
         return salva;
     }
 
-    public void deletar(Long id, String accessToken) {
-        Reuniao reuniao = buscarPorId(id);
+    public void deletar(Long id, Long usuarioId, String accessToken) {
+        exigirUsuarioAutenticado(usuarioId);
+        Reuniao reuniao = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reuniao nao encontrada"));
+        exigirParticipante(reuniao.getIdReuniao(), usuarioId);
         if (accessToken != null &&
                 !accessToken.isBlank() &&
                 reuniao.getGoogleEventId() != null &&
@@ -211,6 +183,18 @@ public class ReuniaoService {
         reuniao.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : "AGENDADA");
     }
 
+    private void exigirUsuarioAutenticado(Long usuarioId) {
+        if (usuarioId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não autenticado");
+        }
+    }
+
+    private void exigirParticipante(Long reuniaoId, Long usuarioId) {
+        if (!participanteReuniaoRepository.existsByReuniao_IdReuniaoAndUsuario_Id(reuniaoId, usuarioId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não participa desta reunião");
+        }
+    }
+
     private void salvarParticipantes(Reuniao reuniao, List<Long> participanteIds) {
         List<ParticipanteReuniao> atuais = participanteReuniaoRepository.findByReuniao_IdReuniao(reuniao.getIdReuniao());
         if (!atuais.isEmpty()) {
@@ -238,6 +222,18 @@ public class ReuniaoService {
         }).toList();
 
         participanteReuniaoRepository.saveAll(participantes);
+    }
+
+    private List<Long> incluirUsuarioAutenticado(List<Long> participanteIds, Long usuarioId) {
+        List<Long> ids = new ArrayList<>();
+        if (participanteIds != null) {
+            ids.addAll(participanteIds);
+        }
+        ids.add(usuarioId);
+        return ids.stream()
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
     }
 
     private boolean sincronizarEventoGoogle(Reuniao reuniao, String accessToken) {
@@ -314,4 +310,3 @@ public class ReuniaoService {
                 });
     }
 }
-
