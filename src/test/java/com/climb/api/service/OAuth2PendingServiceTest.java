@@ -28,6 +28,9 @@ class OAuth2PendingServiceTest {
     @Mock
     private AprovacaoAcessoService aprovacaoAcessoService;
 
+    @Mock
+    private SolicitacaoAcessoService solicitacaoAcessoService;
+
     @InjectMocks
     private OAuth2PendingService service;
 

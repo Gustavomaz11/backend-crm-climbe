@@ -38,4 +38,16 @@ public class UsuarioOAuth {
 
     @Column(name = "vinculado_em", nullable = false)
     private LocalDateTime vinculadoEm;
+
+    @Column(name = "access_token_criptografado", length = 4096)
+    private String accessTokenCriptografado;
+
+    @Column(name = "refresh_token_criptografado", length = 4096)
+    private String refreshTokenCriptografado;
+
+    @Column(name = "access_token_expira_em")
+    private LocalDateTime accessTokenExpiraEm;
+
+    @Column(length = 1000)
+    private String scopes;
 }

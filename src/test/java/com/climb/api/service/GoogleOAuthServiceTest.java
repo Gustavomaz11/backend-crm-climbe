@@ -47,6 +47,9 @@ class GoogleOAuthServiceTest {
     @Mock
     private JwtUtil jwtUtil;
 
+    @Mock
+    private GoogleCredentialService googleCredentialService;
+
     @InjectMocks
     private GoogleOAuthService googleOAuthService;
 

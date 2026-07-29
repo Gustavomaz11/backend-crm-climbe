@@ -4,7 +4,11 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
 
-  # Flyway excluído da app - migrations rodam apenas no container dedicado no deploy
+  # No Render a propria API aplica as migrations antes de validar o schema.
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+
   jpa:
     hibernate:
       ddl-auto: validate

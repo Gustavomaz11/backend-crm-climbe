@@ -2,6 +2,8 @@ package com.climb.api.service;
 
 import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.OAuthProvider;
+import com.climb.api.model.SolicitacaoAcessoOrigem;
+import com.climb.api.model.SolicitacaoAcessoStatus;
 import com.climb.api.repository.OAuth2PendingRegistrationRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,11 +21,14 @@ public class OAuth2PendingService {
 
     private final OAuth2PendingRegistrationRepository repository;
     private final AprovacaoAcessoService aprovacaoAcessoService;
+    private final SolicitacaoAcessoService solicitacaoAcessoService;
 
     public OAuth2PendingService(OAuth2PendingRegistrationRepository repository,
-                                AprovacaoAcessoService aprovacaoAcessoService) {
+                                AprovacaoAcessoService aprovacaoAcessoService,
+                                SolicitacaoAcessoService solicitacaoAcessoService) {
         this.repository = repository;
         this.aprovacaoAcessoService = aprovacaoAcessoService;
+        this.solicitacaoAcessoService = solicitacaoAcessoService;
     }
 
     @Transactional
@@ -50,7 +55,9 @@ public class OAuth2PendingService {
         pending.setAprovado(false);
         pending.setCriadoEm(now);
 
-        return repository.save(pending);
+        OAuth2PendingRegistration salvo = repository.save(pending);
+        solicitacaoAcessoService.registrarGoogle(salvo);
+        return salvo;
     }
 
     @Transactional
@@ -78,10 +85,16 @@ public class OAuth2PendingService {
         pending.getPermissoes().clear();
         pending.getPermissoes().addAll(atribuicao.permissoes());
         repository.save(pending);
+        solicitacaoAcessoService.decidir(
+                SolicitacaoAcessoOrigem.GOOGLE,
+                pendingId,
+                SolicitacaoAcessoStatus.APROVADO,
+                aprovadorUsuarioId,
+                atribuicao.cargo().getNome());
     }
 
     @Transactional
-    public void recusar(Long pendingId) {
+    public void recusar(Long pendingId, Long aprovadorUsuarioId) {
         OAuth2PendingRegistration pending = repository.findById(pendingId)
                 .orElseThrow(() -> new RuntimeException("Cadastro pendente nao encontrado"));
 
@@ -92,6 +105,12 @@ public class OAuth2PendingService {
         pending.setConsumido(true);
         pending.setAprovado(false);
         repository.save(pending);
+        solicitacaoAcessoService.decidir(
+                SolicitacaoAcessoOrigem.GOOGLE,
+                pendingId,
+                SolicitacaoAcessoStatus.RECUSADO,
+                aprovadorUsuarioId,
+                null);
     }
 
     public Optional<OAuth2PendingRegistration> findAtivoPorProvider(OAuthProvider provider, String providerUserId) {

@@ -23,6 +23,7 @@ import com.climb.api.model.dto.UsuarioResponseDTO;
 import com.climb.api.service.OAuth2PendingService;
 import com.climb.api.service.AuthenticationService;
 import com.climb.api.service.RbacService;
+import com.climb.api.service.SolicitacaoAcessoService;
 import com.climb.api.service.UsuarioService;
 
 @RestController
@@ -33,15 +34,18 @@ public class UsuarioController {
     private final RbacService rbacService;
     private final OAuth2PendingService pendingService;
     private final AuthenticationService authenticationService;
+    private final SolicitacaoAcessoService solicitacaoAcessoService;
 
     public UsuarioController(UsuarioService service,
                              RbacService rbacService,
                              OAuth2PendingService pendingService,
-                             AuthenticationService authenticationService) {
+                             AuthenticationService authenticationService,
+                             SolicitacaoAcessoService solicitacaoAcessoService) {
         this.service = service;
         this.rbacService = rbacService;
         this.pendingService = pendingService;
         this.authenticationService = authenticationService;
+        this.solicitacaoAcessoService = solicitacaoAcessoService;
     }
 
     @GetMapping
@@ -82,6 +86,12 @@ public class UsuarioController {
         return resultado;
     }
 
+    @GetMapping("/solicitacoes")
+    public List<UsuarioPendenteResponseDTO> listarSolicitacoesAcesso() {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        return solicitacaoAcessoService.listar();
+    }
+
     @GetMapping("/{id}")
     public UsuarioResponseDTO buscarPorId(@PathVariable Long id) {
         return service.buscarPorIdDTO(id);
@@ -107,13 +117,13 @@ public class UsuarioController {
     public UsuarioResponseDTO aprovarUsuario(@PathVariable Long id,
                                              @RequestBody AprovarAcessoRequestDTO dto) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
-        return service.aprovarUsuario(id, dto.cargoId(), dto.permissaoIds());
+        return service.aprovarUsuario(id, usuarioAutenticadoId(), dto.cargoId(), dto.permissaoIds());
     }
 
     @PostMapping("/{id}/recusar")
     public UsuarioResponseDTO recusarUsuario(@PathVariable Long id) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
-        return service.recusarUsuario(id);
+        return service.recusarUsuario(id, usuarioAutenticadoId());
     }
 
     @PostMapping("/pendentes-google/{pendingId}/aprovar")
@@ -121,7 +131,7 @@ public class UsuarioController {
             @PathVariable Long pendingId,
             @RequestBody AprovarAcessoRequestDTO dto) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
-        Long aprovadorId = (Long) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        Long aprovadorId = usuarioAutenticadoId();
         try {
             pendingService.aprovar(pendingId, aprovadorId, dto.cargoId(), dto.permissaoIds());
             return ResponseEntity.ok(ApiResponse.ok(null, "Cadastro Google aprovado"));
@@ -133,8 +143,9 @@ public class UsuarioController {
     @PostMapping("/pendentes-google/{pendingId}/recusar")
     public ResponseEntity<ApiResponse<Void>> recusarPendingGoogle(@PathVariable Long pendingId) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        Long aprovadorId = usuarioAutenticadoId();
         try {
-            pendingService.recusar(pendingId);
+            pendingService.recusar(pendingId, aprovadorId);
             return ResponseEntity.ok(ApiResponse.ok(null, "Cadastro Google recusado"));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
@@ -163,9 +174,17 @@ public class UsuarioController {
     }
 
     private void exigirPermissao(PermissaoCodigo permissao) {
-        Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getDetails();
+        Long userId = usuarioAutenticadoId();
         if (!rbacService.temPermissao(userId, permissao)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão: " + permissao);
         }
+    }
+
+    private Long usuarioAutenticadoId() {
+        Object details = SecurityContextHolder.getContext().getAuthentication().getDetails();
+        if (details instanceof Number id) {
+            return id.longValue();
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario nao autenticado");
     }
 }

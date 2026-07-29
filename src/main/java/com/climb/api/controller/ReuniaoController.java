@@ -25,12 +25,8 @@ public class ReuniaoController {
     }
 
     @GetMapping
-    public List<ReuniaoListItemDTO> listar(
-            @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) {
-        boolean comGoogle = googleAccessToken != null && !googleAccessToken.isBlank();
-        log.info("GET /reunioes - header Google: presente={}, tamanho={}",
-                comGoogle, comGoogle ? googleAccessToken.length() : 0);
-        List<ReuniaoListItemDTO> out = service.listar(getAuthenticatedUserId(), googleAccessToken);
+    public List<ReuniaoListItemDTO> listar() {
+        List<ReuniaoListItemDTO> out = service.listar(getAuthenticatedUserId());
         log.info("GET /reunioes - retornando {} itens", out.size());
         return out;
     }
@@ -46,25 +42,20 @@ public class ReuniaoController {
     }
 
     @PostMapping
-    public Reuniao criar(
-            @RequestBody ReuniaoRequestDTO reuniao,
-            @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) throws Exception {
-        return service.criar(reuniao, getAuthenticatedUserId(), googleAccessToken);
+    public Reuniao criar(@RequestBody ReuniaoRequestDTO reuniao) throws Exception {
+        return service.criar(reuniao, getAuthenticatedUserId());
     }
 
     @PutMapping("/{id}")
     public Reuniao atualizar(
             @PathVariable Long id,
-            @RequestBody ReuniaoRequestDTO atualizada,
-            @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) {
-        return service.atualizar(id, getAuthenticatedUserId(), atualizada, googleAccessToken);
+            @RequestBody ReuniaoRequestDTO atualizada) {
+        return service.atualizar(id, getAuthenticatedUserId(), atualizada);
     }
 
     @DeleteMapping("/{id}")
-    public void deletar(
-            @PathVariable Long id,
-            @RequestHeader(value = "X-Google-Access-Token", required = false) String googleAccessToken) {
-        service.deletar(id, getAuthenticatedUserId(), googleAccessToken);
+    public void deletar(@PathVariable Long id) {
+        service.deletar(id, getAuthenticatedUserId());
     }
 
     private Long getAuthenticatedUserId() {

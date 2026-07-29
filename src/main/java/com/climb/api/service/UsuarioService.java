@@ -13,6 +13,8 @@ import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.OAuthProvider;
 import com.climb.api.model.Permissao;
 import com.climb.api.model.PermissaoCodigo;
+import com.climb.api.model.SolicitacaoAcessoOrigem;
+import com.climb.api.model.SolicitacaoAcessoStatus;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.UsuarioOAuth;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
@@ -42,6 +44,8 @@ public class UsuarioService {
     private final UsuarioOAuthRepository usuarioOAuthRepository;
     private final PermissaoRepository permissaoRepository;
     private final AprovacaoAcessoService aprovacaoAcessoService;
+    private final SolicitacaoAcessoService solicitacaoAcessoService;
+    private final GoogleCredentialService googleCredentialService;
 
     public UsuarioService(UsuarioRepository repository,
                           EmailService emailService,
@@ -51,7 +55,9 @@ public class UsuarioService {
                           OAuth2PendingRegistrationRepository pendingRepository,
                           UsuarioOAuthRepository usuarioOAuthRepository,
                           PermissaoRepository permissaoRepository,
-                          AprovacaoAcessoService aprovacaoAcessoService) {
+                          AprovacaoAcessoService aprovacaoAcessoService,
+                          SolicitacaoAcessoService solicitacaoAcessoService,
+                          GoogleCredentialService googleCredentialService) {
         this.repository = repository;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
@@ -61,6 +67,8 @@ public class UsuarioService {
         this.usuarioOAuthRepository = usuarioOAuthRepository;
         this.permissaoRepository = permissaoRepository;
         this.aprovacaoAcessoService = aprovacaoAcessoService;
+        this.solicitacaoAcessoService = solicitacaoAcessoService;
+        this.googleCredentialService = googleCredentialService;
     }
 
     public Usuario buscarPorId(Long id) {
@@ -112,6 +120,7 @@ public class UsuarioService {
         return salvo;
     }
 
+    @Transactional
     public UsuarioResponseDTO criar(UsuarioRequestDTO dto) {
         exigirCampoObrigatorio(dto.getNomeCompleto(), "Nome");
         exigirCampoObrigatorio(dto.getCpf(), "CPF");
@@ -134,7 +143,9 @@ public class UsuarioService {
         usuario.setCargo(cargo);
         atribuirPermissaoPadraoAgendamento(usuario);
 
-        return toResponse(repository.save(usuario));
+        Usuario salvo = repository.save(usuario);
+        solicitacaoAcessoService.registrarUsuario(salvo);
+        return toResponse(salvo);
     }
 
     public String criarSolicitacaoAcesso(UsuarioRequestDTO dto) {
@@ -176,6 +187,7 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioResponseDTO aprovarUsuario(Long id,
+                                             Long aprovadorId,
                                              Long cargoId,
                                              Set<Long> permissaoIds) {
         Usuario usuario = buscarPorId(id);
@@ -191,10 +203,18 @@ public class UsuarioService {
         usuario.getPermissoes().clear();
         usuario.getPermissoes().addAll(atribuicao.permissoes());
         usuario.setSituacao("ATIVO");
-        return toResponse(repository.save(usuario));
+        Usuario salvo = repository.save(usuario);
+        solicitacaoAcessoService.decidir(
+                SolicitacaoAcessoOrigem.USUARIO,
+                id,
+                SolicitacaoAcessoStatus.APROVADO,
+                aprovadorId,
+                atribuicao.cargo().getNome());
+        return toResponse(salvo);
     }
 
-    public UsuarioResponseDTO recusarUsuario(Long id) {
+    @Transactional
+    public UsuarioResponseDTO recusarUsuario(Long id, Long aprovadorId) {
         Usuario usuario = buscarPorId(id);
 
         if (!"ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
@@ -202,7 +222,14 @@ public class UsuarioService {
         }
 
         usuario.setSituacao("INATIVO");
-        return toResponse(repository.save(usuario));
+        Usuario salvo = repository.save(usuario);
+        solicitacaoAcessoService.decidir(
+                SolicitacaoAcessoOrigem.USUARIO,
+                id,
+                SolicitacaoAcessoStatus.RECUSADO,
+                aprovadorId,
+                null);
+        return toResponse(salvo);
     }
 
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {
@@ -264,6 +291,7 @@ public class UsuarioService {
         vinculo.setAvatarUrl(pending.getAvatarUrl());
         vinculo.setVinculadoEm(LocalDateTime.now());
         usuarioOAuthRepository.save(vinculo);
+        googleCredentialService.transferirPendingParaVinculo(pending, vinculo);
 
         return toResponse(salvo);
     }

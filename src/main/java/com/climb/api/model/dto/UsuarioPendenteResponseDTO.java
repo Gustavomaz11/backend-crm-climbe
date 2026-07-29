@@ -16,6 +16,9 @@ public class UsuarioPendenteResponseDTO {
     private String cpf;
     private String contato;
     private String cargoNome;
+    private String status;
     private LocalDateTime criadoEm;
     private LocalDateTime expiraEm;
+    private LocalDateTime decididoEm;
+    private Long decididoPor;
 }

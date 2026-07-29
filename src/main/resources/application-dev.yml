@@ -4,7 +4,10 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}
 
-  # Flyway excluído da app - migrations rodam apenas no container dedicado no deploy
+  # Em desenvolvimento, o Docker Compose continua usando o container Flyway dedicado.
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:false}
+
   jpa:
     hibernate:
       ddl-auto: validate

@@ -42,6 +42,8 @@ class UsuarioServiceAprovacaoTest {
     @Mock private UsuarioOAuthRepository usuarioOAuthRepository;
     @Mock private PermissaoRepository permissaoRepository;
     @Mock private AprovacaoAcessoService aprovacaoAcessoService;
+    @Mock private SolicitacaoAcessoService solicitacaoAcessoService;
+    @Mock private GoogleCredentialService googleCredentialService;
 
     private UsuarioService service;
 
@@ -56,7 +58,9 @@ class UsuarioServiceAprovacaoTest {
                 pendingRepository,
                 usuarioOAuthRepository,
                 permissaoRepository,
-                aprovacaoAcessoService);
+                aprovacaoAcessoService,
+                solicitacaoAcessoService,
+                googleCredentialService);
     }
 
     @Test

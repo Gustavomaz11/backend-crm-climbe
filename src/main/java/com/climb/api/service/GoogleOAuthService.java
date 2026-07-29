@@ -77,6 +77,7 @@ public class GoogleOAuthService {
     private final AuthenticationService authenticationService;
     private final UsuarioMapper usuarioMapper;
     private final OAuth2PendingService pendingService;
+    private final GoogleCredentialService googleCredentialService;
 
     public GoogleOAuthService(
             GoogleCalendarConfig googleCalendarConfig,
@@ -88,7 +89,8 @@ public class GoogleOAuthService {
             OAuth2ExchangeCodeRepository exchangeCodeRepository,
             AuthenticationService authenticationService,
             UsuarioMapper usuarioMapper,
-            OAuth2PendingService pendingService
+            OAuth2PendingService pendingService,
+            GoogleCredentialService googleCredentialService
     ) {
         this.googleCalendarConfig = googleCalendarConfig;
         this.usuarioService = usuarioService;
@@ -101,6 +103,7 @@ public class GoogleOAuthService {
         this.authenticationService = authenticationService;
         this.usuarioMapper = usuarioMapper;
         this.pendingService = pendingService;
+        this.googleCredentialService = googleCredentialService;
     }
 
     // ==================== Google Calendar API Integration ====================
@@ -450,6 +453,8 @@ public class GoogleOAuthService {
         String googleAccessToken = googleResp.get("access_token").toString();
         String googleRefreshToken = googleResp.get("refresh_token") != null
                 ? googleResp.get("refresh_token").toString() : null;
+        Long expiresIn = googleResp.get("expires_in") instanceof Number number ? number.longValue() : 3600L;
+        String scopes = googleResp.get("scope") != null ? googleResp.get("scope").toString() : GOOGLE_SCOPE;
 
         Map<String, Object> userInfo = obterInfoUsuarioGoogle(googleAccessToken);
         String providerUserId = userInfo.get("sub") != null ? userInfo.get("sub").toString() : null;
@@ -458,6 +463,25 @@ public class GoogleOAuthService {
         String avatarUrl = userInfo.get("picture") != null ? userInfo.get("picture").toString() : null;
 
         GoogleOAuthResolveResponseDTO resolution = resolverLoginGoogle(providerUserId, email, nome, avatarUrl);
+
+        if (STATUS_LOGIN_SUCCESS.equals(resolution.getStatus())
+                && resolution.getLogin() != null
+                && resolution.getLogin().getUsuario() != null) {
+            googleCredentialService.salvarParaUsuario(
+                    resolution.getLogin().getUsuario().getId(),
+                    googleAccessToken,
+                    googleRefreshToken,
+                    expiresIn,
+                    scopes);
+        } else {
+            pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, providerUserId)
+                    .ifPresent(pending -> googleCredentialService.salvarParaPending(
+                            pending,
+                            googleAccessToken,
+                            googleRefreshToken,
+                            expiresIn,
+                            scopes));
+        }
 
         return switch (resolution.getStatus()) {
             case STATUS_LOGIN_SUCCESS -> redirectAposLogin(resolution.getLogin(),
