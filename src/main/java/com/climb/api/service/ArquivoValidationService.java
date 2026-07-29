@@ -4,6 +4,8 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.poifs.filesystem.POIFSFileSystem;
+import org.apache.poi.hslf.usermodel.HSLFSlideShow;
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.tika.Tika;
@@ -22,7 +24,7 @@ import java.util.Set;
 public class ArquivoValidationService {
 
     private static final Set<String> EXTENSOES_PERMITIDAS = Set.of(
-            "pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png", "gif", "bmp"
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png", "gif", "bmp"
     );
 
     private static final Set<String> CONTENT_TYPES_PERMITIDOS = Set.of(
@@ -31,6 +33,8 @@ public class ArquivoValidationService {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/vnd.ms-excel",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "image/jpeg",
             "image/png",
             "image/gif",
@@ -72,6 +76,8 @@ public class ArquivoValidationService {
             case "application/vnd.ms-excel" -> validarXls(conteudo);
             case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> validarDocx(conteudo);
             case "application/msword" -> validarDoc(conteudo);
+            case "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> validarPptx(conteudo);
+            case "application/vnd.ms-powerpoint" -> validarPpt(conteudo);
             default -> throw new IllegalArgumentException("Tipo de arquivo não permitido: " + contentType);
         }
     }
@@ -122,6 +128,26 @@ public class ArquivoValidationService {
         try (POIFSFileSystem ignored = new POIFSFileSystem(new ByteArrayInputStream(conteudo))) {
         } catch (Exception e) {
             throw new IllegalArgumentException("DOC corrompido: " + e.getMessage(), e);
+        }
+    }
+
+    private void validarPptx(byte[] conteudo) {
+        try (XMLSlideShow slides = new XMLSlideShow(new ByteArrayInputStream(conteudo))) {
+            if (slides.getSlides().isEmpty()) {
+                throw new IllegalArgumentException("PPTX sem slides.");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("PPTX corrompido: " + e.getMessage(), e);
+        }
+    }
+
+    private void validarPpt(byte[] conteudo) {
+        try (HSLFSlideShow slides = new HSLFSlideShow(new ByteArrayInputStream(conteudo))) {
+            if (slides.getSlides().isEmpty()) {
+                throw new IllegalArgumentException("PPT sem slides.");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("PPT corrompido: " + e.getMessage(), e);
         }
     }
 

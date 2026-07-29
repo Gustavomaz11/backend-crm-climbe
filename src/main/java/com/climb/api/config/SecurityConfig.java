@@ -46,7 +46,7 @@ public class SecurityConfig {
                                 "/hello", "/healthz", "/error", "/actuator/health", "/actuator/info"
                         ).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/documentos/public/**").permitAll()
+                        .requestMatchers("/documentos/public/**", "/revisoes/public/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/cargos").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/usuarios").permitAll()
                         .requestMatchers(

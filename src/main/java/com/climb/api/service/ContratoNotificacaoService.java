@@ -34,7 +34,7 @@ public class ContratoNotificacaoService {
     public void notificarContratoCriado(Contrato contrato) {
         String assunto = "Contrato criado";
         String mensagem = "Contrato #" + contrato.getIdContrato() + " criado com status " + contrato.getStatus() + ".";
-        notificarInteressados(contrato, assunto, mensagem, TIPO_CONTRATO);
+        notificarEquipeInterna(contrato, assunto, mensagem, TIPO_CONTRATO);
     }
 
     public void notificarContratoAtualizado(Contrato anterior, Contrato atualizado) {
@@ -109,6 +109,13 @@ public class ContratoNotificacaoService {
         if (empresa != null && empresa.getEmail() != null && !empresa.getEmail().isBlank()) {
             emailService.enviarEmail(empresa.getEmail(), assunto, montarCorpo(empresa.getNomeFantasia(), mensagem));
         }
+    }
+
+    private void notificarEquipeInterna(Contrato contrato, String assunto, String mensagem, String tipo) {
+        Usuario responsavel = obterResponsavel(contrato);
+        if (responsavel == null) return;
+        salvarNotificacao(responsavel, mensagem, tipo);
+        emailService.enviarEmail(responsavel.getEmail(), assunto, montarCorpo(responsavel.getNomeCompleto(), mensagem));
     }
 
     private void salvarNotificacao(Usuario usuario, String mensagem, String tipo) {

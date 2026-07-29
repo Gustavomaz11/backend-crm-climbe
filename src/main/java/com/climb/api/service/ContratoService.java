@@ -7,6 +7,7 @@ import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.Proposta;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.HistoricoAprovacaoContratoResponseDTO;
+import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.repository.ContratoRepository;
 import com.climb.api.repository.ContratoKanbanTaskRepository;
@@ -57,6 +58,7 @@ public class ContratoService {
     private final ContratoNotificacaoService contratoNotificacaoService;
     private final CloudflareR2ArquivoStorageService arquivoStorageService;
     private final RbacService rbacService;
+    private final RevisaoDocumentoService revisaoDocumentoService;
     private final int diasAvisoVencimento;
 
     public ContratoService(ContratoRepository repository,
@@ -68,6 +70,7 @@ public class ContratoService {
                            ContratoNotificacaoService contratoNotificacaoService,
                            CloudflareR2ArquivoStorageService arquivoStorageService,
                            RbacService rbacService,
+                           RevisaoDocumentoService revisaoDocumentoService,
                            @Value("${app.contract-notifications.expiration-warning-days:30}") int diasAvisoVencimento) {
         this.repository = repository;
         this.taskRepository = taskRepository;
@@ -78,6 +81,7 @@ public class ContratoService {
         this.contratoNotificacaoService = contratoNotificacaoService;
         this.arquivoStorageService = arquivoStorageService;
         this.rbacService = rbacService;
+        this.revisaoDocumentoService = revisaoDocumentoService;
         this.diasAvisoVencimento = diasAvisoVencimento;
     }
 
@@ -125,6 +129,7 @@ public class ContratoService {
         return salvo;
     }
 
+    @Transactional
     public Contrato criarComArquivo(Long empresaId,
                                     Long propostaId,
                                     Long usuarioId,
@@ -149,9 +154,10 @@ public class ContratoService {
         }
         Usuario responsavel = buscarUsuarioOuFalhar(responsavelId, "Responsável do contrato não encontrado");
         Set<Usuario> participantes = buscarParticipantes(participanteIds);
+        revisaoDocumentoService.validarEnvio(empresa, arquivo);
 
         String prefixo = "contratos/empresa-" + empresa.getIdEmpresa();
-        String url = arquivoStorageService.salvar(arquivo, prefixo).url();
+        ArquivoUploadResponseDTO upload = arquivoStorageService.salvar(arquivo, prefixo);
 
         Contrato contrato = new Contrato();
         contrato.setProposta(proposta);
@@ -160,13 +166,14 @@ public class ContratoService {
         contrato.setEmpresaNomeFantasia(empresa.getNomeFantasia());
         contrato.setDataInicio(LocalDate.now());
         contrato.setStatus(STATUS_PENDENTE);
-        contrato.setUrlPdf(url);
+        contrato.setUrlPdf(upload.url());
         contrato.setResponsavel(responsavel);
         contrato.setParticipantes(participantes);
         normalizarParticipantes(contrato);
 
         Contrato salvo = repository.save(contrato);
         contratoNotificacaoService.notificarContratoCriado(salvo);
+        revisaoDocumentoService.iniciarContrato(salvo, upload, usuario);
         return salvo;
     }
 

@@ -9,6 +9,7 @@ import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.dto.PropostaAprovacaoRequestDTO;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
+import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
 import com.climb.api.repository.PropostaRepository;
@@ -37,19 +38,22 @@ public class PropostaService {
     private final HistoricoAprovacaoPropostaRepository historicoRepository;
     private final RbacService rbacService;
     private final CloudflareR2ArquivoStorageService arquivoStorageService;
+    private final RevisaoDocumentoService revisaoDocumentoService;
 
     public PropostaService(PropostaRepository repository,
                            EmpresaRepository empresaRepository,
                            UsuarioRepository usuarioRepository,
                            HistoricoAprovacaoPropostaRepository historicoRepository,
                            RbacService rbacService,
-                           CloudflareR2ArquivoStorageService arquivoStorageService) {
+                           CloudflareR2ArquivoStorageService arquivoStorageService,
+                           RevisaoDocumentoService revisaoDocumentoService) {
         this.repository = repository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
         this.historicoRepository = historicoRepository;
         this.rbacService = rbacService;
         this.arquivoStorageService = arquivoStorageService;
+        this.revisaoDocumentoService = revisaoDocumentoService;
     }
 
     public List<HistoricoAprovacaoPropostaResponseDTO> listarHistorico(Long propostaId) {
@@ -167,6 +171,7 @@ public class PropostaService {
         return toResponseDTO(repository.save(proposta));
     }
 
+    @Transactional
     public PropostaResponseDTO criarComArquivo(Long empresaId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo, BigDecimal valuation) {
         if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
@@ -176,19 +181,22 @@ public class PropostaService {
 
         Empresa empresa = buscarEmpresa(empresaId);
         Usuario usuario = buscarUsuario(usuarioId);
+        revisaoDocumentoService.validarEnvio(empresa, arquivo);
 
         String prefixo = "propostas/empresa-" + empresa.getIdEmpresa();
-        String url = arquivoStorageService.salvar(arquivo, prefixo).url();
+        ArquivoUploadResponseDTO upload = arquivoStorageService.salvar(arquivo, prefixo);
 
         Proposta proposta = new Proposta();
         proposta.setEmpresa(empresa);
         proposta.setUsuario(usuario);
         proposta.setStatus(PropostaStatus.PENDENTE);
-        proposta.setUrl(url);
+        proposta.setUrl(upload.url());
         proposta.setValuation(valuation);
         proposta.setDataCriacao(LocalDate.now());
 
-        return toResponseDTO(repository.save(proposta));
+        Proposta salva = repository.save(proposta);
+        revisaoDocumentoService.iniciarProposta(salva, upload, usuario);
+        return toResponseDTO(salva);
     }
 
     @Transactional

@@ -36,6 +36,7 @@ class ContratoServiceTest {
     @Mock private ContratoNotificacaoService contratoNotificacaoService;
     @Mock private CloudflareR2ArquivoStorageService arquivoStorageService;
     @Mock private RbacService rbacService;
+    @Mock private RevisaoDocumentoService revisaoDocumentoService;
 
     private ContratoService service;
 
@@ -51,6 +52,7 @@ class ContratoServiceTest {
                 contratoNotificacaoService,
                 arquivoStorageService,
                 rbacService,
+                revisaoDocumentoService,
                 30
         );
     }
