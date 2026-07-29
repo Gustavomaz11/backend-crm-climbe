@@ -35,11 +35,10 @@ public class RevisaoDocumentoVersao {
     @Column(nullable = false, length = 30)
     private RevisaoDocumentoStatus resultado;
 
-    @Lob
-    @Column(name = "comentario_geral")
+    @Column(name = "comentario_geral", columnDefinition = "TEXT")
     private String comentarioGeral;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     private String justificativa;
 
     @ManyToOne

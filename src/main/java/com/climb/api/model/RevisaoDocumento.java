@@ -46,7 +46,7 @@ public class RevisaoDocumento {
     @Column(name = "versao_atual", nullable = false)
     private int versaoAtual;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     private String justificativa;
 
     @Column(name = "criado_em", nullable = false)

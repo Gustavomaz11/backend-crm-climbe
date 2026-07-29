@@ -29,8 +29,7 @@ public class RevisaoDocumentoAnotacao {
     private BigDecimal altura;
     @Column(nullable = false, length = 20)
     private String cor;
-    @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String comentario;
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
