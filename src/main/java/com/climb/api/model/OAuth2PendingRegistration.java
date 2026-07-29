@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -52,4 +54,16 @@ public class OAuth2PendingRegistration {
 
     @Column(name = "aprovado_por")
     private Long aprovadoPor;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cargo_id")
+    private Cargo cargo;
+
+    @ManyToMany
+    @JoinTable(
+            name = "oauth2_pending_permissoes",
+            joinColumns = @JoinColumn(name = "pending_id"),
+            inverseJoinColumns = @JoinColumn(name = "id_permissao")
+    )
+    private Set<Permissao> permissoes = new HashSet<>();
 }

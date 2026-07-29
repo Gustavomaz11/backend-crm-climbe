@@ -37,3 +37,7 @@ build/
 
 ### Logs ###
 *.log
+
+### Certificados locais de rede corporativa ###
+certs/*
+!certs/README.md

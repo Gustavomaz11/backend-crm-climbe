@@ -7,4 +7,5 @@ target/
 .vscode/
 .DS_Store
 README.md
+!certs/README.md
 HELP.md

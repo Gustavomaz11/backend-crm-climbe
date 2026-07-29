@@ -4,6 +4,8 @@ import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.ContratoKanbanBoardResponseDTO;
 import com.climb.api.model.dto.ContratoKanbanMoverTaskRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanRaiaRequestDTO;
+import com.climb.api.model.dto.ContratoKanbanSubtarefaConclusaoRequestDTO;
+import com.climb.api.model.dto.ContratoKanbanSubtarefaRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanTaskRequestDTO;
 import com.climb.api.service.ContratoKanbanService;
 import org.springframework.http.ResponseEntity;
@@ -76,6 +78,54 @@ public class ContratoKanbanController {
             @PathVariable Long contratoId,
             @PathVariable Long taskId) {
         return ResponseEntity.ok(ApiResponse.ok(service.removerTask(contratoId, taskId, getAuthenticatedUserId())));
+    }
+
+    @PostMapping("/tasks/{taskId}/subtasks")
+    public ResponseEntity<ApiResponse<ContratoKanbanBoardResponseDTO>> criarSubtarefa(
+            @PathVariable Long contratoId,
+            @PathVariable Long taskId,
+            @RequestBody ContratoKanbanSubtarefaRequestDTO dto) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                service.criarSubtarefa(contratoId, taskId, getAuthenticatedUserId(), dto)
+        ));
+    }
+
+    @PutMapping("/tasks/{taskId}/subtasks/{subtarefaId}")
+    public ResponseEntity<ApiResponse<ContratoKanbanBoardResponseDTO>> atualizarSubtarefa(
+            @PathVariable Long contratoId,
+            @PathVariable Long taskId,
+            @PathVariable Long subtarefaId,
+            @RequestBody ContratoKanbanSubtarefaRequestDTO dto) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                service.atualizarSubtarefa(contratoId, taskId, subtarefaId, getAuthenticatedUserId(), dto)
+        ));
+    }
+
+    @PatchMapping("/tasks/{taskId}/subtasks/{subtarefaId}/conclusao")
+    public ResponseEntity<ApiResponse<ContratoKanbanBoardResponseDTO>> atualizarConclusaoSubtarefa(
+            @PathVariable Long contratoId,
+            @PathVariable Long taskId,
+            @PathVariable Long subtarefaId,
+            @RequestBody ContratoKanbanSubtarefaConclusaoRequestDTO dto) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                service.atualizarConclusaoSubtarefa(
+                        contratoId,
+                        taskId,
+                        subtarefaId,
+                        getAuthenticatedUserId(),
+                        dto
+                )
+        ));
+    }
+
+    @DeleteMapping("/tasks/{taskId}/subtasks/{subtarefaId}")
+    public ResponseEntity<ApiResponse<ContratoKanbanBoardResponseDTO>> removerSubtarefa(
+            @PathVariable Long contratoId,
+            @PathVariable Long taskId,
+            @PathVariable Long subtarefaId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                service.removerSubtarefa(contratoId, taskId, subtarefaId, getAuthenticatedUserId())
+        ));
     }
 
     private Long getAuthenticatedUserId() {

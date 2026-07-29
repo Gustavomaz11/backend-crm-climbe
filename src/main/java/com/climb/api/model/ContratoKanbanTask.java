@@ -1,5 +1,6 @@
 package com.climb.api.model;
 
+import com.climb.api.model.enums.ContratoKanbanPrioridade;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,6 +27,10 @@ public class ContratoKanbanTask {
 
     @Column(columnDefinition = "TEXT")
     private String descricao;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ContratoKanbanPrioridade prioridade = ContratoKanbanPrioridade.MEDIA;
 
     @ManyToOne
     @JoinColumn(name = "id_responsavel")
@@ -72,6 +77,9 @@ public class ContratoKanbanTask {
 
     public String getDescricao() { return descricao; }
     public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public ContratoKanbanPrioridade getPrioridade() { return prioridade; }
+    public void setPrioridade(ContratoKanbanPrioridade prioridade) { this.prioridade = prioridade; }
 
     public Usuario getResponsavel() { return responsavel; }
     public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }

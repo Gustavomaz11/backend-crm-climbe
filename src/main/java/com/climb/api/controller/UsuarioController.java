@@ -13,6 +13,7 @@ import com.climb.api.config.PendingPrincipal;
 import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.dto.ApiResponse;
+import com.climb.api.model.dto.AprovarAcessoRequestDTO;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
 import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.LoginResponseDTO;
@@ -103,9 +104,10 @@ public class UsuarioController {
     }
 
     @PostMapping("/{id}/aprovar")
-    public UsuarioResponseDTO aprovarUsuario(@PathVariable Long id) {
+    public UsuarioResponseDTO aprovarUsuario(@PathVariable Long id,
+                                             @RequestBody AprovarAcessoRequestDTO dto) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
-        return service.aprovarUsuario(id);
+        return service.aprovarUsuario(id, dto.cargoId(), dto.permissaoIds());
     }
 
     @PostMapping("/{id}/recusar")
@@ -115,11 +117,13 @@ public class UsuarioController {
     }
 
     @PostMapping("/pendentes-google/{pendingId}/aprovar")
-    public ResponseEntity<ApiResponse<Void>> aprovarPendingGoogle(@PathVariable Long pendingId) {
+    public ResponseEntity<ApiResponse<Void>> aprovarPendingGoogle(
+            @PathVariable Long pendingId,
+            @RequestBody AprovarAcessoRequestDTO dto) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
         Long aprovadorId = (Long) SecurityContextHolder.getContext().getAuthentication().getDetails();
         try {
-            pendingService.aprovar(pendingId, aprovadorId);
+            pendingService.aprovar(pendingId, aprovadorId, dto.cargoId(), dto.permissaoIds());
             return ResponseEntity.ok(ApiResponse.ok(null, "Cadastro Google aprovado"));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));

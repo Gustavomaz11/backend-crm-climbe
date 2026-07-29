@@ -148,7 +148,7 @@ public class ContratoNotificacaoService {
 
     private String montarCorpo(String nomeDestino, String mensagem) {
         String saudacao = nomeDestino == null || nomeDestino.isBlank() ? "Ola" : "Ola, " + nomeDestino;
-        return saudacao + "!\n\n" + mensagem + "\n\nAtenciosamente,\nEquipe Climb";
+        return saudacao + "!\n\n" + mensagem + "\n\nAtenciosamente,\nEquipe Climbe";
     }
 
     private String valorOuNaoInformado(Object valor) {

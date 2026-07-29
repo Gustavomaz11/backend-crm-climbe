@@ -17,9 +17,9 @@ public class SwaggerConfig {
 
         return new OpenAPI()
                 .info(new Info()
-                        .title("Climb Services")
+                        .title("Climbe Services")
                         .version("1.0")
-                        .description("API para gerenciamento da Climb"))
+                        .description("API para gerenciamento da Climbe"))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName, new SecurityScheme()

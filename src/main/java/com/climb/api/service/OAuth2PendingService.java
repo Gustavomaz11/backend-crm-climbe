@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -17,9 +18,12 @@ public class OAuth2PendingService {
     private static final int PENDING_TTL_DAYS = 30;
 
     private final OAuth2PendingRegistrationRepository repository;
+    private final AprovacaoAcessoService aprovacaoAcessoService;
 
-    public OAuth2PendingService(OAuth2PendingRegistrationRepository repository) {
+    public OAuth2PendingService(OAuth2PendingRegistrationRepository repository,
+                                AprovacaoAcessoService aprovacaoAcessoService) {
         this.repository = repository;
+        this.aprovacaoAcessoService = aprovacaoAcessoService;
     }
 
     @Transactional
@@ -50,7 +54,10 @@ public class OAuth2PendingService {
     }
 
     @Transactional
-    public void aprovar(Long pendingId, Long aprovadorUsuarioId) {
+    public void aprovar(Long pendingId,
+                        Long aprovadorUsuarioId,
+                        Long cargoId,
+                        Set<Long> permissaoIds) {
         OAuth2PendingRegistration pending = repository.findById(pendingId)
                 .orElseThrow(() -> new RuntimeException("Cadastro pendente nao encontrado"));
 
@@ -60,13 +67,16 @@ public class OAuth2PendingService {
         if (pending.getExpiraEm().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Cadastro pendente expirado");
         }
-        if (Boolean.TRUE.equals(pending.getAprovado())) {
-            return;
-        }
+
+        AprovacaoAcessoService.AtribuicaoAcesso atribuicao =
+                aprovacaoAcessoService.resolver(cargoId, permissaoIds);
 
         pending.setAprovado(true);
         pending.setAprovadoEm(LocalDateTime.now());
         pending.setAprovadoPor(aprovadorUsuarioId);
+        pending.setCargo(atribuicao.cargo());
+        pending.getPermissoes().clear();
+        pending.getPermissoes().addAll(atribuicao.permissoes());
         repository.save(pending);
     }
 

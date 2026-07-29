@@ -232,7 +232,7 @@ public class DocumentoService {
         String corpo = """
                 Ola,
 
-                A Climb solicitou o envio do documento "%s" para %s.
+                A Climbe solicitou o envio do documento "%s" para %s.
 
                 Acesse o link abaixo para anexar o arquivo:
                 %s

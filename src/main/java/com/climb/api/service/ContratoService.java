@@ -105,6 +105,26 @@ public class ContratoService {
         return salvo;
     }
 
+    @Transactional
+    public Contrato criarAPartirDoPipeline(Empresa empresa, Usuario usuario, Usuario responsavel) {
+        if (empresa == null || usuario == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empresa e usuário são obrigatórios para converter o negócio");
+        }
+
+        Contrato contrato = new Contrato();
+        contrato.setEmpresa(empresa);
+        contrato.setEmpresaNomeFantasia(empresa.getNomeFantasia());
+        contrato.setUsuario(usuario);
+        contrato.setResponsavel(responsavel != null ? responsavel : usuario);
+        contrato.setDataInicio(LocalDate.now());
+        contrato.setStatus(STATUS_PENDENTE);
+        contrato.getParticipantes().add(contrato.getResponsavel());
+
+        Contrato salvo = repository.save(contrato);
+        contratoNotificacaoService.notificarContratoCriado(salvo);
+        return salvo;
+    }
+
     public Contrato criarComArquivo(Long empresaId,
                                     Long propostaId,
                                     Long usuarioId,
@@ -432,9 +452,11 @@ public class ContratoService {
         if (contrato.getResponsavel() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Responsável do contrato é obrigatório");
         }
-        validarParticipantesObrigatorios(contrato.getParticipantes() == null
+        List<Long> participanteIds = contrato.getParticipantes() == null
                 ? null
-                : contrato.getParticipantes().stream().map(Usuario::getId).toList());
+                : contrato.getParticipantes().stream().map(Usuario::getId).toList();
+        validarParticipantesObrigatorios(participanteIds);
+        contrato.setParticipantes(buscarParticipantes(participanteIds));
         normalizarParticipantes(contrato);
     }
 

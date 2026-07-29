@@ -70,7 +70,7 @@ public class ReuniaoEmailService {
 
         return "Ola, " + destinatario + "!\n\n"
                 + confirmacao + "\n\n"
-                + "Titulo: " + valorOuPadrao(reuniao.getTitulo(), "Reunião Climb") + "\n"
+                + "Titulo: " + valorOuPadrao(reuniao.getTitulo(), "Reunião Climbe") + "\n"
                 + "Empresa: " + (reuniao.getEmpresa() != null ? valorOuPadrao(reuniao.getEmpresa().getNomeFantasia(), reuniao.getEmpresa().getRazaoSocial()) : "Nao informada") + "\n"
                 + "Quando: " + inicio + "\n"
                 + "Link do Google Meet: " + linkMeet + "\n\n"

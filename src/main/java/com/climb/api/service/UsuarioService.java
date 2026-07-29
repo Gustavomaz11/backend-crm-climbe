@@ -41,6 +41,7 @@ public class UsuarioService {
     private final OAuth2PendingRegistrationRepository pendingRepository;
     private final UsuarioOAuthRepository usuarioOAuthRepository;
     private final PermissaoRepository permissaoRepository;
+    private final AprovacaoAcessoService aprovacaoAcessoService;
 
     public UsuarioService(UsuarioRepository repository,
                           EmailService emailService,
@@ -49,7 +50,8 @@ public class UsuarioService {
                           UsuarioMapper usuarioMapper,
                           OAuth2PendingRegistrationRepository pendingRepository,
                           UsuarioOAuthRepository usuarioOAuthRepository,
-                          PermissaoRepository permissaoRepository) {
+                          PermissaoRepository permissaoRepository,
+                          AprovacaoAcessoService aprovacaoAcessoService) {
         this.repository = repository;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
@@ -58,6 +60,7 @@ public class UsuarioService {
         this.pendingRepository = pendingRepository;
         this.usuarioOAuthRepository = usuarioOAuthRepository;
         this.permissaoRepository = permissaoRepository;
+        this.aprovacaoAcessoService = aprovacaoAcessoService;
     }
 
     public Usuario buscarPorId(Long id) {
@@ -171,15 +174,23 @@ public class UsuarioService {
         repository.delete(buscarPorId(id));
     }
 
-    public UsuarioResponseDTO aprovarUsuario(Long id) {
+    @Transactional
+    public UsuarioResponseDTO aprovarUsuario(Long id,
+                                             Long cargoId,
+                                             Set<Long> permissaoIds) {
         Usuario usuario = buscarPorId(id);
 
         if (!"ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
             throw new RuntimeException("Usuário não está aguardando aprovação");
         }
 
+        AprovacaoAcessoService.AtribuicaoAcesso atribuicao =
+                aprovacaoAcessoService.resolver(cargoId, permissaoIds);
+
+        usuario.setCargo(atribuicao.cargo());
+        usuario.getPermissoes().clear();
+        usuario.getPermissoes().addAll(atribuicao.permissoes());
         usuario.setSituacao("ATIVO");
-        atribuirPermissaoPadraoAgendamento(usuario);
         return toResponse(repository.save(usuario));
     }
 
@@ -206,9 +217,6 @@ public class UsuarioService {
     public UsuarioResponseDTO completarCadastroViaPending(Long pendingId, CompletarCadastroRequestDTO dto) {
         exigirCampoObrigatorio(dto.getCpf(), "CPF");
         exigirCampoObrigatorio(dto.getContato(), "Contato");
-        if (dto.getCargoId() == null) {
-            throw new RuntimeException("Cargo é obrigatório");
-        }
 
         OAuth2PendingRegistration pending = pendingRepository.findById(pendingId)
                 .orElseThrow(() -> new RuntimeException("Cadastro pendente não encontrado"));
@@ -222,6 +230,9 @@ public class UsuarioService {
         if (pending.getExpiraEm().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Cadastro pendente expirado");
         }
+        if (pending.getCargo() == null || pending.getPermissoes().isEmpty()) {
+            throw new RuntimeException("A aprovacao precisa definir cargo e permissoes");
+        }
 
         int linhasAfetadas = pendingRepository.consumirSeNaoConsumido(pendingId);
         if (linhasAfetadas == 0) {
@@ -229,7 +240,6 @@ public class UsuarioService {
         }
 
         validarCpfEmailDisponiveis(dto.getCpf(), pending.getEmail(), null);
-        Cargo cargo = buscarCargoOuFalhar(dto.getCargoId());
 
         Usuario usuario = new Usuario();
         usuario.setNomeCompleto(pending.getNome() != null && !pending.getNome().isBlank()
@@ -238,10 +248,10 @@ public class UsuarioService {
         usuario.setEmail(pending.getEmail());
         usuario.setCpf(dto.getCpf());
         usuario.setContato(dto.getContato());
-        usuario.setCargo(cargo);
+        usuario.setCargo(pending.getCargo());
         usuario.setSituacao("ATIVO");
         usuario.setSenhaHash("GOOGLE_OAUTH_" + UUID.randomUUID());
-        atribuirPermissaoPadraoAgendamento(usuario);
+        usuario.getPermissoes().addAll(pending.getPermissoes());
 
         Usuario salvo = repository.save(usuario);
 

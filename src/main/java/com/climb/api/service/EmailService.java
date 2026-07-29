@@ -17,7 +17,7 @@ public class EmailService {
     private final String remetente;
 
     public EmailService(JavaMailSender mailSender,
-                        @Value("${app.mail.from:no-reply@climb.com}") String remetente) {
+                        @Value("${app.mail.from:no-reply@climbe.com}") String remetente) {
         this.mailSender = mailSender;
         this.remetente = remetente;
     }
@@ -25,7 +25,7 @@ public class EmailService {
     public void enviarEmailBoasVindas(String emailDestino, String nomeUsuario) {
         enviarEmail(
                 emailDestino,
-                "Bem-vindo ao sistema Climb!",
+                "Bem-vindo ao sistema Climbe!",
                 "Ola, " + nomeUsuario + "!\n\nSeu cadastro foi realizado com sucesso.\n"
                         + "As instrucoes de acesso foram enviadas para este e-mail."
         );

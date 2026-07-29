@@ -8,5 +8,6 @@ public record ContratoKanbanBoardResponseDTO(
         boolean gestor,
         UsuarioResumoDTO responsavel,
         List<UsuarioResumoDTO> participantes,
+        List<UsuarioResumoDTO> usuariosDisponiveis,
         List<ContratoKanbanRaiaResponseDTO> raias
 ) {}
