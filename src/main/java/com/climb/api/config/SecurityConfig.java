@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/", "/auth/**",
-                                "/hello", "/error", "/actuator/health", "/actuator/info"
+                                "/hello", "/healthz", "/error", "/actuator/health", "/actuator/info"
                         ).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/documentos/public/**").permitAll()
