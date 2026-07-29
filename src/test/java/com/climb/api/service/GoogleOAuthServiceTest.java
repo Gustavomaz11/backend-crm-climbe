@@ -21,10 +21,13 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,7 +71,7 @@ class GoogleOAuthServiceTest {
         usuario.setEmail("usuario@climbe.com.br");
         usuario.setSituacao("ATIVO");
 
-        when(googleCalendarConfig.isEmailAllowed(anyString()))
+        lenient().when(googleCalendarConfig.isEmailAllowed(anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(0, String.class).endsWith("@climbe.com.br"));
 
         loginResponse = new LoginResponseDTO();
@@ -94,6 +97,20 @@ class GoogleOAuthServiceTest {
         assertEquals(GoogleOAuthService.STATUS_LOGIN_SUCCESS, response.getStatus());
         assertEquals("access-token", response.getLogin().getAccessToken());
         verify(usuarioService, never()).buscarPorEmail(anyString());
+    }
+
+    @Test
+    void deveReaproveitarConsentimentoGoogleNosProximosLogins() {
+        when(googleCalendarConfig.isEnabled()).thenReturn(true);
+        when(googleCalendarConfig.getClientId()).thenReturn("client-id");
+        when(googleCalendarConfig.getClientSecret()).thenReturn("client-secret");
+        when(googleCalendarConfig.getRedirectUri()).thenReturn("https://api.climbe.com/auth/google/callback");
+
+        String authorizationUrl = googleOAuthService.gerarUrlAutorizacao().authorizationUrl();
+
+        assertFalse(authorizationUrl.contains("prompt=consent"));
+        assertTrue(authorizationUrl.contains("access_type=offline"));
+        assertTrue(authorizationUrl.contains("include_granted_scopes=true"));
     }
 
     @Test

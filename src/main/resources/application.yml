@@ -36,9 +36,9 @@ app:
 jwt:
   secret: ${JWT_SECRET:your-secret-key-change-in-production-minimum-256-bits-long}
   expiration:
-    access-token: 900000
-    refresh-token: 604800000
-    pending-token: 1800000
+    access-token: ${JWT_ACCESS_TOKEN_EXPIRATION:7200000}
+    refresh-token: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
+    pending-token: ${JWT_PENDING_TOKEN_EXPIRATION:1800000}
   issuer: climb-api
 
 google:
