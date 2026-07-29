@@ -16,7 +16,7 @@ public class CargoService {
     }
 
     public List<Cargo> listar() {
-        return repository.findAll();
+        return repository.findAllByAtivoTrueOrderByNomeAsc();
     }
 
     public Cargo buscarPorId(Long id) {
@@ -24,6 +24,7 @@ public class CargoService {
     }
 
     public Cargo criar(Cargo cargo) {
+        cargo.setAtivo(true);
         return repository.save(cargo);
     }
 

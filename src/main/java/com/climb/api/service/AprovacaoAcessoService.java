@@ -36,8 +36,8 @@ public class AprovacaoAcessoService {
             throw new IllegalArgumentException("Selecione ao menos uma permissao");
         }
 
-        Cargo cargo = cargoRepository.findById(cargoId)
-                .orElseThrow(() -> new IllegalArgumentException("Cargo nao encontrado"));
+        Cargo cargo = cargoRepository.findByIdAndAtivoTrue(cargoId)
+                .orElseThrow(() -> new IllegalArgumentException("Cargo nao encontrado ou inativo"));
         List<Permissao> permissoesEncontradas = permissaoRepository.findAllById(idsUnicos);
 
         if (permissoesEncontradas.size() != idsUnicos.size()) {

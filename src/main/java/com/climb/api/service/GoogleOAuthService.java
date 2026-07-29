@@ -63,9 +63,6 @@ public class GoogleOAuthService {
     private static final String MSG_DEACTIVATED = "Sua conta foi desativada. Entre em contato com o administrador";
     private static final String MSG_COMPLETAR_CADASTRO = "Cadastro aprovado. Complete seu perfil para concluir o acesso";
 
-    @org.springframework.beans.factory.annotation.Value("${google.calendar.allowed-domain:}")
-    private String googleAllowedDomain;
-
     private final GoogleCalendarConfig googleCalendarConfig;
     private final UsuarioService usuarioService;
     private final UsuarioRepository usuarioRepository;
@@ -425,7 +422,9 @@ public class GoogleOAuthService {
                 .findByUsuarioIdAndProvider(usuarioId, OAuthProvider.GOOGLE)
                 .orElseGet(UsuarioOAuth::new);
 
-        if (vinculo.getId() != null && !vinculo.getProviderUserId().equals(providerUserId)) {
+        if (vinculo.getId() != null
+                && !vinculo.getProviderUserId().equals(providerUserId)
+                && googleCalendarConfig.isEmailAllowed(vinculo.getEmailProvider())) {
             throw new RuntimeException("Este usuario ja possui outra conta Google vinculada");
         }
 
@@ -590,6 +589,8 @@ public class GoogleOAuthService {
         if (email == null || email.isBlank()) {
             throw new RuntimeException("O Google nao retornou um e-mail valido");
         }
+
+        validarEmailCorporativo(email);
     }
 
     private void limparPendenciasExpiradas() {
@@ -609,6 +610,8 @@ public class GoogleOAuthService {
         if (email == null || email.isBlank()) {
             throw new RuntimeException("Google nao retornou e-mail para autenticar no sistema.");
         }
+
+        validarEmailCorporativo(email);
 
         Usuario usuario = usuarioService.buscarPorEmail(email);
 
@@ -667,10 +670,6 @@ public class GoogleOAuthService {
     private Usuario criarUsuarioGoogle(String email, Map<String, Object> userInfo) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
 
-        if (googleAllowedDomain != null && !googleAllowedDomain.isBlank() && !normalizedEmail.endsWith(googleAllowedDomain)) {
-            throw new RuntimeException("E-mail Google " + email + " nao pertence ao dominio permitido (" + googleAllowedDomain + ").");
-        }
-
         Cargo cargo = usuarioService.buscarCargoOuFalhar(1L);
 
         Usuario usuario = new Usuario();
@@ -683,6 +682,13 @@ public class GoogleOAuthService {
         usuario.setCargo(cargo);
 
         return usuarioRepository.save(usuario);
+    }
+
+    private void validarEmailCorporativo(String email) {
+        if (!googleCalendarConfig.isEmailAllowed(email)) {
+            throw new RuntimeException(
+                    "Use uma conta Google corporativa " + googleCalendarConfig.getAllowedDomain());
+        }
     }
 
     private String obterNomeGoogle(String email, Map<String, Object> userInfo) {

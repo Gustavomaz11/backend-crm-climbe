@@ -22,13 +22,16 @@ public class OAuth2PendingService {
     private final OAuth2PendingRegistrationRepository repository;
     private final AprovacaoAcessoService aprovacaoAcessoService;
     private final SolicitacaoAcessoService solicitacaoAcessoService;
+    private final EmailService emailService;
 
     public OAuth2PendingService(OAuth2PendingRegistrationRepository repository,
                                 AprovacaoAcessoService aprovacaoAcessoService,
-                                SolicitacaoAcessoService solicitacaoAcessoService) {
+                                SolicitacaoAcessoService solicitacaoAcessoService,
+                                EmailService emailService) {
         this.repository = repository;
         this.aprovacaoAcessoService = aprovacaoAcessoService;
         this.solicitacaoAcessoService = solicitacaoAcessoService;
+        this.emailService = emailService;
     }
 
     @Transactional
@@ -57,6 +60,7 @@ public class OAuth2PendingService {
 
         OAuth2PendingRegistration salvo = repository.save(pending);
         solicitacaoAcessoService.registrarGoogle(salvo);
+        emailService.enviarAguardandoAprovacao(salvo.getEmail(), salvo.getNome());
         return salvo;
     }
 
@@ -91,6 +95,7 @@ public class OAuth2PendingService {
                 SolicitacaoAcessoStatus.APROVADO,
                 aprovadorUsuarioId,
                 atribuicao.cargo().getNome());
+        emailService.enviarAcessoAprovado(pending.getEmail(), pending.getNome());
     }
 
     @Transactional

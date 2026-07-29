@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,10 +29,12 @@ class GoogleCredentialServiceTest {
         TokenEncryptionService encryption = new TokenEncryptionService(
                 "segredo-de-testes-com-pelo-menos-trinta-e-dois-bytes");
         UsuarioOAuth vinculo = new UsuarioOAuth();
+        vinculo.setEmailProvider("usuario@climbe.com.br");
         vinculo.setAccessTokenCriptografado(encryption.criptografar("token-do-usuario-7"));
         vinculo.setAccessTokenExpiraEm(LocalDateTime.now().plusMinutes(30));
         when(usuarioOAuthRepository.findByUsuarioIdAndProvider(7L, OAuthProvider.GOOGLE))
                 .thenReturn(Optional.of(vinculo));
+        when(config.isEmailAllowed("usuario@climbe.com.br")).thenReturn(true);
 
         GoogleCredentialService service = new GoogleCredentialService(
                 usuarioOAuthRepository,
@@ -40,5 +43,26 @@ class GoogleCredentialServiceTest {
                 config);
 
         assertEquals("token-do-usuario-7", service.obterAccessToken(7L).orElseThrow());
+    }
+
+    @Test
+    void naoDeveUsarTokenDeContaGooglePessoal() {
+        TokenEncryptionService encryption = new TokenEncryptionService(
+                "segredo-de-testes-com-pelo-menos-trinta-e-dois-bytes");
+        UsuarioOAuth vinculo = new UsuarioOAuth();
+        vinculo.setEmailProvider("usuario@gmail.com");
+        vinculo.setAccessTokenCriptografado(encryption.criptografar("token-pessoal"));
+        vinculo.setAccessTokenExpiraEm(LocalDateTime.now().plusMinutes(30));
+        when(usuarioOAuthRepository.findByUsuarioIdAndProvider(7L, OAuthProvider.GOOGLE))
+                .thenReturn(Optional.of(vinculo));
+        when(config.isEmailAllowed("usuario@gmail.com")).thenReturn(false);
+
+        GoogleCredentialService service = new GoogleCredentialService(
+                usuarioOAuthRepository,
+                pendingRepository,
+                encryption,
+                config);
+
+        assertTrue(service.obterAccessToken(7L).isEmpty());
     }
 }

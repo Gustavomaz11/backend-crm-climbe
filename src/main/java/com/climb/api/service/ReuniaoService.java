@@ -305,10 +305,6 @@ public class ReuniaoService {
         String nomeCriador = resolverNomeCriador(emailCriador);
 
         Set<String> convidados = new LinkedHashSet<>();
-        if (reuniao.getEmpresa() != null && StringUtils.hasText(reuniao.getEmpresa().getEmail())) {
-            convidados.add(reuniao.getEmpresa().getEmail().trim());
-        }
-
         participanteReuniaoRepository.findByReuniao_IdReuniao(reuniao.getIdReuniao()).forEach(participante -> {
             if (participante.getUsuario() != null && StringUtils.hasText(participante.getUsuario().getEmail())) {
                 convidados.add(participante.getUsuario().getEmail().trim());

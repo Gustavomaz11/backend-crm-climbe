@@ -31,6 +31,9 @@ class OAuth2PendingServiceTest {
     @Mock
     private SolicitacaoAcessoService solicitacaoAcessoService;
 
+    @Mock
+    private EmailService emailService;
+
     @InjectMocks
     private OAuth2PendingService service;
 
@@ -51,6 +54,8 @@ class OAuth2PendingServiceTest {
     @Test
     void devePersistirCargoEPermissoesEscolhidosPeloAprovador() {
         OAuth2PendingRegistration pending = pendingValido();
+        pending.setEmail("novo@climbe.com.br");
+        pending.setNome("Novo Usuario");
         Cargo cargo = cargo(2L, "CEO");
         Permissao permissao = permissao(10L, "PERMITIR_ACESSO");
         AprovacaoAcessoService.AtribuicaoAcesso atribuicao =
@@ -65,6 +70,30 @@ class OAuth2PendingServiceTest {
         assertEquals(cargo, pending.getCargo());
         assertEquals(Set.of(permissao), pending.getPermissoes());
         verify(repository).save(pending);
+        verify(emailService).enviarAcessoAprovado(pending.getEmail(), pending.getNome());
+    }
+
+    @Test
+    void deveEnviarEmailDeEsperaAoCriarSolicitacaoGoogle() {
+        when(repository.findByProviderAndProviderUserIdAndConsumidoFalse(
+                com.climb.api.model.OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(java.util.Optional.empty());
+        when(repository.save(org.mockito.ArgumentMatchers.any(OAuth2PendingRegistration.class)))
+                .thenAnswer(invocation -> {
+                    OAuth2PendingRegistration pending = invocation.getArgument(0);
+                    pending.setId(42L);
+                    return pending;
+                });
+
+        service.criarPendingGoogle(
+                "google-sub",
+                "novo@climbe.com.br",
+                "Novo Usuario",
+                null);
+
+        verify(emailService).enviarAguardandoAprovacao(
+                "novo@climbe.com.br",
+                "Novo Usuario");
     }
 
     private OAuth2PendingRegistration pendingValido() {

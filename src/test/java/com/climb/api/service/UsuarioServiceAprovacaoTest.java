@@ -7,6 +7,7 @@ import com.climb.api.model.OAuthProvider;
 import com.climb.api.model.Permissao;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
+import com.climb.api.model.dto.UsuarioRequestDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 import com.climb.api.repository.CargoRepository;
 import com.climb.api.repository.OAuth2PendingRegistrationRepository;
@@ -90,6 +91,55 @@ class UsuarioServiceAprovacaoTest {
         Usuario usuarioSalvo = usuarioCaptor.getValue();
         assertEquals(cargo, usuarioSalvo.getCargo());
         assertEquals(Set.of(permitirAcesso), usuarioSalvo.getPermissoes());
+    }
+
+    @Test
+    void deveEnviarEmailDeEsperaAoCriarSolicitacaoManual() {
+        Cargo cargo = cargo(2L, "Analista Comercial");
+        UsuarioRequestDTO request = new UsuarioRequestDTO();
+        request.setNomeCompleto("Novo Usuario");
+        request.setCpf("07508154509");
+        request.setEmail("novo@climbe.com.br");
+        request.setContato("79999999999");
+        request.setSenha("senha-segura");
+        request.setCargoId(cargo.getId());
+
+        when(usuarioRepository.findByCpf(request.getCpf())).thenReturn(Optional.empty());
+        when(usuarioRepository.findByEmail(request.getEmail())).thenReturn(Optional.empty());
+        when(cargoRepository.findById(cargo.getId())).thenReturn(Optional.of(cargo));
+        when(permissaoRepository.findByCodigo(any())).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(request.getSenha())).thenReturn("senha-hash");
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
+            Usuario usuario = invocation.getArgument(0);
+            usuario.setId(8L);
+            return usuario;
+        });
+        when(usuarioMapper.toResponse(any(Usuario.class))).thenReturn(new UsuarioResponseDTO());
+
+        service.criar(request);
+
+        verify(emailService).enviarAguardandoAprovacao(request.getEmail(), request.getNomeCompleto());
+    }
+
+    @Test
+    void deveEnviarEmailAoAprovarSolicitacaoManual() {
+        Usuario pendente = new Usuario();
+        pendente.setId(8L);
+        pendente.setNomeCompleto("Novo Usuario");
+        pendente.setEmail("novo@climbe.com.br");
+        pendente.setSituacao("ESPERANDO_APROVACAO");
+        Cargo cargo = cargo(2L, "Analista Comercial");
+        AprovacaoAcessoService.AtribuicaoAcesso atribuicao =
+                new AprovacaoAcessoService.AtribuicaoAcesso(cargo, Set.of());
+
+        when(usuarioRepository.findById(8L)).thenReturn(Optional.of(pendente));
+        when(aprovacaoAcessoService.resolver(cargo.getId(), Set.of())).thenReturn(atribuicao);
+        when(usuarioRepository.save(pendente)).thenReturn(pendente);
+        when(usuarioMapper.toResponse(pendente)).thenReturn(new UsuarioResponseDTO());
+
+        service.aprovarUsuario(8L, 1L, cargo.getId(), Set.of());
+
+        verify(emailService).enviarAcessoAprovado(pendente.getEmail(), pendente.getNomeCompleto());
     }
 
     private OAuth2PendingRegistration pendingAprovado(Cargo cargo, Set<Permissao> permissoes) {

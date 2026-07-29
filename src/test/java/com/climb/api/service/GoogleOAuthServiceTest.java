@@ -1,5 +1,6 @@
 package com.climb.api.service;
 
+import com.climb.api.config.GoogleCalendarConfig;
 import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.OAuthProvider;
 import com.climb.api.model.Usuario;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -28,6 +30,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class GoogleOAuthServiceTest {
+
+    @Mock
+    private GoogleCalendarConfig googleCalendarConfig;
 
     @Mock
     private UsuarioOAuthRepository usuarioOAuthRepository;
@@ -60,8 +65,11 @@ class GoogleOAuthServiceTest {
     void setUp() {
         usuario = new Usuario();
         usuario.setId(1L);
-        usuario.setEmail("usuario@teste.com");
+        usuario.setEmail("usuario@climbe.com.br");
         usuario.setSituacao("ATIVO");
+
+        when(googleCalendarConfig.isEmailAllowed(anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0, String.class).endsWith("@climbe.com.br"));
 
         loginResponse = new LoginResponseDTO();
         loginResponse.setAccessToken("access-token");
@@ -81,7 +89,7 @@ class GoogleOAuthServiceTest {
         when(authenticationService.gerarRespostaLogin(usuario)).thenReturn(AuthResult.success(loginResponse));
 
         GoogleOAuthResolveResponseDTO response = googleOAuthService
-                .resolverLoginGoogle("google-sub", "usuario@teste.com", "Usuario", "https://img");
+                .resolverLoginGoogle("google-sub", "usuario@climbe.com.br", "Usuario", "https://img");
 
         assertEquals(GoogleOAuthService.STATUS_LOGIN_SUCCESS, response.getStatus());
         assertEquals("access-token", response.getLogin().getAccessToken());
@@ -94,23 +102,23 @@ class GoogleOAuthServiceTest {
                 .thenReturn(Optional.empty());
         when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
                 .thenReturn(Optional.empty());
-        when(usuarioService.buscarPorEmail("novo@teste.com")).thenReturn(null);
+        when(usuarioService.buscarPorEmail("novo@climbe.com.br")).thenReturn(null);
 
-        OAuth2PendingRegistration salvo = pendingFixture(42L, "novo@teste.com", "Novo Usuario", false);
-        when(pendingService.criarPendingGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img"))
+        OAuth2PendingRegistration salvo = pendingFixture(42L, "novo@climbe.com.br", "Novo Usuario", false);
+        when(pendingService.criarPendingGoogle("google-sub", "novo@climbe.com.br", "Novo Usuario", "https://img"))
                 .thenReturn(salvo);
 
         GoogleOAuthResolveResponseDTO response = googleOAuthService
-                .resolverLoginGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
+                .resolverLoginGoogle("google-sub", "novo@climbe.com.br", "Novo Usuario", "https://img");
 
         assertEquals(GoogleOAuthService.STATUS_PENDING_APPROVAL, response.getStatus());
-        assertEquals("novo@teste.com", response.getEmail());
-        verify(pendingService).criarPendingGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
+        assertEquals("novo@climbe.com.br", response.getEmail());
+        verify(pendingService).criarPendingGoogle("google-sub", "novo@climbe.com.br", "Novo Usuario", "https://img");
     }
 
     @Test
     void deveRetornarPendingApprovalQuandoPendingExisteNaoAprovada() {
-        OAuth2PendingRegistration pending = pendingFixture(42L, "novo@teste.com", "Novo Usuario", false);
+        OAuth2PendingRegistration pending = pendingFixture(42L, "novo@climbe.com.br", "Novo Usuario", false);
 
         when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
                 .thenReturn(Optional.empty());
@@ -118,7 +126,7 @@ class GoogleOAuthServiceTest {
                 .thenReturn(Optional.of(pending));
 
         GoogleOAuthResolveResponseDTO response = googleOAuthService
-                .resolverLoginGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
+                .resolverLoginGoogle("google-sub", "novo@climbe.com.br", "Novo Usuario", "https://img");
 
         assertEquals(GoogleOAuthService.STATUS_PENDING_APPROVAL, response.getStatus());
         verify(jwtUtil, never()).generatePendingRegistrationToken(eq(42L), anyString());
@@ -127,21 +135,64 @@ class GoogleOAuthServiceTest {
 
     @Test
     void deveRetornarCompletarCadastroComTokenQuandoPendingAprovada() {
-        OAuth2PendingRegistration pending = pendingFixture(42L, "novo@teste.com", "Novo Usuario", true);
+        OAuth2PendingRegistration pending = pendingFixture(42L, "novo@climbe.com.br", "Novo Usuario", true);
 
         when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
                 .thenReturn(Optional.empty());
         when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
                 .thenReturn(Optional.of(pending));
-        when(jwtUtil.generatePendingRegistrationToken(42L, "novo@teste.com"))
+        when(jwtUtil.generatePendingRegistrationToken(42L, "novo@climbe.com.br"))
                 .thenReturn("pending-jwt");
 
         GoogleOAuthResolveResponseDTO response = googleOAuthService
-                .resolverLoginGoogle("google-sub", "novo@teste.com", "Novo Usuario", "https://img");
+                .resolverLoginGoogle("google-sub", "novo@climbe.com.br", "Novo Usuario", "https://img");
 
         assertEquals(GoogleOAuthService.STATUS_COMPLETAR_CADASTRO, response.getStatus());
         assertEquals("pending-jwt", response.getPendingToken());
-        assertEquals("novo@teste.com", response.getEmail());
+        assertEquals("novo@climbe.com.br", response.getEmail());
+    }
+
+    @Test
+    void deveRecusarContaGooglePessoal() {
+        when(googleCalendarConfig.getAllowedDomain()).thenReturn("@climbe.com.br");
+
+        RuntimeException erro = assertThrows(
+                RuntimeException.class,
+                () -> googleOAuthService.resolverLoginGoogle(
+                        "google-pessoal", "usuario@gmail.com", "Usuario", "https://img"));
+
+        assertEquals("Use uma conta Google corporativa @climbe.com.br", erro.getMessage());
+    }
+
+    @Test
+    void deveSubstituirVinculoPessoalPorContaCorporativaDoUsuario() {
+        UsuarioOAuth vinculoPessoal = new UsuarioOAuth();
+        vinculoPessoal.setId(9L);
+        vinculoPessoal.setUsuario(usuario);
+        vinculoPessoal.setProvider(OAuthProvider.GOOGLE);
+        vinculoPessoal.setProviderUserId("google-pessoal");
+        vinculoPessoal.setEmailProvider("usuario@gmail.com");
+
+        when(usuarioService.buscarPorId(1L)).thenReturn(usuario);
+        when(authenticationService.validarUsuarioAtivo(usuario, "Usuario nao encontrado"))
+                .thenReturn(AuthResult.success(null));
+        when(usuarioOAuthRepository.findByProviderAndProviderUserId(
+                OAuthProvider.GOOGLE, "google-corporativo"))
+                .thenReturn(Optional.empty());
+        when(usuarioOAuthRepository.findByUsuarioIdAndProvider(1L, OAuthProvider.GOOGLE))
+                .thenReturn(Optional.of(vinculoPessoal));
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService.vincularConta(
+                1L,
+                "google-corporativo",
+                "usuario@climbe.com.br",
+                "Usuario",
+                "https://img-corporativa");
+
+        assertEquals(GoogleOAuthService.STATUS_LINK_SUCCESS, response.getStatus());
+        assertEquals("google-corporativo", vinculoPessoal.getProviderUserId());
+        assertEquals("usuario@climbe.com.br", vinculoPessoal.getEmailProvider());
+        verify(usuarioOAuthRepository).save(vinculoPessoal);
     }
 
     private OAuth2PendingRegistration pendingFixture(Long id, String email, String nome, boolean aprovado) {

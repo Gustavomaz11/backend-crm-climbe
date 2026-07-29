@@ -115,7 +115,7 @@ public class UsuarioService {
         atribuirPermissaoPadraoAgendamento(usuario);
 
         Usuario salvo = repository.save(usuario);
-        emailService.enviarEmailBoasVindas(salvo.getEmail(), salvo.getNomeCompleto());
+        emailService.enviarAguardandoAprovacao(salvo.getEmail(), salvo.getNomeCompleto());
 
         return salvo;
     }
@@ -145,6 +145,7 @@ public class UsuarioService {
 
         Usuario salvo = repository.save(usuario);
         solicitacaoAcessoService.registrarUsuario(salvo);
+        emailService.enviarAguardandoAprovacao(salvo.getEmail(), salvo.getNomeCompleto());
         return toResponse(salvo);
     }
 
@@ -210,6 +211,7 @@ public class UsuarioService {
                 SolicitacaoAcessoStatus.APROVADO,
                 aprovadorId,
                 atribuicao.cargo().getNome());
+        emailService.enviarAcessoAprovado(salvo.getEmail(), salvo.getNomeCompleto());
         return toResponse(salvo);
     }
 
