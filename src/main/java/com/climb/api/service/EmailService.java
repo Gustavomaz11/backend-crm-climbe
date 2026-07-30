@@ -125,7 +125,7 @@ public class EmailService {
                   <tr><td align="center">
                     <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 28px rgba(15,23,42,.08)">
                       <tr><td style="padding:24px 30px;background:#0f172a">
-                        <span style="color:#ffffff;font-size:23px;font-weight:800;letter-spacing:-.5px">climbe</span><span style="color:#4db6b2;font-size:23px;font-weight:800">▰</span>
+                        <span style="color:#ffffff;font-size:23px;font-weight:800;letter-spacing:-.5px">climb</span><span style="color:#4db6b2;font-size:23px;font-weight:800">▰</span>
                       </td></tr>
                       <tr><td style="padding:34px 30px 28px">
                         <div style="display:inline-block;margin-bottom:16px;padding:6px 10px;border-radius:999px;background:#e6f4f3;color:#13777b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px">Climbe CRM</div>
