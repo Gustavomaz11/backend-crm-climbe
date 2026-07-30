@@ -4,6 +4,8 @@ import com.climb.api.model.dto.DocumentoResponseDTO;
 import com.climb.api.model.dto.DocumentoSolicitacaoRequestDTO;
 import com.climb.api.model.dto.DocumentoUploadInfoResponseDTO;
 import com.climb.api.model.dto.DocumentoValidacaoRequestDTO;
+import com.climb.api.model.dto.DocumentoLoteRequestDTO;
+import com.climb.api.model.dto.DocumentoLoteResponseDTO;
 import com.climb.api.service.DocumentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -84,6 +86,16 @@ public class DocumentoController {
                 .buildAndExpand(criado.id())
                 .toUri();
         return ResponseEntity.created(location).body(criado);
+    }
+
+    @PostMapping("/solicitar-lote")
+    public ResponseEntity<DocumentoLoteResponseDTO> solicitarLote(@Valid @RequestBody DocumentoLoteRequestDTO dto) {
+        return ResponseEntity.status(201).body(documentoService.solicitarLote(dto, getAuthenticatedUserId()));
+    }
+
+    @GetMapping("/public/lote/{token}")
+    public ResponseEntity<DocumentoLoteResponseDTO> buscarLotePorToken(@PathVariable String token) {
+        return ResponseEntity.ok(documentoService.buscarLotePorToken(token));
     }
 
     @Operation(

@@ -4,6 +4,7 @@ import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.PropostaAprovacaoRequestDTO;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
+import com.climb.api.model.dto.PropostaComercialRequestDTO;
 import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.service.RbacService;
@@ -80,10 +81,11 @@ public class PropostaController {
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> criarComUpload(
             @RequestParam(value = "empresaId", required = false) Long empresaId,
             @RequestParam(value = "valuation", required = false) BigDecimal valuation,
+            @Valid @RequestPart(value = "configuracao", required = false) PropostaComercialRequestDTO configuracao,
             @RequestParam("arquivo") MultipartFile arquivo) {
         try {
             Long usuarioId = getAuthenticatedUserId();
-            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criarComArquivo(empresaId, usuarioId, arquivo, valuation)));
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criarComArquivo(empresaId, usuarioId, arquivo, valuation, configuracao)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(e.getMessage()));
         } catch (RuntimeException e) {

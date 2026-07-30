@@ -31,6 +31,7 @@ public interface DocumentoMapper {
     @Mapping(target = "tokenExpiraEm", ignore = true)
     @Mapping(target = "dataSolicitacao", ignore = true)
     @Mapping(target = "dataEnvio", ignore = true)
+    @Mapping(target = "lote", ignore = true)
     Documento toEntity(DocumentoSolicitacaoRequestDTO dto);
 
     List<DocumentoResponseDTO> toResponseDto(List<Documento> documentos);

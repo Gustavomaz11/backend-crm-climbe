@@ -3,6 +3,8 @@ package com.climb.api.controller;
 import com.climb.api.model.dto.EmpresaRequestDTO;
 import com.climb.api.model.dto.EmpresaResponseDTO;
 import com.climb.api.service.EmpresaService;
+import com.climb.api.service.EmpresaFinanceiroService;
+import com.climb.api.model.dto.EmpresaFinanceiroResponseDTO;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +17,11 @@ import java.util.List;
 public class EmpresaController {
 
     private final EmpresaService service;
+    private final EmpresaFinanceiroService financeiroService;
 
-    public EmpresaController(EmpresaService service) {
+    public EmpresaController(EmpresaService service, EmpresaFinanceiroService financeiroService) {
         this.service = service;
+        this.financeiroService = financeiroService;
     }
 
     @GetMapping
@@ -28,6 +32,11 @@ public class EmpresaController {
     @GetMapping("/{id}")
     public ResponseEntity<EmpresaResponseDTO> buscarPorId(@PathVariable Long id) {
         return ResponseEntity.ok(service.buscarPorId(id));
+    }
+
+    @GetMapping("/{id}/financeiro")
+    public ResponseEntity<EmpresaFinanceiroResponseDTO> consultarFinanceiro(@PathVariable Long id) {
+        return ResponseEntity.ok(financeiroService.consultar(id));
     }
 
     @PostMapping

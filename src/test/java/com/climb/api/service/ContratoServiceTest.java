@@ -37,6 +37,7 @@ class ContratoServiceTest {
     @Mock private CloudflareR2ArquivoStorageService arquivoStorageService;
     @Mock private RbacService rbacService;
     @Mock private RevisaoDocumentoService revisaoDocumentoService;
+    @Mock private ContratoParcelaCalculator parcelaCalculator;
 
     private ContratoService service;
 
@@ -53,6 +54,7 @@ class ContratoServiceTest {
                 arquivoStorageService,
                 rbacService,
                 revisaoDocumentoService,
+                parcelaCalculator,
                 30
         );
     }

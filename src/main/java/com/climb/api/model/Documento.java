@@ -49,6 +49,10 @@ public class Documento {
     @Column(name = "data_envio")
     private LocalDateTime dataEnvio;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lote_id")
+    private DocumentoLote lote;
+
     public Long getIdDocumento() { return idDocumento; }
     public void setIdDocumento(Long idDocumento) { this.idDocumento = idDocumento; }
 
@@ -84,4 +88,6 @@ public class Documento {
 
     public LocalDateTime getDataEnvio() { return dataEnvio; }
     public void setDataEnvio(LocalDateTime dataEnvio) { this.dataEnvio = dataEnvio; }
+    public DocumentoLote getLote() { return lote; }
+    public void setLote(DocumentoLote lote) { this.lote = lote; }
 }

@@ -2,15 +2,19 @@ package com.climb.api.service;
 
 import com.climb.api.mapper.DocumentoMapper;
 import com.climb.api.model.Documento;
+import com.climb.api.model.DocumentoLote;
 import com.climb.api.model.Empresa;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.model.dto.DocumentoResponseDTO;
+import com.climb.api.model.dto.DocumentoLoteRequestDTO;
+import com.climb.api.model.dto.DocumentoLoteResponseDTO;
 import com.climb.api.model.dto.DocumentoSolicitacaoRequestDTO;
 import com.climb.api.model.dto.DocumentoUploadInfoResponseDTO;
 import com.climb.api.model.dto.DocumentoValidacaoRequestDTO;
 import com.climb.api.model.enums.DocumentoStatus;
 import com.climb.api.repository.DocumentoRepository;
+import com.climb.api.repository.DocumentoLoteRepository;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.UsuarioRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -20,16 +24,24 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class DocumentoService {
 
     private static final int DIAS_EXPIRACAO_UPLOAD = 7;
+    private static final Set<String> DOCUMENTOS_PERMITIDOS = Set.of(
+            "balancete", "balanco", "dre", "planilha gerencial", "pgdas", "cartao cnpj",
+            "contrato social", "emprestimos bancarios", "certidoes negativas", "extrato bancario",
+            "nota fiscal", "extrato do cartao de credito", "documentos judiciais", "extrato de dividas"
+    );
 
     private final DocumentoRepository documentoRepository;
+    private final DocumentoLoteRepository loteRepository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
     private final DocumentoMapper documentoMapper;
@@ -38,6 +50,7 @@ public class DocumentoService {
     private final String frontendUrl;
 
     public DocumentoService(DocumentoRepository documentoRepository,
+                            DocumentoLoteRepository loteRepository,
                             EmpresaRepository empresaRepository,
                             UsuarioRepository usuarioRepository,
                             DocumentoMapper documentoMapper,
@@ -45,6 +58,7 @@ public class DocumentoService {
                             EmailService emailService,
                             @Value("${app.frontend-url:http://localhost:5173}") String frontendUrl) {
         this.documentoRepository = documentoRepository;
+        this.loteRepository = loteRepository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
         this.documentoMapper = documentoMapper;
@@ -91,6 +105,62 @@ public class DocumentoService {
         return documentoMapper.toResponseDto(salvo);
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public DocumentoLoteResponseDTO solicitarLote(DocumentoLoteRequestDTO dto, Long analistaId) {
+        Empresa empresa = empresaRepository.findById(dto.empresaId())
+                .orElseThrow(() -> new EntityNotFoundException("Empresa não encontrada: " + dto.empresaId()));
+        Usuario analista = usuarioRepository.findById(analistaId)
+                .orElseThrow(() -> new EntityNotFoundException("Analista não encontrado: " + analistaId));
+        String email = normalizarEmail(dto.emailDestinatario());
+        List<String> titulos = dto.documentos().stream()
+                .map(item -> exigirTexto(item, "O nome do documento é obrigatório."))
+                .distinct()
+                .toList();
+        validarDocumentosPermitidos(titulos);
+
+        LocalDateTime agora = LocalDateTime.now();
+        DocumentoLote lote = new DocumentoLote();
+        lote.setEmpresa(empresa);
+        lote.setAnalista(analista);
+        lote.setEmailDestinatario(email);
+        lote.setTokenUpload(gerarTokenUpload());
+        lote.setTokenExpiraEm(agora.plusDays(DIAS_EXPIRACAO_UPLOAD));
+        lote.setDataSolicitacao(agora);
+        DocumentoLote salvo = loteRepository.save(lote);
+
+        List<Documento> documentos = titulos.stream().map(titulo -> {
+            Documento documento = new Documento();
+            documento.setEmpresa(empresa);
+            documento.setAnalista(analista);
+            documento.setLote(salvo);
+            documento.setTitulo(titulo);
+            documento.setTipoDocumento(titulo);
+            documento.setEmailDestinatario(email);
+            documento.setValidado(DocumentoStatus.PENDENTE);
+            documento.setTokenExpiraEm(salvo.getTokenExpiraEm());
+            documento.setDataSolicitacao(agora);
+            return documento;
+        }).toList();
+        documentoRepository.saveAll(documentos);
+        enviarEmailLote(salvo, titulos);
+        return toLoteResponse(salvo, documentos);
+    }
+
+    public DocumentoLoteResponseDTO buscarLotePorToken(String token) {
+        DocumentoLote lote = buscarLoteValido(token);
+        return toLoteResponse(lote, documentoRepository.findByLote_IdOrderByIdDocumentoAsc(lote.getId()));
+    }
+
+    public DocumentoResponseDTO enviarPorTokenLote(String token, Long documentoId, MultipartFile arquivo) {
+        DocumentoLote lote = buscarLoteValido(token);
+        Documento documento = buscarDocumento(documentoId);
+        if (documento.getLote() == null || !lote.getId().equals(documento.getLote().getId())) {
+            throw new IllegalArgumentException("O documento não pertence a esta solicitação.");
+        }
+        salvarArquivoNoDocumento(documento, arquivo);
+        return documentoMapper.toResponseDto(documentoRepository.save(documento));
+    }
+
     public DocumentoUploadInfoResponseDTO buscarSolicitacaoPorToken(String token) {
         Documento documento = buscarDocumentoPorTokenValido(token);
         return toUploadInfo(documento);
@@ -102,9 +172,13 @@ public class DocumentoService {
 
         if (dto.validado() == DocumentoStatus.REPROVADO) {
             documento.setValidado(DocumentoStatus.PENDENTE);
-            renovarLinkUpload(documento);
+            renovarLink(documento);
             Documento salvo = documentoRepository.save(documento);
-            enviarEmailDocumentoReprovado(salvo);
+            if (salvo.getLote() != null) {
+                enviarEmailLote(salvo.getLote(), List.of(salvo.getTitulo()));
+            } else {
+                enviarEmailDocumentoReprovado(salvo);
+            }
             return documentoMapper.toResponseDto(salvo);
         }
 
@@ -126,10 +200,14 @@ public class DocumentoService {
         }
 
         documento.setValidado(DocumentoStatus.PENDENTE);
-        renovarLinkUpload(documento);
+        renovarLink(documento);
 
         Documento salvo = documentoRepository.save(documento);
-        enviarEmailSolicitacao(salvo);
+        if (salvo.getLote() != null) {
+            enviarEmailLote(salvo.getLote(), List.of(salvo.getTitulo()));
+        } else {
+            enviarEmailSolicitacao(salvo);
+        }
         return documentoMapper.toResponseDto(salvo);
     }
 
@@ -182,6 +260,16 @@ public class DocumentoService {
         return documento;
     }
 
+    private DocumentoLote buscarLoteValido(String token) {
+        if (!StringUtils.hasText(token)) throw new IllegalArgumentException("Link de envio inválido.");
+        DocumentoLote lote = loteRepository.findByTokenUpload(token.trim())
+                .orElseThrow(() -> new EntityNotFoundException("Solicitação de documentos não encontrada."));
+        if (lote.getTokenExpiraEm().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Link de envio expirado.");
+        }
+        return lote;
+    }
+
     private void salvarArquivoNoDocumento(Documento documento, MultipartFile arquivo) {
         String prefixo = "documentos/empresa-%d".formatted(documento.getEmpresa().getIdEmpresa());
         ArquivoUploadResponseDTO upload = arquivoStorageService.salvar(arquivo, prefixo);
@@ -198,6 +286,16 @@ public class DocumentoService {
         documento.setEmailDestinatario(normalizarEmail(documento.getEmailDestinatario()));
         documento.setTokenUpload(gerarTokenUpload());
         documento.setTokenExpiraEm(LocalDateTime.now().plusDays(DIAS_EXPIRACAO_UPLOAD));
+    }
+
+    private void renovarLink(Documento documento) {
+        if (documento.getLote() == null) {
+            renovarLinkUpload(documento);
+            return;
+        }
+        documento.getLote().setTokenExpiraEm(LocalDateTime.now().plusDays(DIAS_EXPIRACAO_UPLOAD));
+        documento.setTokenExpiraEm(documento.getLote().getTokenExpiraEm());
+        loteRepository.save(documento.getLote());
     }
 
     private void validarStatusDeAnalise(Documento documento, DocumentoStatus statusNovo) {
@@ -258,6 +356,42 @@ public class DocumentoService {
                 """.formatted(documento.getTitulo(), nomeEmpresa, montarLinkUpload(documento), DIAS_EXPIRACAO_UPLOAD);
 
         emailService.enviarEmail(documento.getEmailDestinatario(), assunto, corpo);
+    }
+
+    private void enviarEmailLote(DocumentoLote lote, List<String> documentos) {
+        String nomeEmpresa = lote.getEmpresa().getNomeFantasia();
+        String lista = documentos.stream().map(item -> "• " + item).collect(java.util.stream.Collectors.joining("\n"));
+        emailService.enviarEmailComBotao(
+                lote.getEmailDestinatario(),
+                "Documentos solicitados pela Climbe",
+                "Envio de documentos",
+                "Olá! A Climbe solicitou os seguintes documentos para " + nomeEmpresa + ":\n\n" + lista
+                        + "\n\nUse o mesmo link para anexar todos os arquivos.",
+                "Anexar documentos",
+                frontendUrl.replaceAll("/+$", "") + "/documentos/enviar/lote/" + lote.getTokenUpload(),
+                "Este link expira em " + DIAS_EXPIRACAO_UPLOAD + " dias."
+        );
+    }
+
+    private DocumentoLoteResponseDTO toLoteResponse(DocumentoLote lote, List<Documento> documentos) {
+        return new DocumentoLoteResponseDTO(
+                lote.getId(), lote.getEmpresa().getIdEmpresa(), lote.getEmpresa().getNomeFantasia(),
+                lote.getEmailDestinatario(), lote.getTokenExpiraEm(), documentoMapper.toResponseDto(documentos)
+        );
+    }
+
+    private void validarDocumentosPermitidos(List<String> documentos) {
+        List<String> invalidos = documentos.stream()
+                .filter(item -> !DOCUMENTOS_PERMITIDOS.contains(normalizarNomeDocumento(item)))
+                .toList();
+        if (!invalidos.isEmpty()) {
+            throw new IllegalArgumentException("Documento não permitido: " + invalidos.getFirst());
+        }
+    }
+
+    private String normalizarNomeDocumento(String valor) {
+        return Normalizer.normalize(valor.trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
     }
 
     private DocumentoUploadInfoResponseDTO toUploadInfo(Documento documento) {

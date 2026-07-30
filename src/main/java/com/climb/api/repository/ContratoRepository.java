@@ -9,6 +9,8 @@ import com.climb.api.model.Contrato;
 
 public interface ContratoRepository extends JpaRepository<Contrato, Long> {
 
+    List<Contrato> findByEmpresa_IdEmpresaOrderByIdContratoDesc(Long empresaId);
+
     List<Contrato> findByStatus(String status);
 
     List<Contrato> findByDataFimBetween(LocalDate inicio, LocalDate fim);

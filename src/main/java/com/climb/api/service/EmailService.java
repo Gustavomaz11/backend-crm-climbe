@@ -76,8 +76,11 @@ public class EmailService {
                                        String textoBotao,
                                        String urlBotao,
                                        String rodape) {
+        String mensagemHtml = HtmlUtils.htmlEscape(mensagem == null ? "" : mensagem)
+                .replace("\r\n", "<br>")
+                .replace("\n", "<br>");
         String corpo = "<p style=\"margin:0;color:#475569;font-size:15px;line-height:24px\">"
-                + HtmlUtils.htmlEscape(mensagem == null ? "" : mensagem) + "</p>";
+                + mensagemHtml + "</p>";
         return enviarEmailHtml(emailDestino, assunto,
                 montarTemplate(titulo, corpo, textoBotao, urlBotao, rodape));
     }

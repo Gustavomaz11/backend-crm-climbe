@@ -1,5 +1,6 @@
 package com.climb.api.model;
 
+import com.climb.api.model.enums.ServicoComercial;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.util.HashSet;
@@ -53,6 +54,17 @@ public class Contrato {
     @Column(nullable = false)
     private String status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "servico", length = 50)
+    private ServicoComercial servico;
+
+    @Column(name = "data_aprovacao")
+    private LocalDate dataAprovacao;
+
+    @OneToMany(mappedBy = "contrato", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("numero ASC")
+    private java.util.List<ContratoParcela> parcelas = new java.util.ArrayList<>();
+
     public Long getIdContrato() { return idContrato; }
     public void setIdContrato(Long idContrato) { this.idContrato = idContrato; }
 
@@ -85,4 +97,17 @@ public class Contrato {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public ServicoComercial getServico() { return servico; }
+    public void setServico(ServicoComercial servico) { this.servico = servico; }
+    public LocalDate getDataAprovacao() { return dataAprovacao; }
+    public void setDataAprovacao(LocalDate dataAprovacao) { this.dataAprovacao = dataAprovacao; }
+    public java.util.List<ContratoParcela> getParcelas() { return parcelas; }
+    public void setParcelas(java.util.List<ContratoParcela> parcelas) {
+        this.parcelas.clear();
+        if (parcelas == null) return;
+        parcelas.forEach(parcela -> {
+            parcela.setContrato(this);
+            this.parcelas.add(parcela);
+        });
+    }
 }

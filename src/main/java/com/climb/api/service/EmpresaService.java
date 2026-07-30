@@ -7,7 +7,9 @@ import com.climb.api.model.dto.EmpresaResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -74,9 +76,19 @@ public class EmpresaService {
         return empresaMapper.toResponseDto(repository.save(empresa));
     }
 
+    @Transactional
     public void deletar(Long id) {
         Empresa empresa = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
-        repository.delete(empresa);
+        try {
+            repository.delete(empresa);
+            repository.flush();
+        } catch (DataIntegrityViolationException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "A empresa não pode ser excluída porque possui registros vinculados.",
+                    exception
+            );
+        }
     }
 }

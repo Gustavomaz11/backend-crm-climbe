@@ -58,4 +58,12 @@ public class DocumentoUploadController {
         DocumentoResponseDTO atualizado = documentoService.enviarPorToken(token, arquivo);
         return ResponseEntity.ok(atualizado);
     }
+
+    @PatchMapping(value = "/public/lote/{token}/{documentoId}/enviar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DocumentoResponseDTO> enviarPorTokenLote(
+            @PathVariable String token,
+            @PathVariable Long documentoId,
+            @RequestParam("arquivo") MultipartFile arquivo) {
+        return ResponseEntity.ok(documentoService.enviarPorTokenLote(token, documentoId, arquivo));
+    }
 }

@@ -12,4 +12,6 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
 
     Optional<Documento> findByTokenUpload(String tokenUpload);
 
+    List<Documento> findByLote_IdOrderByIdDocumentoAsc(Long loteId);
+
 }

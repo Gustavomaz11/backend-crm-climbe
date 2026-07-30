@@ -3,6 +3,7 @@ package com.climb.api.controller;
 import com.climb.api.model.Contrato;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.ContratoResponsaveisRequestDTO;
+import com.climb.api.model.dto.ContratoParcelaVencimentoRequestDTO;
 import com.climb.api.model.dto.HistoricoAprovacaoContratoResponseDTO;
 import com.climb.api.service.ContratoService;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -97,6 +98,14 @@ public class ContratoController {
     @PatchMapping("/{id}/responsaveis")
     public Contrato atualizarResponsaveis(@PathVariable Long id, @RequestBody ContratoResponsaveisRequestDTO dto) {
         return service.atualizarResponsaveis(id, getAuthenticatedUserId(), dto.responsavelId(), dto.participanteIds());
+    }
+
+    @PatchMapping("/{id}/parcelas/{parcelaId}/vencimento")
+    public Contrato alterarVencimentoParcela(
+            @PathVariable Long id,
+            @PathVariable Long parcelaId,
+            @RequestBody ContratoParcelaVencimentoRequestDTO dto) {
+        return service.alterarVencimentoParcela(id, parcelaId, getAuthenticatedUserId(), dto.vencimento());
     }
 
     @GetMapping("/{id}/historico")

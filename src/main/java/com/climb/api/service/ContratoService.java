@@ -1,6 +1,7 @@
 package com.climb.api.service;
 
 import com.climb.api.model.Contrato;
+import com.climb.api.model.ContratoParcela;
 import com.climb.api.model.Empresa;
 import com.climb.api.model.HistoricoAprovacaoContrato;
 import com.climb.api.model.PermissaoCodigo;
@@ -59,6 +60,7 @@ public class ContratoService {
     private final CloudflareR2ArquivoStorageService arquivoStorageService;
     private final RbacService rbacService;
     private final RevisaoDocumentoService revisaoDocumentoService;
+    private final ContratoParcelaCalculator parcelaCalculator;
     private final int diasAvisoVencimento;
 
     public ContratoService(ContratoRepository repository,
@@ -71,6 +73,7 @@ public class ContratoService {
                            CloudflareR2ArquivoStorageService arquivoStorageService,
                            RbacService rbacService,
                            RevisaoDocumentoService revisaoDocumentoService,
+                           ContratoParcelaCalculator parcelaCalculator,
                            @Value("${app.contract-notifications.expiration-warning-days:30}") int diasAvisoVencimento) {
         this.repository = repository;
         this.taskRepository = taskRepository;
@@ -82,6 +85,7 @@ public class ContratoService {
         this.arquivoStorageService = arquivoStorageService;
         this.rbacService = rbacService;
         this.revisaoDocumentoService = revisaoDocumentoService;
+        this.parcelaCalculator = parcelaCalculator;
         this.diasAvisoVencimento = diasAvisoVencimento;
     }
 
@@ -169,6 +173,7 @@ public class ContratoService {
         contrato.setUrlPdf(upload.url());
         contrato.setResponsavel(responsavel);
         contrato.setParticipantes(participantes);
+        contrato.setServico(proposta != null ? proposta.getServico() : null);
         normalizarParticipantes(contrato);
 
         Contrato salvo = repository.save(contrato);
@@ -272,6 +277,10 @@ public class ContratoService {
         }
 
         contrato.setStatus(statusNormalizado);
+        if (STATUS_APROVADO.equals(statusNormalizado)) {
+            contrato.setDataAprovacao(LocalDate.now());
+            gerarParcelas(contrato);
+        }
         Contrato salvo = repository.save(contrato);
 
         HistoricoAprovacaoContrato historico = new HistoricoAprovacaoContrato();
@@ -405,6 +414,8 @@ public class ContratoService {
         snapshot.setDataFim(contrato.getDataFim());
         snapshot.setUrlPdf(contrato.getUrlPdf());
         snapshot.setStatus(contrato.getStatus());
+        snapshot.setServico(contrato.getServico());
+        snapshot.setDataAprovacao(contrato.getDataAprovacao());
         return snapshot;
     }
 
@@ -422,6 +433,48 @@ public class ContratoService {
         contrato.setEmpresa(proposta.getEmpresa());
         if (proposta.getEmpresa() != null) {
             contrato.setEmpresaNomeFantasia(proposta.getEmpresa().getNomeFantasia());
+        }
+        contrato.setServico(proposta.getServico());
+    }
+
+    @Transactional
+    public Contrato alterarVencimentoParcela(Long id, Long parcelaId, Long usuarioId, LocalDate vencimento) {
+        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para editar contratos");
+        }
+        if (vencimento == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vencimento é obrigatório");
+        }
+        Contrato contrato = buscarPorId(id);
+        ContratoParcela parcela = contrato.getParcelas().stream()
+                .filter(item -> Objects.equals(item.getId(), parcelaId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parcela não encontrada neste contrato"));
+        parcela.setVencimento(vencimento);
+        return repository.save(contrato);
+    }
+
+    private void gerarParcelas(Contrato contrato) {
+        if (contrato.getProposta() == null || !contrato.getParcelas().isEmpty()) {
+            return;
+        }
+        List<ContratoParcela> parcelas = parcelaCalculator.calcular(contrato.getProposta(), contrato.getDataAprovacao())
+                .stream()
+                .map(planejada -> {
+                    ContratoParcela parcela = new ContratoParcela();
+                    parcela.setNumero(planejada.numero());
+                    parcela.setCompetencia(planejada.competencia());
+                    parcela.setVencimento(planejada.vencimento());
+                    parcela.setValor(planejada.valor());
+                    parcela.setStatus("PENDENTE");
+                    return parcela;
+                })
+                .toList();
+        contrato.setParcelas(parcelas);
+        if (!parcelas.isEmpty()) {
+            contrato.setDataInicio(parcelas.getFirst().getCompetencia());
+            contrato.setDataFim(parcelas.getLast().getCompetencia().withDayOfMonth(
+                    parcelas.getLast().getCompetencia().lengthOfMonth()));
         }
     }
 

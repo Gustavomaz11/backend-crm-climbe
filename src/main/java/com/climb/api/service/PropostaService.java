@@ -4,11 +4,14 @@ import com.climb.api.model.Empresa;
 import com.climb.api.model.HistoricoAprovacaoProposta;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.Proposta;
+import com.climb.api.model.PropostaReajuste;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.dto.PropostaAprovacaoRequestDTO;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
+import com.climb.api.model.dto.PropostaComercialRequestDTO;
+import com.climb.api.model.dto.PropostaReajusteDTO;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
@@ -22,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -102,7 +106,20 @@ public class PropostaService {
                 proposta.getUrl(),
                 proposta.getValuation(),
                 proposta.getStatus(),
-                proposta.getDataCriacao()
+                proposta.getDataCriacao(),
+                proposta.getServico(),
+                proposta.getMesInicio(),
+                proposta.getRecorrenciaMeses(),
+                proposta.getQuantidadeParcelas(),
+                proposta.getParcelasIguais(),
+                proposta.getComissaoTecnicoPercentual(),
+                proposta.getComissaoComercialPercentual(),
+                proposta.getEquipeTecnicaIds(),
+                proposta.getEquipeComercialIds(),
+                proposta.getReajustes().stream()
+                        .map(item -> new PropostaReajusteDTO(item.getMesVigencia(), item.getValor()))
+                        .toList(),
+                proposta.getObservacoes()
         );
     }
 
@@ -172,12 +189,14 @@ public class PropostaService {
     }
 
     @Transactional
-    public PropostaResponseDTO criarComArquivo(Long empresaId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo, BigDecimal valuation) {
+    public PropostaResponseDTO criarComArquivo(Long empresaId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo,
+                                               BigDecimal valuation, PropostaComercialRequestDTO configuracao) {
         if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
         }
         validarEmpresaObrigatoria(empresaId);
         validarValuation(valuation);
+        validarConfiguracaoComercial(configuracao);
 
         Empresa empresa = buscarEmpresa(empresaId);
         Usuario usuario = buscarUsuario(usuarioId);
@@ -193,10 +212,64 @@ public class PropostaService {
         proposta.setUrl(upload.url());
         proposta.setValuation(valuation);
         proposta.setDataCriacao(LocalDate.now());
+        aplicarConfiguracaoComercial(proposta, configuracao);
 
         Proposta salva = repository.save(proposta);
         revisaoDocumentoService.iniciarProposta(salva, upload, usuario);
         return toResponseDTO(salva);
+    }
+
+    private void validarConfiguracaoComercial(PropostaComercialRequestDTO configuracao) {
+        if (configuracao == null || configuracao.servico() == null) {
+            throw new RuntimeException("Selecione o serviço da proposta");
+        }
+        int recorrencia = configuracao.recorrenciaMeses() == null ? 0 : configuracao.recorrenciaMeses();
+        if (configuracao.servico().recorrente() && (recorrencia < 0 || recorrencia > 24)) {
+            throw new RuntimeException("A recorrência deve estar entre 0 e 24 meses");
+        }
+        int parcelas = configuracao.quantidadeParcelas() == null ? 1 : configuracao.quantidadeParcelas();
+        if (!configuracao.servico().recorrente() && (parcelas < 1 || parcelas > 24)) {
+            throw new RuntimeException("A quantidade de parcelas deve estar entre 1 e 24");
+        }
+    }
+
+    private void aplicarConfiguracaoComercial(Proposta proposta, PropostaComercialRequestDTO configuracao) {
+        proposta.setServico(configuracao.servico());
+        proposta.setMesInicio(configuracao.mesInicio());
+        proposta.setRecorrenciaMeses(configuracao.servico().recorrente()
+                ? Objects.requireNonNullElse(configuracao.recorrenciaMeses(), 0)
+                : null);
+        proposta.setQuantidadeParcelas(configuracao.servico().recorrente()
+                ? 1
+                : Objects.requireNonNullElse(configuracao.quantidadeParcelas(), 1));
+        proposta.setParcelasIguais(!Boolean.FALSE.equals(configuracao.parcelasIguais()));
+        proposta.setComissaoTecnicoPercentual(configuracao.comissaoTecnicoPercentual());
+        proposta.setComissaoComercialPercentual(configuracao.comissaoComercialPercentual());
+        proposta.setObservacoes(configuracao.observacoes());
+        proposta.setEquipeTecnicaIds(validarUsuarios(configuracao.equipeTecnicaIds()));
+        proposta.setEquipeComercialIds(validarUsuarios(configuracao.equipeComercialIds()));
+        proposta.setReajustes(toReajustes(configuracao.reajustes()));
+    }
+
+    private HashSet<Long> validarUsuarios(List<Long> ids) {
+        HashSet<Long> unicos = ids == null ? new HashSet<>() : ids.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        if (unicos.isEmpty()) return unicos;
+        if (usuarioRepository.findAllById(unicos).size() != unicos.size()) {
+            throw new RuntimeException("Uma das pessoas selecionadas para a equipe não foi encontrada");
+        }
+        return unicos;
+    }
+
+    private List<PropostaReajuste> toReajustes(List<PropostaReajusteDTO> reajustes) {
+        if (reajustes == null) return List.of();
+        return reajustes.stream().map(dto -> {
+            PropostaReajuste reajuste = new PropostaReajuste();
+            reajuste.setMesVigencia(dto.mesVigencia());
+            reajuste.setValor(dto.valor());
+            return reajuste;
+        }).toList();
     }
 
     @Transactional
