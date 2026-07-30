@@ -51,7 +51,11 @@ public class GoogleCredentialService {
         UsuarioOAuth vinculo = usuarioOAuthRepository
                 .findByUsuarioIdAndProvider(usuarioId, OAuthProvider.GOOGLE)
                 .orElseThrow(() -> new IllegalStateException("Conta Google nao vinculada ao usuario"));
-        exigirContaCorporativa(vinculo.getEmailProvider());
+        if (!config.isEmailAllowed(vinculo.getEmailProvider())) {
+            log.info("Credencial de agenda nao armazenada para o usuario {}: conta Google sem dominio corporativo",
+                    usuarioId);
+            return;
+        }
         aplicarCredenciais(vinculo, accessToken, refreshToken, expiresIn, scopes);
         usuarioOAuthRepository.save(vinculo);
     }
@@ -62,7 +66,10 @@ public class GoogleCredentialService {
                                   String refreshToken,
                                   Long expiresIn,
                                   String scopes) {
-        exigirContaCorporativa(pending.getEmail());
+        if (!config.isEmailAllowed(pending.getEmail())) {
+            log.info("Credencial de agenda nao armazenada para cadastro Google nao corporativo");
+            return;
+        }
         pending.setAccessTokenCriptografado(encryptionService.criptografar(accessToken));
         if (refreshToken != null && !refreshToken.isBlank()) {
             pending.setRefreshTokenCriptografado(encryptionService.criptografar(refreshToken));
@@ -74,7 +81,10 @@ public class GoogleCredentialService {
 
     @Transactional
     public void transferirPendingParaVinculo(OAuth2PendingRegistration pending, UsuarioOAuth vinculo) {
-        exigirContaCorporativa(vinculo.getEmailProvider());
+        if (!config.isEmailAllowed(vinculo.getEmailProvider())) {
+            log.info("Credencial de agenda nao transferida: conta Google sem dominio corporativo");
+            return;
+        }
         vinculo.setAccessTokenCriptografado(pending.getAccessTokenCriptografado());
         vinculo.setRefreshTokenCriptografado(pending.getRefreshTokenCriptografado());
         vinculo.setAccessTokenExpiraEm(pending.getAccessTokenExpiraEm());
@@ -158,9 +168,4 @@ public class GoogleCredentialService {
         return LocalDateTime.now().plusSeconds(expiresIn != null ? expiresIn : 3600L);
     }
 
-    private void exigirContaCorporativa(String email) {
-        if (!config.isEmailAllowed(email)) {
-            throw new IllegalArgumentException("Use uma conta Google corporativa " + config.getAllowedDomain());
-        }
-    }
 }

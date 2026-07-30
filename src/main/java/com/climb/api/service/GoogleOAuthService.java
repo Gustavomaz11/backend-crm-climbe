@@ -460,10 +460,12 @@ public class GoogleOAuthService {
         String email = userInfo.get("email") != null ? userInfo.get("email").toString() : null;
         String nome = userInfo.get("name") != null ? userInfo.get("name").toString() : null;
         String avatarUrl = userInfo.get("picture") != null ? userInfo.get("picture").toString() : null;
+        boolean agendaCorporativaHabilitada = googleCalendarConfig.isEmailAllowed(email);
 
         GoogleOAuthResolveResponseDTO resolution = resolverLoginGoogle(providerUserId, email, nome, avatarUrl);
 
-        if (STATUS_LOGIN_SUCCESS.equals(resolution.getStatus())
+        if (agendaCorporativaHabilitada
+                && STATUS_LOGIN_SUCCESS.equals(resolution.getStatus())
                 && resolution.getLogin() != null
                 && resolution.getLogin().getUsuario() != null) {
             googleCredentialService.salvarParaUsuario(
@@ -472,7 +474,7 @@ public class GoogleOAuthService {
                     googleRefreshToken,
                     expiresIn,
                     scopes);
-        } else {
+        } else if (agendaCorporativaHabilitada) {
             pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, providerUserId)
                     .ifPresent(pending -> googleCredentialService.salvarParaPending(
                             pending,
@@ -482,11 +484,14 @@ public class GoogleOAuthService {
                             scopes));
         }
 
+        String accessTokenAgenda = agendaCorporativaHabilitada ? googleAccessToken : null;
+        String refreshTokenAgenda = agendaCorporativaHabilitada ? googleRefreshToken : null;
+
         return switch (resolution.getStatus()) {
             case STATUS_LOGIN_SUCCESS -> redirectAposLogin(resolution.getLogin(),
-                    googleAccessToken, googleRefreshToken);
+                    accessTokenAgenda, refreshTokenAgenda);
             case STATUS_COMPLETAR_CADASTRO -> redirectCompletarCadastro(resolution.getPendingToken(),
-                    googleAccessToken, googleRefreshToken);
+                    accessTokenAgenda, refreshTokenAgenda);
             case STATUS_GOOGLE_NOT_LINKED -> UriComponentsBuilder
                     .fromUriString(googleCalendarConfig.getFrontendUrl())
                     .queryParam("google_oauth", "not_linked")
@@ -590,7 +595,6 @@ public class GoogleOAuthService {
             throw new RuntimeException("O Google nao retornou um e-mail valido");
         }
 
-        validarEmailCorporativo(email);
     }
 
     private void limparPendenciasExpiradas() {
@@ -610,8 +614,6 @@ public class GoogleOAuthService {
         if (email == null || email.isBlank()) {
             throw new RuntimeException("Google nao retornou e-mail para autenticar no sistema.");
         }
-
-        validarEmailCorporativo(email);
 
         Usuario usuario = usuarioService.buscarPorEmail(email);
 
@@ -682,13 +684,6 @@ public class GoogleOAuthService {
         usuario.setCargo(cargo);
 
         return usuarioRepository.save(usuario);
-    }
-
-    private void validarEmailCorporativo(String email) {
-        if (!googleCalendarConfig.isEmailAllowed(email)) {
-            throw new RuntimeException(
-                    "Use uma conta Google corporativa " + googleCalendarConfig.getAllowedDomain());
-        }
     }
 
     private String obterNomeGoogle(String email, Map<String, Object> userInfo) {

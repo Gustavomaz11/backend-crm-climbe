@@ -22,7 +22,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -100,6 +99,29 @@ class GoogleOAuthServiceTest {
     }
 
     @Test
+    void deveLogarComContaGooglePessoalQuandoVinculoJaExiste() {
+        Usuario usuarioPessoal = new Usuario();
+        usuarioPessoal.setId(2L);
+        usuarioPessoal.setEmail("usuario@gmail.com");
+        usuarioPessoal.setSituacao("ATIVO");
+
+        UsuarioOAuth vinculo = new UsuarioOAuth();
+        vinculo.setUsuario(usuarioPessoal);
+
+        when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-pessoal"))
+                .thenReturn(Optional.of(vinculo));
+        when(authenticationService.validarUsuarioAtivo(usuarioPessoal, "Usuario nao encontrado"))
+                .thenReturn(AuthResult.success(null));
+        when(authenticationService.gerarRespostaLogin(usuarioPessoal)).thenReturn(AuthResult.success(loginResponse));
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService
+                .resolverLoginGoogle("google-pessoal", "usuario@gmail.com", "Usuario", "https://img");
+
+        assertEquals(GoogleOAuthService.STATUS_LOGIN_SUCCESS, response.getStatus());
+        assertEquals("access-token", response.getLogin().getAccessToken());
+    }
+
+    @Test
     void deveReaproveitarConsentimentoGoogleNosProximosLogins() {
         when(googleCalendarConfig.isEnabled()).thenReturn(true);
         when(googleCalendarConfig.getClientId()).thenReturn("client-id");
@@ -170,15 +192,26 @@ class GoogleOAuthServiceTest {
     }
 
     @Test
-    void deveRecusarContaGooglePessoal() {
-        when(googleCalendarConfig.getAllowedDomain()).thenReturn("@climbe.com.br");
+    void devePermitirSolicitacaoDeAcessoComContaGooglePessoal() {
+        when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-pessoal"))
+                .thenReturn(Optional.empty());
+        when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-pessoal"))
+                .thenReturn(Optional.empty());
+        when(usuarioService.buscarPorEmail("usuario@gmail.com")).thenReturn(null);
 
-        RuntimeException erro = assertThrows(
-                RuntimeException.class,
-                () -> googleOAuthService.resolverLoginGoogle(
-                        "google-pessoal", "usuario@gmail.com", "Usuario", "https://img"));
+        OAuth2PendingRegistration salvo = pendingFixture(43L, "usuario@gmail.com", "Usuario", false);
+        salvo.setProviderUserId("google-pessoal");
+        when(pendingService.criarPendingGoogle(
+                "google-pessoal", "usuario@gmail.com", "Usuario", "https://img"))
+                .thenReturn(salvo);
 
-        assertEquals("Use uma conta Google corporativa @climbe.com.br", erro.getMessage());
+        GoogleOAuthResolveResponseDTO response = googleOAuthService.resolverLoginGoogle(
+                "google-pessoal", "usuario@gmail.com", "Usuario", "https://img");
+
+        assertEquals(GoogleOAuthService.STATUS_PENDING_APPROVAL, response.getStatus());
+        assertEquals("usuario@gmail.com", response.getEmail());
+        verify(pendingService).criarPendingGoogle(
+                "google-pessoal", "usuario@gmail.com", "Usuario", "https://img");
     }
 
     @Test
