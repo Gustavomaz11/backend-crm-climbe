@@ -2,8 +2,10 @@ package com.climb.api.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
@@ -32,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UsuarioService {
 
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private static final Set<String> SITUACOES_PERMITIDAS_NO_UPDATE =
             Set.of("ATIVO", "INATIVO", "ESPERANDO_APROVACAO");
 
@@ -125,18 +128,20 @@ public class UsuarioService {
         exigirCampoObrigatorio(dto.getNomeCompleto(), "Nome");
         exigirCampoObrigatorio(dto.getCpf(), "CPF");
         exigirCampoObrigatorio(dto.getEmail(), "Email");
+        exigirCampoObrigatorio(dto.getContato(), "Contato");
         exigirCampoObrigatorio(dto.getSenha(), "Senha");
         if (dto.getCargoId() == null) {
-            throw new RuntimeException("Cargo é obrigatório");
+            throw new IllegalArgumentException("Cargo é obrigatório");
         }
 
-        validarCpfEmailDisponiveis(dto.getCpf(), dto.getEmail(), null);
+        String emailNormalizado = normalizarEmail(dto.getEmail());
+        validarCpfEmailDisponiveis(dto.getCpf(), emailNormalizado, null);
         Cargo cargo = buscarCargoOuFalhar(dto.getCargoId());
 
         Usuario usuario = new Usuario();
         usuario.setNomeCompleto(dto.getNomeCompleto());
         usuario.setCpf(dto.getCpf());
-        usuario.setEmail(dto.getEmail());
+        usuario.setEmail(emailNormalizado);
         usuario.setContato(dto.getContato());
         usuario.setSenhaHash(passwordEncoder.encode(dto.getSenha()));
         usuario.setSituacao("ESPERANDO_APROVACAO");
@@ -317,7 +322,7 @@ public class UsuarioService {
 
     Cargo buscarCargoOuFalhar(Long cargoId) {
         return cargoRepository.findById(cargoId)
-                .orElseThrow(() -> new RuntimeException("Cargo não encontrado"));
+                .orElseThrow(() -> new IllegalArgumentException("Cargo não encontrado"));
     }
 
     private void atribuirPermissaoPadraoAgendamento(Usuario usuario) {
@@ -333,14 +338,14 @@ public class UsuarioService {
         if (cpf != null && !cpf.isBlank()) {
             repository.findByCpf(cpf).ifPresent(u -> {
                 if (usuarioIdAtual == null || !u.getId().equals(usuarioIdAtual)) {
-                    throw new RuntimeException(usuarioIdAtual == null ? "CPF já cadastrado" : "CPF já em uso");
+                    throw new IllegalStateException(usuarioIdAtual == null ? "CPF já cadastrado" : "CPF já em uso");
                 }
             });
         }
         if (email != null && !email.isBlank()) {
             repository.findByEmail(email).ifPresent(u -> {
                 if (usuarioIdAtual == null || !u.getId().equals(usuarioIdAtual)) {
-                    throw new RuntimeException(usuarioIdAtual == null ? "Email já cadastrado" : "Email já em uso");
+                    throw new IllegalStateException(usuarioIdAtual == null ? "Email já cadastrado" : "Email já em uso");
                 }
             });
         }
@@ -348,7 +353,15 @@ public class UsuarioService {
 
     private static void exigirCampoObrigatorio(String valor, String campo) {
         if (valor == null || valor.isBlank()) {
-            throw new RuntimeException(campo + " é obrigatório");
+            throw new IllegalArgumentException(campo + " é obrigatório");
         }
+    }
+
+    private static String normalizarEmail(String email) {
+        String normalizado = email.trim().toLowerCase(Locale.ROOT);
+        if (!EMAIL_PATTERN.matcher(normalizado).matches()) {
+            throw new IllegalArgumentException("Informe um e-mail válido");
+        }
+        return normalizado;
     }
 }

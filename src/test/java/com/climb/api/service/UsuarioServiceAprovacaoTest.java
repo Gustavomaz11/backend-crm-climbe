@@ -99,7 +99,7 @@ class UsuarioServiceAprovacaoTest {
         UsuarioRequestDTO request = new UsuarioRequestDTO();
         request.setNomeCompleto("Novo Usuario");
         request.setCpf("07508154509");
-        request.setEmail("novo@climbe.com.br");
+        request.setEmail("novo.usuario@gmail.com");
         request.setContato("79999999999");
         request.setSenha("senha-segura");
         request.setCargoId(cargo.getId());

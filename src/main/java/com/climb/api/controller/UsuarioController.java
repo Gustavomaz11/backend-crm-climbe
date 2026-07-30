@@ -98,8 +98,14 @@ public class UsuarioController {
     }
 
     @PostMapping
-    public String criar(@RequestBody UsuarioRequestDTO dto) {
-        return service.criarSolicitacaoAcesso(dto);
+    public ResponseEntity<?> criar(@RequestBody UsuarioRequestDTO dto) {
+        try {
+            return ResponseEntity.ok(service.criarSolicitacaoAcesso(dto));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}")
