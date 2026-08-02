@@ -20,6 +20,10 @@ public class PipelineVendasComentario {
     @JoinColumn(name = "autor_id", nullable = false)
     private Usuario autor;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "comentario_pai_id")
+    private PipelineVendasComentario comentarioPai;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String conteudo;
 
@@ -30,10 +34,13 @@ public class PipelineVendasComentario {
     void prePersist() { if (criadoEm == null) criadoEm = LocalDateTime.now(); }
 
     public Long getIdComentario() { return idComentario; }
+    public void setIdComentario(Long idComentario) { this.idComentario = idComentario; }
     public PipelineVendasNegocio getNegocio() { return negocio; }
     public void setNegocio(PipelineVendasNegocio negocio) { this.negocio = negocio; }
     public Usuario getAutor() { return autor; }
     public void setAutor(Usuario autor) { this.autor = autor; }
+    public PipelineVendasComentario getComentarioPai() { return comentarioPai; }
+    public void setComentarioPai(PipelineVendasComentario comentarioPai) { this.comentarioPai = comentarioPai; }
     public String getConteudo() { return conteudo; }
     public void setConteudo(String conteudo) { this.conteudo = conteudo; }
     public LocalDateTime getCriadoEm() { return criadoEm; }

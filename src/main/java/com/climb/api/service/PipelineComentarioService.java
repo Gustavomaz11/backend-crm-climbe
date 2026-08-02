@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class PipelineComentarioService {
@@ -51,14 +52,29 @@ public class PipelineComentarioService {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_COMENTARIO_CRIAR);
         PipelineVendasNegocio negocio = buscarNegocio(negocioId);
         Usuario autor = buscarUsuario(usuarioId);
+        PipelineVendasComentario comentarioPai = buscarComentarioPai(dto.comentarioPaiId(), negocioId);
         PipelineVendasComentario comentario = new PipelineVendasComentario();
         comentario.setNegocio(negocio);
         comentario.setAutor(autor);
+        comentario.setComentarioPai(comentarioPai);
         comentario.setConteudo(dto.conteudo().trim());
         PipelineVendasComentario salvo = repository.save(comentario);
         historicoService.registrar(negocio, usuarioId, PipelineHistoricoTipo.COMENTARIO_ADICIONADO,
-                "Comentário incluído por " + autor.getNomeCompleto());
+                (comentarioPai == null ? "Comentário incluído por " : "Resposta incluída por ")
+                        + autor.getNomeCompleto());
         return toResponse(salvo);
+    }
+
+    private PipelineVendasComentario buscarComentarioPai(Long comentarioPaiId, Long negocioId) {
+        if (comentarioPaiId == null) return null;
+
+        PipelineVendasComentario comentarioPai = repository.findById(comentarioPaiId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comentário respondido não encontrado"));
+        if (!Objects.equals(comentarioPai.getNegocio().getIdNegocio(), negocioId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "O comentário respondido não pertence a este negócio");
+        }
+        return comentarioPai;
     }
 
     private PipelineVendasNegocio buscarNegocio(Long negocioId) {
@@ -80,6 +96,7 @@ public class PipelineComentarioService {
     private PipelineComentarioResponseDTO toResponse(PipelineVendasComentario comentario) {
         return new PipelineComentarioResponseDTO(
                 comentario.getIdComentario(),
+                comentario.getComentarioPai() == null ? null : comentario.getComentarioPai().getIdComentario(),
                 comentario.getAutor().getId(),
                 comentario.getAutor().getNomeCompleto(),
                 comentario.getConteudo(),
