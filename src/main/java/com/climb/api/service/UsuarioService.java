@@ -29,7 +29,9 @@ import com.climb.api.repository.UsuarioOAuthRepository;
 import com.climb.api.repository.UsuarioRepository;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class UsuarioService {
@@ -76,7 +78,7 @@ public class UsuarioService {
 
     public Usuario buscarPorId(Long id) {
         return repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario nao encontrado"));
     }
 
     public List<UsuarioResponseDTO> listar() {
@@ -187,8 +189,18 @@ public class UsuarioService {
         return toResponse(repository.save(usuario));
     }
 
-    public void deletar(Long id) {
-        repository.delete(buscarPorId(id));
+    @Transactional
+    public void deletar(Long id, Long responsavelId) {
+        Usuario usuario = buscarPorId(id);
+        if ("ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
+            solicitacaoAcessoService.decidir(
+                    SolicitacaoAcessoOrigem.USUARIO,
+                    id,
+                    SolicitacaoAcessoStatus.RECUSADO,
+                    responsavelId,
+                    null);
+        }
+        repository.delete(usuario);
     }
 
     @Transactional
@@ -221,22 +233,25 @@ public class UsuarioService {
     }
 
     @Transactional
-    public UsuarioResponseDTO recusarUsuario(Long id, Long aprovadorId) {
-        Usuario usuario = buscarPorId(id);
+    public void recusarUsuario(Long id, Long aprovadorId) {
+        Usuario usuario = repository.findById(id).orElse(null);
 
-        if (!"ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
-            throw new RuntimeException("Usuário não está aguardando aprovação");
+        if (usuario != null && !"ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Usuario nao esta aguardando aprovacao");
         }
 
-        usuario.setSituacao("INATIVO");
-        Usuario salvo = repository.save(usuario);
+        if (usuario != null) {
+            usuario.setSituacao("INATIVO");
+            repository.save(usuario);
+        }
         solicitacaoAcessoService.decidir(
                 SolicitacaoAcessoOrigem.USUARIO,
                 id,
                 SolicitacaoAcessoStatus.RECUSADO,
                 aprovadorId,
                 null);
-        return toResponse(salvo);
     }
 
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {

@@ -22,6 +22,8 @@ app:
   frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   mail:
     from: ${APP_MAIL_FROM:no-reply@climbe.com}
+    from-name: ${APP_MAIL_FROM_NAME:Climbe}
+    reply-to: ${APP_MAIL_REPLY_TO:}
   reports:
     output-dir: ${REPORTS_OUTPUT_DIR:uploads/relatorios}
   contract-storage:

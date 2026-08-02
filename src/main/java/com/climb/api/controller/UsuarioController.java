@@ -116,7 +116,7 @@ public class UsuarioController {
 
     @DeleteMapping("/{id}")
     public void deletar(@PathVariable Long id) {
-        service.deletar(id);
+        service.deletar(id, usuarioAutenticadoId());
     }
 
     @PostMapping("/{id}/aprovar")
@@ -127,9 +127,10 @@ public class UsuarioController {
     }
 
     @PostMapping("/{id}/recusar")
-    public UsuarioResponseDTO recusarUsuario(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> recusarUsuario(@PathVariable Long id) {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
-        return service.recusarUsuario(id, usuarioAutenticadoId());
+        service.recusarUsuario(id, usuarioAutenticadoId());
+        return ResponseEntity.ok(ApiResponse.ok(null, "Solicitacao de acesso recusada"));
     }
 
     @PostMapping("/pendentes-google/{pendingId}/aprovar")

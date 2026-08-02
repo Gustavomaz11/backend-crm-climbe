@@ -1,5 +1,6 @@
 package com.climb.api.service;
 
+import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +10,8 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
 
+import java.io.UnsupportedEncodingException;
+
 @Service
 public class EmailService {
 
@@ -16,13 +19,19 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
     private final String remetente;
+    private final String nomeRemetente;
+    private final String responderPara;
     private final String frontendUrl;
 
     public EmailService(JavaMailSender mailSender,
                         @Value("${app.mail.from:no-reply@climbe.com}") String remetente,
+                        @Value("${app.mail.from-name:Climbe}") String nomeRemetente,
+                        @Value("${app.mail.reply-to:}") String responderPara,
                         @Value("${app.frontend-url:http://localhost:5173}") String frontendUrl) {
         this.mailSender = mailSender;
         this.remetente = remetente;
+        this.nomeRemetente = nomeRemetente;
+        this.responderPara = responderPara;
         this.frontendUrl = frontendUrl;
     }
 
@@ -94,7 +103,7 @@ public class EmailService {
         try {
             MimeMessage mensagem = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mensagem, "UTF-8");
-            helper.setFrom(remetente);
+            configurarRemetente(helper);
             helper.setTo(emailDestino.trim());
             helper.setSubject(assunto);
             helper.setText(html, true);
@@ -105,6 +114,19 @@ public class EmailService {
             // A operação principal permanece disponível e o e-mail pode ser reenviado pela revisão.
             log.error("Falha ao enviar e-mail para {} com assunto '{}': {}", emailDestino, assunto, e.getMessage(), e);
             return false;
+        }
+    }
+
+    private void configurarRemetente(MimeMessageHelper helper)
+            throws MessagingException, UnsupportedEncodingException {
+        if (nomeRemetente == null || nomeRemetente.isBlank()) {
+            helper.setFrom(remetente);
+        } else {
+            helper.setFrom(remetente, nomeRemetente.trim());
+        }
+
+        if (responderPara != null && !responderPara.isBlank()) {
+            helper.setReplyTo(responderPara.trim());
         }
     }
 

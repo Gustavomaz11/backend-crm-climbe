@@ -5,6 +5,8 @@ import com.climb.api.model.Cargo;
 import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.OAuthProvider;
 import com.climb.api.model.Permissao;
+import com.climb.api.model.SolicitacaoAcessoOrigem;
+import com.climb.api.model.SolicitacaoAcessoStatus;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
 import com.climb.api.model.dto.UsuarioRequestDTO;
@@ -140,6 +142,38 @@ class UsuarioServiceAprovacaoTest {
         service.aprovarUsuario(8L, 1L, cargo.getId(), Set.of());
 
         verify(emailService).enviarAcessoAprovado(pendente.getEmail(), pendente.getNomeCompleto());
+    }
+
+    @Test
+    void deveRecusarHistoricoQuandoUsuarioPendenteJaFoiExcluido() {
+        when(usuarioRepository.findById(6L)).thenReturn(Optional.empty());
+
+        service.recusarUsuario(6L, 3L);
+
+        verify(solicitacaoAcessoService).decidir(
+                SolicitacaoAcessoOrigem.USUARIO,
+                6L,
+                SolicitacaoAcessoStatus.RECUSADO,
+                3L,
+                null);
+    }
+
+    @Test
+    void deveEncerrarHistoricoAntesDeExcluirUsuarioPendente() {
+        Usuario pendente = new Usuario();
+        pendente.setId(9L);
+        pendente.setSituacao("ESPERANDO_APROVACAO");
+        when(usuarioRepository.findById(9L)).thenReturn(Optional.of(pendente));
+
+        service.deletar(9L, 3L);
+
+        verify(solicitacaoAcessoService).decidir(
+                SolicitacaoAcessoOrigem.USUARIO,
+                9L,
+                SolicitacaoAcessoStatus.RECUSADO,
+                3L,
+                null);
+        verify(usuarioRepository).delete(pendente);
     }
 
     private OAuth2PendingRegistration pendingAprovado(Cargo cargo, Set<Permissao> permissoes) {

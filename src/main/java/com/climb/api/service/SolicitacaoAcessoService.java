@@ -7,8 +7,10 @@ import com.climb.api.model.SolicitacaoAcessoStatus;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.UsuarioPendenteResponseDTO;
 import com.climb.api.repository.SolicitacaoAcessoRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -55,7 +57,14 @@ public class SolicitacaoAcessoService {
                         Long decididoPor,
                         String cargoNome) {
         SolicitacaoAcesso solicitacao = repository.findByOrigemAndReferenciaId(origem, referenciaId)
-                .orElseThrow(() -> new IllegalStateException("Historico da solicitacao de acesso nao encontrado"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Historico da solicitacao de acesso nao encontrado"));
+        if (solicitacao.getStatus() != SolicitacaoAcessoStatus.PENDENTE) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Solicitacao de acesso ja foi decidida");
+        }
         solicitacao.setStatus(status);
         solicitacao.setDecididoEm(LocalDateTime.now());
         solicitacao.setDecididoPor(decididoPor);

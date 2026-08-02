@@ -9,16 +9,21 @@ import com.climb.api.service.UsuarioService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -47,6 +52,11 @@ class UsuarioControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(usuarioController)
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -88,6 +98,22 @@ class UsuarioControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Email invalido"));
+    }
+
+    @Test
+    void deveRecusarSolicitacaoManualComRespostaPadronizada() throws Exception {
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getDetails()).thenReturn(3L);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        when(rbacService.temPermissao(3L, com.climb.api.model.PermissaoCodigo.PERMITIR_ACESSO))
+                .thenReturn(true);
+
+        mockMvc.perform(post("/usuarios/6/recusar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Solicitacao de acesso recusada"));
+
+        verify(usuarioService).recusarUsuario(6L, 3L);
     }
 
     private UsuarioRequestDTO request(String email) {
