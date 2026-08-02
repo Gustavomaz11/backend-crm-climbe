@@ -64,10 +64,10 @@ public class AuthenticationService {
         }
 
         Long usuarioId = jwtUtil.extractUserId(refreshToken);
-        String email = jwtUtil.extractEmail(refreshToken);
-
-        Usuario usuario = usuarioService.buscarPorEmail(email);
-        if (usuario == null || !usuarioId.equals(usuario.getId())) {
+        Usuario usuario;
+        try {
+            usuario = usuarioService.buscarPorId(usuarioId);
+        } catch (RuntimeException ex) {
             return AuthResult.failure(AuthStatus.INVALID_REFRESH_TOKEN, "Refresh token invalido");
         }
         AuthResult<Void> situacao = validarUsuarioAtivo(usuario, "Usuario nao encontrado");
@@ -75,7 +75,7 @@ public class AuthenticationService {
             return AuthResult.failure(situacao.status(), situacao.message());
         }
 
-        return AuthResult.success(jwtUtil.generateAccessToken(usuarioId, email));
+        return AuthResult.success(jwtUtil.generateAccessToken(usuarioId, usuario.getEmail()));
     }
 
     public long getAccessTokenExpirationTime() {

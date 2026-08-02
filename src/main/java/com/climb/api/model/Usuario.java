@@ -31,6 +31,9 @@ public class Usuario {
     @Column(nullable = false)
     private String contato;
 
+    @Column(name = "foto_perfil_url", length = 1000)
+    private String fotoPerfilUrl;
+
     @Column(nullable = false)
     @JsonIgnore
     private String senhaHash;

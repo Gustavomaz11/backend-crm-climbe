@@ -52,6 +52,7 @@ public class UsuarioService {
     private final AprovacaoAcessoService aprovacaoAcessoService;
     private final SolicitacaoAcessoService solicitacaoAcessoService;
     private final GoogleCredentialService googleCredentialService;
+    private final CloudflareR2ArquivoStorageService storageService;
 
     public UsuarioService(UsuarioRepository repository,
                           EmailService emailService,
@@ -63,7 +64,8 @@ public class UsuarioService {
                           PermissaoRepository permissaoRepository,
                           AprovacaoAcessoService aprovacaoAcessoService,
                           SolicitacaoAcessoService solicitacaoAcessoService,
-                          GoogleCredentialService googleCredentialService) {
+                          GoogleCredentialService googleCredentialService,
+                          CloudflareR2ArquivoStorageService storageService) {
         this.repository = repository;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
@@ -75,6 +77,7 @@ public class UsuarioService {
         this.aprovacaoAcessoService = aprovacaoAcessoService;
         this.solicitacaoAcessoService = solicitacaoAcessoService;
         this.googleCredentialService = googleCredentialService;
+        this.storageService = storageService;
     }
 
     public Usuario buscarPorId(Long id) {
@@ -382,6 +385,13 @@ public class UsuarioService {
     public String buscarFotoPerfil(Usuario usuario) {
         if (usuario == null || usuario.getId() == null) {
             return null;
+        }
+
+        if (usuario.getFotoPerfilUrl() != null && !usuario.getFotoPerfilUrl().isBlank()) {
+            String foto = usuario.getFotoPerfilUrl();
+            return foto.startsWith("http://") || foto.startsWith("https://")
+                    ? foto
+                    : storageService.gerarUrlTemporariaDownload(foto);
         }
 
         return usuarioOAuthRepository

@@ -49,12 +49,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     if (JwtUtil.TYPE_ACCESS.equals(tokenType)) {
                         Long userId = jwtUtil.extractUserId(token);
-                        if (!usuarioAtivo(userId, email)) {
+                        Usuario usuario = usuarioAtivo(userId);
+                        if (usuario == null) {
                             filterChain.doFilter(request, response);
                             return;
                         }
                         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                                email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                                usuario.getEmail(), null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
                         auth.setDetails(userId);
                         SecurityContextHolder.getContext().setAuthentication(auth);
                     } else if (JwtUtil.TYPE_PENDING_REGISTRATION.equals(tokenType)) {
@@ -73,11 +74,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean usuarioAtivo(Long userId, String email) {
+    private Usuario usuarioAtivo(Long userId) {
         return usuarioRepository.findById(userId)
                 .filter(usuario -> "ATIVO".equals(usuario.getSituacao()))
-                .map(Usuario::getEmail)
-                .filter(emailUsuario -> emailUsuario.equalsIgnoreCase(email))
-                .isPresent();
+                .orElse(null);
     }
 }

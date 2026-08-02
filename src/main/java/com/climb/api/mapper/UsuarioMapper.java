@@ -17,11 +17,16 @@ public abstract class UsuarioMapper {
     private UsuarioOAuthRepository usuarioOAuthRepository;
 
     @Mapping(target = "cargoNome", source = "cargo.nome")
+    @Mapping(target = "fotoPerfil", source = "fotoPerfilUrl")
     public abstract UsuarioResponseDTO toResponse(Usuario usuario);
 
     @AfterMapping
     protected void preencherFotoPerfil(Usuario usuario, @MappingTarget UsuarioResponseDTO dto) {
         if (usuario == null || usuario.getId() == null) {
+            return;
+        }
+
+        if (dto.getFotoPerfil() != null && !dto.getFotoPerfil().isBlank()) {
             return;
         }
 

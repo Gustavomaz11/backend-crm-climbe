@@ -35,6 +35,8 @@ public class CargoService {
     }
 
     public void deletar(Long id) {
-        repository.deleteById(id);
+        Cargo cargo = buscarPorId(id);
+        cargo.setAtivo(false);
+        repository.save(cargo);
     }
 }

@@ -50,6 +50,7 @@ class UsuarioServiceAprovacaoTest {
     @Mock private AprovacaoAcessoService aprovacaoAcessoService;
     @Mock private SolicitacaoAcessoService solicitacaoAcessoService;
     @Mock private GoogleCredentialService googleCredentialService;
+    @Mock private CloudflareR2ArquivoStorageService storageService;
 
     private UsuarioService service;
 
@@ -66,7 +67,8 @@ class UsuarioServiceAprovacaoTest {
                 permissaoRepository,
                 aprovacaoAcessoService,
                 solicitacaoAcessoService,
-                googleCredentialService);
+                googleCredentialService,
+                storageService);
     }
 
     @Test

@@ -32,8 +32,7 @@ class AuthenticationServiceTest {
         when(jwtUtil.validateToken("refresh-token")).thenReturn(true);
         when(jwtUtil.extractTokenType("refresh-token")).thenReturn(JwtUtil.TYPE_REFRESH);
         when(jwtUtil.extractUserId("refresh-token")).thenReturn(7L);
-        when(jwtUtil.extractEmail("refresh-token")).thenReturn(usuario.getEmail());
-        when(usuarioService.buscarPorEmail(usuario.getEmail())).thenReturn(usuario);
+        when(usuarioService.buscarPorId(7L)).thenReturn(usuario);
 
         AuthenticationService service = new AuthenticationService(
                 usuarioService, jwtUtil, passwordEncoder, usuarioMapper);

@@ -7,6 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import jakarta.validation.Valid;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.climb.api.config.PendingPrincipal;
@@ -21,11 +23,13 @@ import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.UsuarioPendenteResponseDTO;
 import com.climb.api.model.dto.UsuarioRequestDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
+import com.climb.api.model.dto.AtualizarMeuPerfilRequestDTO;
 import com.climb.api.service.OAuth2PendingService;
 import com.climb.api.service.AuthenticationService;
 import com.climb.api.service.RbacService;
 import com.climb.api.service.SolicitacaoAcessoService;
 import com.climb.api.service.UsuarioService;
+import com.climb.api.service.PerfilService;
 
 @RestController
 @RequestMapping("/usuarios")
@@ -36,17 +40,35 @@ public class UsuarioController {
     private final OAuth2PendingService pendingService;
     private final AuthenticationService authenticationService;
     private final SolicitacaoAcessoService solicitacaoAcessoService;
+    private final PerfilService perfilService;
 
     public UsuarioController(UsuarioService service,
                              RbacService rbacService,
                              OAuth2PendingService pendingService,
                              AuthenticationService authenticationService,
-                             SolicitacaoAcessoService solicitacaoAcessoService) {
+                             SolicitacaoAcessoService solicitacaoAcessoService,
+                             PerfilService perfilService) {
         this.service = service;
         this.rbacService = rbacService;
         this.pendingService = pendingService;
         this.authenticationService = authenticationService;
         this.solicitacaoAcessoService = solicitacaoAcessoService;
+        this.perfilService = perfilService;
+    }
+
+    @GetMapping("/me")
+    public UsuarioResponseDTO buscarMeuPerfil() {
+        return perfilService.buscar(usuarioAutenticadoId());
+    }
+
+    @PutMapping("/me")
+    public UsuarioResponseDTO atualizarMeuPerfil(@Valid @RequestBody AtualizarMeuPerfilRequestDTO dto) {
+        return perfilService.atualizar(usuarioAutenticadoId(), dto);
+    }
+
+    @PostMapping(value = "/me/foto", consumes = "multipart/form-data")
+    public UsuarioResponseDTO atualizarMinhaFoto(@RequestPart("foto") MultipartFile foto) {
+        return perfilService.atualizarFoto(usuarioAutenticadoId(), foto);
     }
 
     @GetMapping
