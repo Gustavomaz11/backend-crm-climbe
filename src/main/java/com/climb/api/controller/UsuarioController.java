@@ -92,6 +92,12 @@ public class UsuarioController {
         return solicitacaoAcessoService.listar();
     }
 
+    @GetMapping("/acessos")
+    public List<UsuarioResponseDTO> listarAcessosGerenciaveis() {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        return service.listarAcessosGerenciaveis();
+    }
+
     @GetMapping("/{id}")
     public UsuarioResponseDTO buscarPorId(@PathVariable Long id) {
         return service.buscarPorIdDTO(id);
@@ -131,6 +137,20 @@ public class UsuarioController {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
         service.recusarUsuario(id, usuarioAutenticadoId());
         return ResponseEntity.ok(ApiResponse.ok(null, "Solicitacao de acesso recusada"));
+    }
+
+    @PostMapping("/{id}/revogar")
+    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> revogarAcesso(@PathVariable Long id) {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        UsuarioResponseDTO usuario = service.revogarAcesso(id, usuarioAutenticadoId());
+        return ResponseEntity.ok(ApiResponse.ok(usuario, "Acesso revogado"));
+    }
+
+    @PostMapping("/{id}/reativar")
+    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> reativarAcesso(@PathVariable Long id) {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        UsuarioResponseDTO usuario = service.reativarAcesso(id);
+        return ResponseEntity.ok(ApiResponse.ok(usuario, "Acesso reativado"));
     }
 
     @PostMapping("/pendentes-google/{pendingId}/aprovar")

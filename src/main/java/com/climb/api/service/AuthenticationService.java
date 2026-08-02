@@ -66,6 +66,15 @@ public class AuthenticationService {
         Long usuarioId = jwtUtil.extractUserId(refreshToken);
         String email = jwtUtil.extractEmail(refreshToken);
 
+        Usuario usuario = usuarioService.buscarPorEmail(email);
+        if (usuario == null || !usuarioId.equals(usuario.getId())) {
+            return AuthResult.failure(AuthStatus.INVALID_REFRESH_TOKEN, "Refresh token invalido");
+        }
+        AuthResult<Void> situacao = validarUsuarioAtivo(usuario, "Usuario nao encontrado");
+        if (!situacao.isSuccess()) {
+            return AuthResult.failure(situacao.status(), situacao.message());
+        }
+
         return AuthResult.success(jwtUtil.generateAccessToken(usuarioId, email));
     }
 
@@ -91,6 +100,9 @@ public class AuthenticationService {
             case "INATIVO" -> AuthResult.failure(
                     AuthStatus.INATIVO,
                     "Sua conta foi desativada. Entre em contato com o administrador");
+            case "REVOGADO" -> AuthResult.failure(
+                    AuthStatus.INATIVO,
+                    "Seu acesso foi revogado. Entre em contato com o administrador");
             case "ATIVO" -> AuthResult.success(null);
             default -> AuthResult.failure(AuthStatus.SITUACAO_INVALIDA, "Usuario com situacao invalida");
         };

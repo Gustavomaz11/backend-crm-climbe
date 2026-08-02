@@ -1,6 +1,8 @@
 package com.climb.api.config;
 
 import com.climb.api.service.JwtUtil;
+import com.climb.api.model.Usuario;
+import com.climb.api.repository.UsuarioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,11 +24,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtUtil jwtUtil;
+    private final UsuarioRepository usuarioRepository;
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String AUTHORIZATION_HEADER = "Authorization";
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UsuarioRepository usuarioRepository) {
         this.jwtUtil = jwtUtil;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @Override
@@ -45,6 +49,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     if (JwtUtil.TYPE_ACCESS.equals(tokenType)) {
                         Long userId = jwtUtil.extractUserId(token);
+                        if (!usuarioAtivo(userId, email)) {
+                            filterChain.doFilter(request, response);
+                            return;
+                        }
                         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                                 email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
                         auth.setDetails(userId);
@@ -63,5 +71,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean usuarioAtivo(Long userId, String email) {
+        return usuarioRepository.findById(userId)
+                .filter(usuario -> "ATIVO".equals(usuario.getSituacao()))
+                .map(Usuario::getEmail)
+                .filter(emailUsuario -> emailUsuario.equalsIgnoreCase(email))
+                .isPresent();
     }
 }

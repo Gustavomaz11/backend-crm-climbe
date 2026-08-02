@@ -102,11 +102,7 @@ class UsuarioControllerTest {
 
     @Test
     void deveRecusarSolicitacaoManualComRespostaPadronizada() throws Exception {
-        Authentication authentication = mock(Authentication.class);
-        when(authentication.getDetails()).thenReturn(3L);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        when(rbacService.temPermissao(3L, com.climb.api.model.PermissaoCodigo.PERMITIR_ACESSO))
-                .thenReturn(true);
+        autenticarAdministrador(3L);
 
         mockMvc.perform(post("/usuarios/6/recusar"))
                 .andExpect(status().isOk())
@@ -114,6 +110,38 @@ class UsuarioControllerTest {
                 .andExpect(jsonPath("$.message").value("Solicitacao de acesso recusada"));
 
         verify(usuarioService).recusarUsuario(6L, 3L);
+    }
+
+    @Test
+    void deveRevogarAcessoDeUsuarioAtivo() throws Exception {
+        autenticarAdministrador(3L);
+
+        mockMvc.perform(post("/usuarios/7/revogar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Acesso revogado"));
+
+        verify(usuarioService).revogarAcesso(7L, 3L);
+    }
+
+    @Test
+    void deveReativarAcessoRevogado() throws Exception {
+        autenticarAdministrador(3L);
+
+        mockMvc.perform(post("/usuarios/7/reativar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Acesso reativado"));
+
+        verify(usuarioService).reativarAcesso(7L);
+    }
+
+    private void autenticarAdministrador(Long id) {
+        Authentication authentication = mock(Authentication.class);
+        when(authentication.getDetails()).thenReturn(id);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        when(rbacService.temPermissao(id, com.climb.api.model.PermissaoCodigo.PERMITIR_ACESSO))
+                .thenReturn(true);
     }
 
     private UsuarioRequestDTO request(String email) {

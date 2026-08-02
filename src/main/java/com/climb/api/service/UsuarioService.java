@@ -39,6 +39,7 @@ public class UsuarioService {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private static final Set<String> SITUACOES_PERMITIDAS_NO_UPDATE =
             Set.of("ATIVO", "INATIVO", "ESPERANDO_APROVACAO");
+    private static final Set<String> SITUACOES_GERENCIAVEIS = Set.of("ATIVO", "REVOGADO");
 
     private final UsuarioRepository repository;
     private final EmailService emailService;
@@ -83,6 +84,13 @@ public class UsuarioService {
 
     public List<UsuarioResponseDTO> listar() {
         return repository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<UsuarioResponseDTO> listarAcessosGerenciaveis() {
+        return repository.findAllBySituacaoInOrderByNomeCompletoAsc(SITUACOES_GERENCIAVEIS)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -254,12 +262,40 @@ public class UsuarioService {
                 null);
     }
 
+    @Transactional
+    public UsuarioResponseDTO revogarAcesso(Long id, Long responsavelId) {
+        if (id.equals(responsavelId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Nao e permitido revogar o proprio acesso");
+        }
+
+        Usuario usuario = buscarPorId(id);
+        exigirSituacao(usuario, "ATIVO", "Somente usuarios ativos podem ter o acesso revogado");
+        usuario.setSituacao("REVOGADO");
+        return toResponse(repository.save(usuario));
+    }
+
+    @Transactional
+    public UsuarioResponseDTO reativarAcesso(Long id) {
+        Usuario usuario = buscarPorId(id);
+        exigirSituacao(usuario, "REVOGADO", "Somente usuarios revogados podem ser reativados");
+        usuario.setSituacao("ATIVO");
+        return toResponse(repository.save(usuario));
+    }
+
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {
         return repository.findAll()
                 .stream()
                 .filter(u -> "ESPERANDO_APROVACAO".equals(u.getSituacao()))
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private void exigirSituacao(Usuario usuario, String esperada, String mensagem) {
+        if (!esperada.equals(usuario.getSituacao())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, mensagem);
+        }
     }
 
     @Transactional

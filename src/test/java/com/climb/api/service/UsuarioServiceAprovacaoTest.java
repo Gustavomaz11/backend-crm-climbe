@@ -23,12 +23,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -176,6 +179,48 @@ class UsuarioServiceAprovacaoTest {
         verify(usuarioRepository).delete(pendente);
     }
 
+    @Test
+    void deveRevogarAcessoPreservandoCargoEPermissoes() {
+        Cargo cargo = cargo(2L, "Analista Comercial");
+        Permissao permissao = permissao(10L, "PERMITIR_ACESSO");
+        Usuario usuario = usuario(7L, "ATIVO", cargo, Set.of(permissao));
+        when(usuarioRepository.findById(7L)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.save(usuario)).thenReturn(usuario);
+        when(usuarioMapper.toResponse(usuario)).thenReturn(new UsuarioResponseDTO());
+
+        service.revogarAcesso(7L, 3L);
+
+        assertEquals("REVOGADO", usuario.getSituacao());
+        assertSame(cargo, usuario.getCargo());
+        assertEquals(Set.of(permissao), usuario.getPermissoes());
+        verify(usuarioRepository).save(usuario);
+    }
+
+    @Test
+    void deveReativarUsuarioComAsMesmasPermissoes() {
+        Cargo cargo = cargo(2L, "Analista Comercial");
+        Permissao permissao = permissao(10L, "PERMITIR_ACESSO");
+        Usuario usuario = usuario(7L, "REVOGADO", cargo, Set.of(permissao));
+        when(usuarioRepository.findById(7L)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.save(usuario)).thenReturn(usuario);
+        when(usuarioMapper.toResponse(usuario)).thenReturn(new UsuarioResponseDTO());
+
+        service.reativarAcesso(7L);
+
+        assertEquals("ATIVO", usuario.getSituacao());
+        assertSame(cargo, usuario.getCargo());
+        assertEquals(Set.of(permissao), usuario.getPermissoes());
+    }
+
+    @Test
+    void naoDevePermitirRevogarOProprioAcesso() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.revogarAcesso(3L, 3L));
+
+        assertEquals(409, exception.getStatusCode().value());
+    }
+
     private OAuth2PendingRegistration pendingAprovado(Cargo cargo, Set<Permissao> permissoes) {
         OAuth2PendingRegistration pending = new OAuth2PendingRegistration();
         pending.setId(42L);
@@ -204,5 +249,14 @@ class UsuarioServiceAprovacaoTest {
         permissao.setCodigo(codigo);
         permissao.setDescricao(codigo);
         return permissao;
+    }
+
+    private Usuario usuario(Long id, String situacao, Cargo cargo, Set<Permissao> permissoes) {
+        Usuario usuario = new Usuario();
+        usuario.setId(id);
+        usuario.setSituacao(situacao);
+        usuario.setCargo(cargo);
+        usuario.getPermissoes().addAll(permissoes);
+        return usuario;
     }
 }

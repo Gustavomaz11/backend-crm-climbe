@@ -1,5 +1,6 @@
 package com.climb.api.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,5 +15,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     Optional<Usuario> findByCpf(String cpf);
 
     List<Usuario> findAllBySituacaoOrderByNomeCompletoAsc(String situacao);
+
+    List<Usuario> findAllBySituacaoInOrderByNomeCompletoAsc(Collection<String> situacoes);
 
 }
