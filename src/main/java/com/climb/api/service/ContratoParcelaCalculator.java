@@ -33,19 +33,16 @@ public class ContratoParcelaCalculator {
         int quantidade = proposta.getRecorrenciaMeses() == null || proposta.getRecorrenciaMeses() == 0
                 ? HORIZONTE_RECORRENCIA_INDETERMINADA
                 : proposta.getRecorrenciaMeses();
-        return criarParcelas(proposta, aprovacao, quantidade, false);
+        return parcelasRecorrentes(proposta, aprovacao, quantidade);
     }
 
     private List<ParcelaPlanejada> calcularParcelamento(Proposta proposta, LocalDate aprovacao) {
         int quantidade = proposta.getQuantidadeParcelas() == null ? 1 : proposta.getQuantidadeParcelas();
-        if (!Boolean.FALSE.equals(proposta.getParcelasIguais())) {
-            return parcelasIguais(proposta, aprovacao, quantidade);
-        }
-        return criarParcelas(proposta, aprovacao, quantidade, true);
+        return parcelasIguais(proposta, aprovacao, quantidade);
     }
 
     private List<ParcelaPlanejada> parcelasIguais(Proposta proposta, LocalDate aprovacao, int quantidade) {
-        BigDecimal valorBase = proposta.getValuation().divide(BigDecimal.valueOf(quantidade), 2, RoundingMode.DOWN);
+        BigDecimal valorBase = valorParcelaBase(proposta.getValuation(), quantidade);
         BigDecimal ultima = proposta.getValuation().subtract(valorBase.multiply(BigDecimal.valueOf(quantidade - 1L)));
         List<ParcelaPlanejada> parcelas = new ArrayList<>();
         for (int indice = 0; indice < quantidade; indice++) {
@@ -55,23 +52,36 @@ public class ContratoParcelaCalculator {
         return parcelas;
     }
 
-    private List<ParcelaPlanejada> criarParcelas(Proposta proposta, LocalDate aprovacao, int quantidade, boolean valorPorParcela) {
+    private List<ParcelaPlanejada> parcelasRecorrentes(Proposta proposta, LocalDate aprovacao, int quantidade) {
         List<PropostaReajuste> reajustes = proposta.getReajustes() == null ? List.of() : proposta.getReajustes().stream()
                 .sorted(Comparator.comparing(PropostaReajuste::getMesVigencia))
                 .toList();
         List<ParcelaPlanejada> parcelas = new ArrayList<>();
-        BigDecimal valorAtual = proposta.getValuation();
+        BigDecimal valorBase = valorParcelaBase(proposta.getValuation(), quantidade);
+        BigDecimal ultimaParcelaBase = proposta.getValuation()
+                .subtract(valorBase.multiply(BigDecimal.valueOf(quantidade - 1L)));
+        BigDecimal valorAtual = valorBase;
+        boolean houveReajuste = false;
         for (int mes = 1; mes <= quantidade; mes++) {
             int numero = mes;
-            valorAtual = reajustes.stream()
+            BigDecimal reajusteDoMes = reajustes.stream()
                     .filter(reajuste -> reajuste.getMesVigencia() != null && reajuste.getMesVigencia() == numero)
                     .map(PropostaReajuste::getValor)
                     .findFirst()
-                    .orElse(valorAtual);
+                    .orElse(null);
+            if (reajusteDoMes != null) {
+                valorAtual = reajusteDoMes;
+                houveReajuste = true;
+            }
+            BigDecimal valorParcela = mes == quantidade && !houveReajuste ? ultimaParcelaBase : valorAtual;
             LocalDate competencia = competenciaInicial(proposta, aprovacao).plusMonths(mes - 1L);
-            parcelas.add(parcela(numero, competencia, aprovacao, valorAtual));
+            parcelas.add(parcela(numero, competencia, aprovacao, valorParcela));
         }
         return parcelas;
+    }
+
+    private BigDecimal valorParcelaBase(BigDecimal valorTotal, int quantidade) {
+        return valorTotal.divide(BigDecimal.valueOf(quantidade), 2, RoundingMode.DOWN);
     }
 
     private LocalDate competenciaInicial(Proposta proposta, LocalDate aprovacao) {

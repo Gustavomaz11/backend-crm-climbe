@@ -16,6 +16,21 @@ class ContratoParcelaCalculatorTest {
     private final ContratoParcelaCalculator calculator = new ContratoParcelaCalculator();
 
     @Test
+    void deveDividirValorTotalDaPropostaRecorrentePelosMeses() {
+        Proposta proposta = proposta(ServicoComercial.BPO, "4500000.00");
+        proposta.setRecorrenciaMeses(24);
+
+        List<ContratoParcelaCalculator.ParcelaPlanejada> parcelas =
+                calculator.calcular(proposta, LocalDate.of(2026, 8, 2));
+
+        assertEquals(24, parcelas.size());
+        assertEquals(new BigDecimal("187500.00"), parcelas.getFirst().valor());
+        assertEquals(new BigDecimal("4500000.00"), parcelas.stream()
+                .map(ContratoParcelaCalculator.ParcelaPlanejada::valor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    @Test
     void deveAplicarReajusteNaCompetenciaInformadaParaServicoRecorrente() {
         Proposta proposta = proposta(ServicoComercial.BPO, "1000.00");
         proposta.setMesInicio(LocalDate.of(2026, 1, 1));
@@ -26,7 +41,7 @@ class ContratoParcelaCalculatorTest {
                 calculator.calcular(proposta, LocalDate.of(2026, 1, 31));
 
         assertEquals(List.of(
-                new BigDecimal("1000.00"),
+                new BigDecimal("333.33"),
                 new BigDecimal("1500.00"),
                 new BigDecimal("1500.00")
         ), parcelas.stream().map(ContratoParcelaCalculator.ParcelaPlanejada::valor).toList());
@@ -46,6 +61,22 @@ class ContratoParcelaCalculatorTest {
                 new BigDecimal("333.33"),
                 new BigDecimal("333.33"),
                 new BigDecimal("333.34")
+        ), parcelas.stream().map(ContratoParcelaCalculator.ParcelaPlanejada::valor).toList());
+    }
+
+    @Test
+    void deveDividirValorTotalMesmoQuandoFlagDeParcelasIguaisForFalsa() {
+        Proposta proposta = proposta(ServicoComercial.VALUATION, "900.00");
+        proposta.setQuantidadeParcelas(3);
+        proposta.setParcelasIguais(false);
+
+        List<ContratoParcelaCalculator.ParcelaPlanejada> parcelas =
+                calculator.calcular(proposta, LocalDate.of(2026, 7, 10));
+
+        assertEquals(List.of(
+                new BigDecimal("300.00"),
+                new BigDecimal("300.00"),
+                new BigDecimal("300.00")
         ), parcelas.stream().map(ContratoParcelaCalculator.ParcelaPlanejada::valor).toList());
     }
 
