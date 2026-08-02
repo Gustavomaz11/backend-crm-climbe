@@ -8,4 +8,5 @@ import java.util.List;
 public interface GrupoPermissaoRepository extends JpaRepository<GrupoPermissao, Long> {
     List<GrupoPermissao> findAllByAtivoTrueOrderByNomeAsc();
     boolean existsByNomeIgnoreCaseAndAtivoTrue(String nome);
+    boolean existsByNomeIgnoreCaseAndAtivoTrueAndIdNot(String nome, Long id);
 }

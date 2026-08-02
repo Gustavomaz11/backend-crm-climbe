@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,5 +43,33 @@ class GrupoPermissaoServiceTest {
         assertEquals(9L, resposta.id());
         assertEquals("Comercial", resposta.nome());
         assertEquals(1, resposta.permissoes().size());
+    }
+
+    @Test
+    void deveEditarNomeDescricaoEPermissoesDoGrupo() {
+        Permissao permissaoAtual = new Permissao();
+        permissaoAtual.setIdPermissao(3L);
+        permissaoAtual.setCodigo("CONTRATO_CRUD");
+        Permissao novaPermissao = new Permissao();
+        novaPermissao.setIdPermissao(4L);
+        novaPermissao.setCodigo("PROPOSTA_CRUD");
+
+        GrupoPermissao grupo = new GrupoPermissao();
+        grupo.setId(9L);
+        grupo.setNome("Comercial");
+        grupo.setDescricao("Descricao antiga");
+        grupo.getPermissoes().add(permissaoAtual);
+
+        when(repository.findById(9L)).thenReturn(Optional.of(grupo));
+        when(permissaoRepository.findAllById(Set.of(4L))).thenReturn(List.of(novaPermissao));
+        when(repository.save(grupo)).thenReturn(grupo);
+
+        GrupoPermissaoService service = new GrupoPermissaoService(repository, permissaoRepository);
+        var resposta = service.atualizar(9L, new GrupoPermissaoRequestDTO(
+                "Administrativo", "Descricao nova", Set.of(4L)));
+
+        assertEquals("Administrativo", resposta.nome());
+        assertEquals("Descricao nova", resposta.descricao());
+        assertEquals(Set.of(novaPermissao), resposta.permissoes());
     }
 }

@@ -48,7 +48,11 @@ public class GrupoPermissaoService {
     @Transactional
     public GrupoPermissaoResponseDTO atualizar(Long id, GrupoPermissaoRequestDTO dto) {
         GrupoPermissao grupo = buscar(id);
-        grupo.setNome(dto.nome().trim());
+        String nome = dto.nome().trim();
+        if (repository.existsByNomeIgnoreCaseAndAtivoTrueAndIdNot(nome, id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ja existe um grupo com este nome");
+        }
+        grupo.setNome(nome);
         grupo.setDescricao(normalizarDescricao(dto.descricao()));
         grupo.setPermissoes(resolverPermissoes(dto.permissaoIds()));
         return toResponse(repository.save(grupo));
