@@ -284,6 +284,25 @@ public class UsuarioService {
         return toResponse(repository.save(usuario));
     }
 
+    @Transactional
+    public UsuarioResponseDTO alterarCargo(Long id, Long cargoId) {
+        if (cargoId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cargo e obrigatorio");
+        }
+
+        Usuario usuario = buscarPorId(id);
+        if (!SITUACOES_GERENCIAVEIS.contains(usuario.getSituacao())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "O cargo pode ser alterado somente para usuarios ativos ou revogados");
+        }
+
+        Cargo cargo = cargoRepository.findByIdAndAtivoTrue(cargoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cargo ativo nao encontrado"));
+        usuario.setCargo(cargo);
+        return toResponse(repository.save(usuario));
+    }
+
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {
         return repository.findAll()
                 .stream()

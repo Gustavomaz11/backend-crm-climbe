@@ -221,6 +221,24 @@ class UsuarioServiceAprovacaoTest {
         assertEquals(409, exception.getStatusCode().value());
     }
 
+    @Test
+    void deveAlterarCargoSemModificarPermissoesOuSituacao() {
+        Cargo cargoAtual = cargo(2L, "Analista Comercial");
+        Cargo novoCargo = cargo(5L, "CEO - Chief Executive Officer");
+        Permissao permissao = permissao(10L, "PERMITIR_ACESSO");
+        Usuario usuario = usuario(7L, "ATIVO", cargoAtual, Set.of(permissao));
+        when(usuarioRepository.findById(7L)).thenReturn(Optional.of(usuario));
+        when(cargoRepository.findByIdAndAtivoTrue(5L)).thenReturn(Optional.of(novoCargo));
+        when(usuarioRepository.save(usuario)).thenReturn(usuario);
+        when(usuarioMapper.toResponse(usuario)).thenReturn(new UsuarioResponseDTO());
+
+        service.alterarCargo(7L, 5L);
+
+        assertSame(novoCargo, usuario.getCargo());
+        assertEquals(Set.of(permissao), usuario.getPermissoes());
+        assertEquals("ATIVO", usuario.getSituacao());
+    }
+
     private OAuth2PendingRegistration pendingAprovado(Cargo cargo, Set<Permissao> permissoes) {
         OAuth2PendingRegistration pending = new OAuth2PendingRegistration();
         pending.setId(42L);

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -134,6 +135,20 @@ class UsuarioControllerTest {
                 .andExpect(jsonPath("$.message").value("Acesso reativado"));
 
         verify(usuarioService).reativarAcesso(7L);
+    }
+
+    @Test
+    void deveAlterarCargoDoUsuario() throws Exception {
+        autenticarAdministrador(3L);
+
+        mockMvc.perform(patch("/usuarios/7/cargo")
+                        .contentType("application/json")
+                        .content("{\"cargoId\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Cargo atualizado"));
+
+        verify(usuarioService).alterarCargo(7L, 5L);
     }
 
     private void autenticarAdministrador(Long id) {

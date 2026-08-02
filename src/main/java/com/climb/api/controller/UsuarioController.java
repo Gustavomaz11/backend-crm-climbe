@@ -13,6 +13,7 @@ import com.climb.api.config.PendingPrincipal;
 import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.dto.ApiResponse;
+import com.climb.api.model.dto.AlterarCargoRequestDTO;
 import com.climb.api.model.dto.AprovarAcessoRequestDTO;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
 import com.climb.api.model.dto.AuthResult;
@@ -151,6 +152,15 @@ public class UsuarioController {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
         UsuarioResponseDTO usuario = service.reativarAcesso(id);
         return ResponseEntity.ok(ApiResponse.ok(usuario, "Acesso reativado"));
+    }
+
+    @PatchMapping("/{id}/cargo")
+    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> alterarCargo(
+            @PathVariable Long id,
+            @RequestBody AlterarCargoRequestDTO dto) {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        UsuarioResponseDTO usuario = service.alterarCargo(id, dto.cargoId());
+        return ResponseEntity.ok(ApiResponse.ok(usuario, "Cargo atualizado"));
     }
 
     @PostMapping("/pendentes-google/{pendingId}/aprovar")
