@@ -13,6 +13,10 @@ public interface CargoRepository extends JpaRepository<Cargo, Long> {
 
     List<Cargo> findAllByAtivoTrueOrderByNomeAsc();
 
+    List<Cargo> findAllByAtivoTrueOrderByOrdemHierarquiaAscNomeAsc();
+
+    List<Cargo> findByCargoSuperiorIdAndAtivoTrueOrderByOrdemHierarquiaAscNomeAsc(Long cargoSuperiorId);
+
     Optional<Cargo> findByIdAndAtivoTrue(Long id);
 
 }

@@ -3,6 +3,7 @@ package com.climb.api.repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -29,5 +30,16 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     List<Usuario> findAllBySituacaoOrderByNomeCompletoAsc(String situacao);
 
     List<Usuario> findAllBySituacaoInOrderByNomeCompletoAsc(Collection<String> situacoes);
+
+    @Query("""
+            select usuario.id
+            from Usuario usuario
+            where usuario.situacao = :situacao
+              and usuario.cargo.id in :cargoIds
+            """)
+    Set<Long> findIdsBySituacaoAndCargoIds(
+            @Param("situacao") String situacao,
+            @Param("cargoIds") Collection<Long> cargoIds
+    );
 
 }

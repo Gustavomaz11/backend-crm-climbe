@@ -47,7 +47,8 @@ class PerformanceQueriesIntegrationTest {
                 List.of(999L), LocalDate.now(),
                 List.of(PipelineTarefaStatus.CONCLUIDA, PipelineTarefaStatus.CANCELADA)));
         assertTrue(tarefaRepository.findFiltradas(
-                false, false, true, false, false, LocalDate.now(), null, null, null, null).isEmpty());
+                false, false, true, false, false, LocalDate.now(), false,
+                java.util.Set.of(999L), null, null, null).isEmpty());
         assertTrue(anotacaoRepository.findByRevisaoIdWithVersao(999L).isEmpty());
         assertTrue(contratoTaskRepository.findResponsavelIdsComTasks(999L, java.util.Set.of(999L)).isEmpty());
         assertEquals(0, notificacaoRepository.marcarTodasComoLidas(999L, java.time.LocalDateTime.now()));

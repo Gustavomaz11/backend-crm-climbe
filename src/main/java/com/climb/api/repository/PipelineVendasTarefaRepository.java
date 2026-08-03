@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.time.LocalDate;
 
 public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVendasTarefa, Long> {
@@ -19,12 +20,17 @@ public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVe
     List<PipelineVendasTarefa> findByNegocioIdNegocioOrderByPrazoAscCriadoEmDesc(Long negocioId);
 
     @EntityGraph(attributePaths = {"negocio", "responsavel", "subtarefas"})
+    List<PipelineVendasTarefa> findByNegocioIdNegocioAndResponsavel_IdOrderByPrazoAscCriadoEmDesc(
+            Long negocioId,
+            Long responsavelId);
+
+    @EntityGraph(attributePaths = {"negocio", "responsavel", "subtarefas"})
     @Query("""
             select distinct tarefa
             from PipelineVendasTarefa tarefa
             where (:negocioId is null or tarefa.negocio.idNegocio = :negocioId)
               and (:funilId is null or tarefa.negocio.funil.idFunil = :funilId)
-              and (:responsavelId is null or tarefa.responsavel.id = :responsavelId)
+              and (:todosResponsaveis = true or tarefa.responsavel.id in :responsavelIds)
               and (:tipo is null or lower(trim(tarefa.tipo)) = lower(:tipo))
               and (
                     :todas = true
@@ -52,7 +58,8 @@ public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVe
             @Param("futuras") boolean futuras,
             @Param("concluidas") boolean concluidas,
             @Param("hoje") LocalDate hoje,
-            @Param("responsavelId") Long responsavelId,
+            @Param("todosResponsaveis") boolean todosResponsaveis,
+            @Param("responsavelIds") Set<Long> responsavelIds,
             @Param("negocioId") Long negocioId,
             @Param("funilId") Long funilId,
             @Param("tipo") String tipo);

@@ -16,6 +16,12 @@ public class Cargo {
     @Column(nullable = false)
     private boolean ativo = true;
 
+    @Column(name = "cargo_superior_id")
+    private Long cargoSuperiorId;
+
+    @Column(name = "ordem_hierarquia", nullable = false)
+    private int ordemHierarquia;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -24,4 +30,10 @@ public class Cargo {
 
     public boolean isAtivo() { return ativo; }
     public void setAtivo(boolean ativo) { this.ativo = ativo; }
+
+    public Long getCargoSuperiorId() { return cargoSuperiorId; }
+    public void setCargoSuperiorId(Long cargoSuperiorId) { this.cargoSuperiorId = cargoSuperiorId; }
+
+    public int getOrdemHierarquia() { return ordemHierarquia; }
+    public void setOrdemHierarquia(int ordemHierarquia) { this.ordemHierarquia = ordemHierarquia; }
 }

@@ -1,6 +1,7 @@
 package com.climb.api.controller;
 
 import com.climb.api.model.Cargo;
+import com.climb.api.model.dto.CargoHierarquiaRequestDTO;
 import com.climb.api.service.CargoService;
 import com.climb.api.service.RbacService;
 import com.climb.api.model.PermissaoCodigo;
@@ -35,27 +36,36 @@ public class CargoController {
 
     @PostMapping
     public Cargo criar(@RequestBody Cargo cargo) {
-        exigirPermissao();
+        exigirPermissao(PermissaoCodigo.CARGO_CRUD, "Sem permissao para gerenciar cargos");
         return service.criar(cargo);
     }
 
     @PutMapping("/{id}")
     public Cargo atualizar(@PathVariable Long id, @RequestBody Cargo atualizado) {
-        exigirPermissao();
+        exigirPermissao(PermissaoCodigo.CARGO_CRUD, "Sem permissao para gerenciar cargos");
         return service.atualizar(id, atualizado);
     }
 
     @DeleteMapping("/{id}")
     public void deletar(@PathVariable Long id) {
-        exigirPermissao();
+        exigirPermissao(PermissaoCodigo.CARGO_CRUD, "Sem permissao para gerenciar cargos");
         service.deletar(id);
     }
 
-    private void exigirPermissao() {
+    @PutMapping("/hierarquia")
+    public List<Cargo> atualizarHierarquia(@RequestBody CargoHierarquiaRequestDTO request) {
+        exigirPermissao(
+                PermissaoCodigo.CARGO_HIERARQUIA_EDITAR,
+                "Sem permissao para editar a hierarquia de cargos"
+        );
+        return service.atualizarHierarquia(request);
+    }
+
+    private void exigirPermissao(PermissaoCodigo permissao, String mensagem) {
         Object details = SecurityContextHolder.getContext().getAuthentication().getDetails();
         if (!(details instanceof Number id)
-                || !rbacService.temPermissao(id.longValue(), PermissaoCodigo.CARGO_CRUD)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissao para gerenciar cargos");
+                || !rbacService.temPermissao(id.longValue(), permissao)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, mensagem);
         }
     }
 }

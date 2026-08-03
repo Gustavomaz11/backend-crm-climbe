@@ -1,17 +1,21 @@
 package com.climb.api.service;
 
 import com.climb.api.model.Cargo;
+import com.climb.api.model.dto.CargoHierarquiaItemRequestDTO;
+import com.climb.api.model.dto.CargoHierarquiaRequestDTO;
 import com.climb.api.repository.CargoRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,9 +51,46 @@ class CargoServiceTest {
         verify(repository).save(cargo);
     }
 
+    @Test
+    void deveAtualizarUmaHierarquiaValida() {
+        Cargo diretor = cargo(1L, "Diretor de TI");
+        Cargo coordenador = cargo(2L, "Coordenador de TI");
+        when(repository.findAllByAtivoTrueOrderByOrdemHierarquiaAscNomeAsc())
+                .thenReturn(List.of(diretor, coordenador), List.of(diretor, coordenador));
+
+        List<Cargo> resultado = service.atualizarHierarquia(new CargoHierarquiaRequestDTO(List.of(
+                new CargoHierarquiaItemRequestDTO(1L, null, 0),
+                new CargoHierarquiaItemRequestDTO(2L, 1L, 0)
+        )));
+
+        assertEquals(1L, coordenador.getCargoSuperiorId());
+        assertEquals(List.of(diretor, coordenador), resultado);
+        verify(repository).saveAll(List.of(diretor, coordenador));
+    }
+
+    @Test
+    void deveRejeitarCicloNaHierarquia() {
+        Cargo diretor = cargo(1L, "Diretor de TI");
+        Cargo coordenador = cargo(2L, "Coordenador de TI");
+        when(repository.findAllByAtivoTrueOrderByOrdemHierarquiaAscNomeAsc())
+                .thenReturn(List.of(diretor, coordenador));
+
+        assertThrows(ResponseStatusException.class, () -> service.atualizarHierarquia(new CargoHierarquiaRequestDTO(List.of(
+                new CargoHierarquiaItemRequestDTO(1L, 2L, 0),
+                new CargoHierarquiaItemRequestDTO(2L, 1L, 0)
+        ))));
+    }
+
     private Cargo cargo(String nome) {
         Cargo cargo = new Cargo();
         cargo.setNome(nome);
+        return cargo;
+    }
+
+    private Cargo cargo(Long id, String nome) {
+        Cargo cargo = cargo(nome);
+        cargo.setId(id);
+        cargo.setAtivo(true);
         return cargo;
     }
 }

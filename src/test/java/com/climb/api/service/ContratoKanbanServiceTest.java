@@ -27,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -54,6 +55,8 @@ class ContratoKanbanServiceTest {
     private UsuarioRepository usuarioRepository;
     @Mock
     private RbacService rbacService;
+    @Mock
+    private CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
 
     @InjectMocks
     private ContratoKanbanService service;
@@ -162,6 +165,7 @@ class ContratoKanbanServiceTest {
         ContratoKanbanSubtarefa subtarefa = subtarefa(40L, tarefa, "Checklist", false, 0);
 
         when(rbacService.temPermissao(2L, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
+        when(rbacService.temPermissao(2L, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(true);
         when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
         when(taskRepository.findByIdTaskAndContrato_IdContrato(30L, CONTRATO_ID)).thenReturn(Optional.of(tarefa));
         when(subtarefaRepository.findByIdSubtarefaAndTask_IdTaskAndTask_Contrato_IdContrato(40L, 30L, CONTRATO_ID))
@@ -184,6 +188,7 @@ class ContratoKanbanServiceTest {
     void boardDeveExporUsuariosAtivosDisponiveisParaAtribuicao() {
         Usuario analista = usuario(2L, "Analista", "ATIVO");
         when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
+        when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(true);
         when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
         prepararConsultasDoBoard(List.of(), List.of(), List.of(gestor, analista));
 
@@ -193,8 +198,34 @@ class ContratoKanbanServiceTest {
         assertEquals("Analista", board.usuariosDisponiveis().get(1).nomeCompleto());
     }
 
+    @Test
+    void boardDeveConsultarSomenteTarefasDoUsuarioSemPermissaoGlobal() {
+        Usuario analista = usuario(2L, "Analista", "ATIVO");
+        ContratoKanbanTask tarefaDoAnalista = tarefa(30L, analista);
+        ContratoKanbanSubtarefa subtarefa = subtarefa(40L, tarefaDoAnalista, "Checklist", false, 0);
+        when(rbacService.temPermissao(2L, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
+        when(rbacService.temPermissao(2L, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(false);
+        when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(2L)).thenReturn(Set.of(2L, 3L));
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(raiaRepository.findByContrato_IdContratoOrderByPosicaoAscIdRaiaAsc(CONTRATO_ID))
+                .thenReturn(List.of(raia));
+        when(taskRepository.findByContrato_IdContratoAndResponsavel_IdInOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(
+                CONTRATO_ID, Set.of(2L, 3L))).thenReturn(List.of(tarefaDoAnalista));
+        when(subtarefaRepository.findByTask_IdTaskInOrderByTask_IdTaskAscPosicaoAscIdSubtarefaAsc(Set.of(30L)))
+                .thenReturn(List.of(subtarefa));
+        when(usuarioRepository.findAllBySituacaoOrderByNomeCompletoAsc("ATIVO")).thenReturn(List.of(gestor, analista));
+
+        ContratoKanbanBoardResponseDTO board = service.buscarBoard(CONTRATO_ID, 2L);
+
+        assertEquals(1, board.raias().getFirst().tasks().size());
+        assertEquals(30L, board.raias().getFirst().tasks().getFirst().id());
+        verify(taskRepository, never())
+                .findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(CONTRATO_ID);
+    }
+
     private void prepararGestorEBoardVazio(List<Usuario> usuariosAtivos) {
         when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
+        when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(true);
         when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
         prepararConsultasDoBoard(List.of(), List.of(), usuariosAtivos);
     }
@@ -206,8 +237,11 @@ class ContratoKanbanServiceTest {
                 .thenReturn(List.of(raia));
         when(taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(CONTRATO_ID))
                 .thenReturn(tarefas);
-        when(subtarefaRepository.findByTask_Contrato_IdContratoOrderByTask_IdTaskAscPosicaoAscIdSubtarefaAsc(CONTRATO_ID))
-                .thenReturn(subtarefas);
+        if (!tarefas.isEmpty()) {
+            Set<Long> taskIds = tarefas.stream().map(ContratoKanbanTask::getIdTask).collect(java.util.stream.Collectors.toSet());
+            when(subtarefaRepository.findByTask_IdTaskInOrderByTask_IdTaskAscPosicaoAscIdSubtarefaAsc(taskIds))
+                    .thenReturn(subtarefas);
+        }
         when(usuarioRepository.findAllBySituacaoOrderByNomeCompletoAsc("ATIVO")).thenReturn(usuariosAtivos);
     }
 

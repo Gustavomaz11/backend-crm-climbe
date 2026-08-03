@@ -32,6 +32,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,19 +44,22 @@ public class ContratoKanbanService {
     private final ContratoKanbanSubtarefaRepository subtarefaRepository;
     private final UsuarioRepository usuarioRepository;
     private final RbacService rbacService;
+    private final CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
 
     public ContratoKanbanService(ContratoRepository contratoRepository,
                                  ContratoKanbanRaiaRepository raiaRepository,
                                  ContratoKanbanTaskRepository taskRepository,
                                  ContratoKanbanSubtarefaRepository subtarefaRepository,
                                  UsuarioRepository usuarioRepository,
-                                 RbacService rbacService) {
+                                 RbacService rbacService,
+                                 CargoHierarquiaAcessoService cargoHierarquiaAcessoService) {
         this.contratoRepository = contratoRepository;
         this.raiaRepository = raiaRepository;
         this.taskRepository = taskRepository;
         this.subtarefaRepository = subtarefaRepository;
         this.usuarioRepository = usuarioRepository;
         this.rbacService = rbacService;
+        this.cargoHierarquiaAcessoService = cargoHierarquiaAcessoService;
     }
 
     public ContratoKanbanBoardResponseDTO buscarBoard(Long contratoId, Long usuarioId) {
@@ -245,9 +249,20 @@ public class ContratoKanbanService {
 
     private ContratoKanbanBoardResponseDTO toBoardResponse(Contrato contrato, Long usuarioId) {
         List<ContratoKanbanRaia> raias = raiaRepository.findByContrato_IdContratoOrderByPosicaoAscIdRaiaAsc(contrato.getIdContrato());
-        List<ContratoKanbanTask> tasks = taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contrato.getIdContrato());
-        List<ContratoKanbanSubtarefa> subtarefas = subtarefaRepository
-                .findByTask_Contrato_IdContratoOrderByTask_IdTaskAscPosicaoAscIdSubtarefaAsc(contrato.getIdContrato());
+        boolean podeVisualizarTodas = rbacService.temPermissao(
+                usuarioId,
+                PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS
+        );
+        List<ContratoKanbanTask> tasks = podeVisualizarTodas
+                ? taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contrato.getIdContrato())
+                : taskRepository.findByContrato_IdContratoAndResponsavel_IdInOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(
+                        contrato.getIdContrato(),
+                        cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId)
+                );
+        Set<Long> taskIds = tasks.stream().map(ContratoKanbanTask::getIdTask).collect(Collectors.toSet());
+        List<ContratoKanbanSubtarefa> subtarefas = taskIds.isEmpty()
+                ? List.of()
+                : subtarefaRepository.findByTask_IdTaskInOrderByTask_IdTaskAscPosicaoAscIdSubtarefaAsc(taskIds);
         Map<Long, List<ContratoKanbanTask>> tasksPorRaia = tasks.stream()
                 .collect(Collectors.groupingBy(task -> task.getRaia().getIdRaia()));
         Map<Long, List<ContratoKanbanSubtarefa>> subtarefasPorTask = subtarefas.stream()

@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class PipelineTarefaService {
@@ -23,19 +24,22 @@ public class PipelineTarefaService {
     private final PipelineHistoricoService historicoService;
     private final PipelineCadenciaEngine cadenciaEngine;
     private final RbacService rbacService;
+    private final CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
 
     public PipelineTarefaService(PipelineVendasTarefaRepository repository,
                                  PipelineVendasNegocioRepository negocioRepository,
                                  UsuarioRepository usuarioRepository,
                                  PipelineHistoricoService historicoService,
                                  PipelineCadenciaEngine cadenciaEngine,
-                                 RbacService rbacService) {
+                                 RbacService rbacService,
+                                 CargoHierarquiaAcessoService cargoHierarquiaAcessoService) {
         this.repository = repository;
         this.negocioRepository = negocioRepository;
         this.usuarioRepository = usuarioRepository;
         this.historicoService = historicoService;
         this.cadenciaEngine = cadenciaEngine;
         this.rbacService = rbacService;
+        this.cargoHierarquiaAcessoService = cargoHierarquiaAcessoService;
     }
 
     @Transactional(readOnly = true)
@@ -47,6 +51,17 @@ public class PipelineTarefaService {
                                                   String tipo) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
         PipelineTarefaVisao visaoEfetiva = visao == null ? PipelineTarefaVisao.TODAS : visao;
+        boolean podeVisualizarTodas = podeVisualizarTodasAsTarefas(usuarioId);
+        Set<Long> responsaveisVisiveis = podeVisualizarTodas
+                ? Set.of(usuarioId)
+                : cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId);
+        if (responsavelId != null) {
+            if (!podeVisualizarTodas && !responsaveisVisiveis.contains(responsavelId)) {
+                return List.of();
+            }
+            responsaveisVisiveis = Set.of(responsavelId);
+        }
+        boolean todosResponsaveis = podeVisualizarTodas && responsavelId == null;
         LocalDate hoje = LocalDate.now();
         return repository.findFiltradas(
                         visaoEfetiva == PipelineTarefaVisao.TODAS,
@@ -54,7 +69,7 @@ public class PipelineTarefaService {
                         visaoEfetiva == PipelineTarefaVisao.ATRASADAS,
                         visaoEfetiva == PipelineTarefaVisao.FUTURAS,
                         visaoEfetiva == PipelineTarefaVisao.CONCLUIDAS,
-                        hoje, responsavelId, negocioId, funilId, normalizar(tipo)).stream()
+                        hoje, todosResponsaveis, responsaveisVisiveis, negocioId, funilId, normalizar(tipo)).stream()
                 .distinct()
                 .map(this::toResponse)
                 .toList();
@@ -64,7 +79,13 @@ public class PipelineTarefaService {
     public List<PipelineTarefaResponseDTO> listarDoNegocio(Long negocioId, Long usuarioId) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
         exigirNegocioExistente(negocioId);
-        return repository.findByNegocioIdNegocioOrderByPrazoAscCriadoEmDesc(negocioId).stream()
+        List<PipelineVendasTarefa> tarefas = podeVisualizarTodasAsTarefas(usuarioId)
+                ? repository.findByNegocioIdNegocioOrderByPrazoAscCriadoEmDesc(negocioId)
+                : repository.findFiltradas(
+                        true, false, false, false, false, LocalDate.now(), false,
+                        cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId), negocioId, null, null
+                );
+        return tarefas.stream()
                 .distinct()
                 .map(this::toResponse)
                 .toList();
@@ -212,6 +233,13 @@ public class PipelineTarefaService {
         if (usuarioId == null || !rbacService.temPermissao(usuarioId, permissao)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário sem permissão para tarefas comerciais");
         }
+    }
+
+    private boolean podeVisualizarTodasAsTarefas(Long usuarioId) {
+        return rbacService.temPermissao(
+                usuarioId,
+                PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS
+        );
     }
 
     private String normalizar(String valor) {

@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,13 +30,15 @@ class PipelineTarefaServiceTest {
     @Mock private PipelineHistoricoService historicoService;
     @Mock private PipelineCadenciaEngine cadenciaEngine;
     @Mock private RbacService rbacService;
+    @Mock private CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
 
     private PipelineTarefaService service;
 
     @BeforeEach
     void setUp() {
         service = new PipelineTarefaService(
-                repository, negocioRepository, usuarioRepository, historicoService, cadenciaEngine, rbacService
+                repository, negocioRepository, usuarioRepository, historicoService, cadenciaEngine, rbacService,
+                cargoHierarquiaAcessoService
         );
     }
 
@@ -45,9 +48,10 @@ class PipelineTarefaServiceTest {
         PipelineVendasNegocio negocio = negocio(10L, responsavel);
         PipelineVendasTarefa atrasada = tarefa(1L, negocio, responsavel, LocalDate.now().minusDays(1), PipelineTarefaStatus.PENDENTE);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(true);
         when(repository.findFiltradas(
                 eq(false), eq(false), eq(true), eq(false), eq(false), any(LocalDate.class),
-                isNull(), isNull(), isNull(), isNull()))
+                eq(true), eq(Set.of(1L)), isNull(), isNull(), isNull()))
                 .thenReturn(List.of(atrasada));
 
         var resultado = service.listar(1L, PipelineTarefaVisao.ATRASADAS, null, null, null, null);
@@ -56,7 +60,54 @@ class PipelineTarefaServiceTest {
         assertEquals(1L, resultado.getFirst().id());
         verify(repository).findFiltradas(
                 eq(false), eq(false), eq(true), eq(false), eq(false), any(LocalDate.class),
-                isNull(), isNull(), isNull(), isNull());
+                eq(true), eq(Set.of(1L)), isNull(), isNull(), isNull());
+    }
+
+    @Test
+    void deveForcarFiltroPeloUsuarioQuandoNaoPodeVisualizarTodasAsTarefas() {
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(false);
+        when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(1L)).thenReturn(Set.of(1L, 2L));
+
+        service.listar(1L, PipelineTarefaVisao.TODAS, 99L, null, null, null);
+
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void deveAplicarEscopoHierarquicoQuandoNaoPodeVisualizarTodasAsTarefas() {
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(false);
+        when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(1L)).thenReturn(Set.of(1L, 2L));
+        when(repository.findFiltradas(
+                eq(true), eq(false), eq(false), eq(false), eq(false), any(LocalDate.class),
+                eq(false), eq(Set.of(1L, 2L)), isNull(), isNull(), isNull()))
+                .thenReturn(List.of());
+
+        service.listar(1L, PipelineTarefaVisao.TODAS, null, null, null, null);
+
+        verify(repository).findFiltradas(
+                eq(true), eq(false), eq(false), eq(false), eq(false), any(LocalDate.class),
+                eq(false), eq(Set.of(1L, 2L)), isNull(), isNull(), isNull());
+    }
+
+    @Test
+    void deveListarNoNegocioSomenteTarefasDoUsuarioSemPermissaoGlobal() {
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(false);
+        when(negocioRepository.existsById(10L)).thenReturn(true);
+        when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(1L)).thenReturn(Set.of(1L, 2L));
+        when(repository.findFiltradas(
+                eq(true), eq(false), eq(false), eq(false), eq(false), any(LocalDate.class),
+                eq(false), eq(Set.of(1L, 2L)), eq(10L), isNull(), isNull()))
+                .thenReturn(List.of());
+
+        service.listarDoNegocio(10L, 1L);
+
+        verify(repository).findFiltradas(
+                eq(true), eq(false), eq(false), eq(false), eq(false), any(LocalDate.class),
+                eq(false), eq(Set.of(1L, 2L)), eq(10L), isNull(), isNull());
+        verify(repository, never()).findByNegocioIdNegocioOrderByPrazoAscCriadoEmDesc(10L);
     }
 
     @Test

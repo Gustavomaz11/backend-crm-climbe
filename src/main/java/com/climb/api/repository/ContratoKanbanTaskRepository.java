@@ -13,6 +13,14 @@ public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanb
 
     List<ContratoKanbanTask> findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(Long contratoId);
 
+    List<ContratoKanbanTask> findByContrato_IdContratoAndResponsavel_IdOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(
+            Long contratoId,
+            Long responsavelId);
+
+    List<ContratoKanbanTask> findByContrato_IdContratoAndResponsavel_IdInOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(
+            Long contratoId,
+            Set<Long> responsavelIds);
+
     Optional<ContratoKanbanTask> findByIdTaskAndContrato_IdContrato(Long idTask, Long contratoId);
 
     boolean existsByContrato_IdContratoAndResponsavel_Id(Long contratoId, Long responsavelId);
