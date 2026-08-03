@@ -44,15 +44,19 @@ class PipelineTarefaServiceTest {
         Usuario responsavel = usuario(2L, "Maria");
         PipelineVendasNegocio negocio = negocio(10L, responsavel);
         PipelineVendasTarefa atrasada = tarefa(1L, negocio, responsavel, LocalDate.now().minusDays(1), PipelineTarefaStatus.PENDENTE);
-        PipelineVendasTarefa futura = tarefa(2L, negocio, responsavel, LocalDate.now().plusDays(1), PipelineTarefaStatus.PENDENTE);
-        PipelineVendasTarefa concluidaAtrasada = tarefa(3L, negocio, responsavel, LocalDate.now().minusDays(2), PipelineTarefaStatus.CONCLUIDA);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
-        when(repository.findAllByOrderByPrazoAscCriadoEmDesc()).thenReturn(List.of(atrasada, futura, concluidaAtrasada));
+        when(repository.findFiltradas(
+                eq(false), eq(false), eq(true), eq(false), eq(false), any(LocalDate.class),
+                isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(List.of(atrasada));
 
         var resultado = service.listar(1L, PipelineTarefaVisao.ATRASADAS, null, null, null, null);
 
         assertEquals(1, resultado.size());
         assertEquals(1L, resultado.getFirst().id());
+        verify(repository).findFiltradas(
+                eq(false), eq(false), eq(true), eq(false), eq(false), any(LocalDate.class),
+                isNull(), isNull(), isNull(), isNull());
     }
 
     @Test

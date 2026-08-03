@@ -54,8 +54,7 @@ public class PipelineCampanhaService {
     @Transactional(readOnly = true)
     public List<PipelineCampanhaLeadDTO> listarLeads(Long usuarioId) {
         exigir(usuarioId, PermissaoCodigo.COMERCIAL_CAMPANHA_VISUALIZAR);
-        return negocioRepository.findAllByOrderByCriadoEmDesc().stream()
-                .filter(negocio -> negocio.getResultado() == PipelineVendasResultado.ABERTO)
+        return negocioRepository.findByResultadoOrderByCriadoEmDesc(PipelineVendasResultado.ABERTO).stream()
                 .map(negocio -> new PipelineCampanhaLeadDTO(
                         negocio.getIdNegocio(), negocio.getNomeEmpresa(), negocio.getNomeContato(),
                         negocio.getResponsavel().getNomeCompleto(), negocio.getServicoInteresse(),

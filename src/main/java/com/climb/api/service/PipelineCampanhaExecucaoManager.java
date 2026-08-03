@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,31 +29,46 @@ public class PipelineCampanhaExecucaoManager {
 
     @Transactional
     public void sincronizar(PipelineCampanha campanha) {
+        List<PipelineCampanhaExecucao> existentes = repository.findByCampanhaIdCampanha(campanha.getIdCampanha());
+        List<PipelineCampanhaExecucao> alteradas = new ArrayList<>();
         if (!Boolean.TRUE.equals(campanha.getAtivo())) {
-            pausar(repository.findByCampanhaIdCampanha(campanha.getIdCampanha()));
+            pausar(existentes, alteradas);
+            salvarEmLote(alteradas);
             return;
         }
         List<Usuario> participantes = campanha.getParticipantes().stream()
                 .sorted(Comparator.comparing(Usuario::getId)).toList();
         Set<Long> leadsAtuais = campanha.getLeads().stream().map(PipelineVendasNegocio::getIdNegocio)
                 .collect(Collectors.toSet());
-        pausarRemovidos(repository.findByCampanhaIdCampanha(campanha.getIdCampanha()), leadsAtuais);
+        Map<Long, PipelineCampanhaExecucao> execucoesPorLead = existentes.stream()
+                .collect(Collectors.toMap(
+                        execucao -> execucao.getNegocio().getIdNegocio(),
+                        execucao -> execucao));
+        pausarRemovidos(existentes, leadsAtuais, alteradas);
         int indice = 0;
         for (PipelineVendasNegocio lead : campanha.getLeads()) {
-            ativarOuCriar(campanha, lead, escolherParticipante(lead, participantes, indice++));
+            ativarOuCriar(
+                    campanha,
+                    lead,
+                    escolherParticipante(lead, participantes, indice++),
+                    execucoesPorLead.get(lead.getIdNegocio()),
+                    alteradas);
         }
+        salvarEmLote(alteradas);
     }
 
-    private void ativarOuCriar(PipelineCampanha campanha, PipelineVendasNegocio lead, Usuario participante) {
-        var existente = repository.findByCampanhaIdCampanhaAndNegocioIdNegocio(
-                campanha.getIdCampanha(), lead.getIdNegocio());
-        if (existente.isPresent()) {
-            PipelineCampanhaExecucao execucao = existente.get();
+    private void ativarOuCriar(PipelineCampanha campanha,
+                               PipelineVendasNegocio lead,
+                               Usuario participante,
+                               PipelineCampanhaExecucao existente,
+                               List<PipelineCampanhaExecucao> alteradas) {
+        if (existente != null) {
+            PipelineCampanhaExecucao execucao = existente;
             if (execucao.getStatus() == PipelineExecucaoStatus.PAUSADA) {
                 execucao.setStatus(PipelineExecucaoStatus.ATIVA);
                 execucao.setProximaExecucaoEm(LocalDateTime.now());
                 execucao.setParticipante(participante);
-                repository.save(execucao);
+                alteradas.add(execucao);
             }
             return;
         }
@@ -62,7 +79,7 @@ public class PipelineCampanhaExecucaoManager {
         execucao.setStatus(PipelineExecucaoStatus.ATIVA);
         execucao.setOrdemAtual(0);
         execucao.setProximaExecucaoEm(LocalDateTime.now());
-        repository.save(execucao);
+        alteradas.add(execucao);
         historicoService.registrar(lead, campanha.getCriadoPor().getId(), PipelineHistoricoTipo.CADENCIA_INICIADA,
                 "Lead incluído na campanha " + campanha.getNome());
     }
@@ -72,15 +89,23 @@ public class PipelineCampanhaExecucaoManager {
                 .findFirst().orElse(participantes.get(indice % participantes.size()));
     }
 
-    private void pausarRemovidos(List<PipelineCampanhaExecucao> execucoes, Set<Long> leadsAtuais) {
-        pausar(execucoes.stream().filter(execucao -> !leadsAtuais.contains(execucao.getNegocio().getIdNegocio())).toList());
+    private void pausarRemovidos(List<PipelineCampanhaExecucao> execucoes,
+                                 Set<Long> leadsAtuais,
+                                 List<PipelineCampanhaExecucao> alteradas) {
+        pausar(execucoes.stream()
+                .filter(execucao -> !leadsAtuais.contains(execucao.getNegocio().getIdNegocio()))
+                .toList(), alteradas);
     }
 
-    private void pausar(List<PipelineCampanhaExecucao> execucoes) {
+    private void pausar(List<PipelineCampanhaExecucao> execucoes, List<PipelineCampanhaExecucao> alteradas) {
         execucoes.stream().filter(execucao -> execucao.getStatus() == PipelineExecucaoStatus.ATIVA).forEach(execucao -> {
             execucao.setStatus(PipelineExecucaoStatus.PAUSADA);
             execucao.setProximaExecucaoEm(null);
-            repository.save(execucao);
+            alteradas.add(execucao);
         });
+    }
+
+    private void salvarEmLote(List<PipelineCampanhaExecucao> alteradas) {
+        if (!alteradas.isEmpty()) repository.saveAll(alteradas);
     }
 }

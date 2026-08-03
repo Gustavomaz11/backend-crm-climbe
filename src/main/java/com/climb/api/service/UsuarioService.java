@@ -1,8 +1,10 @@
 package com.climb.api.service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -26,6 +28,7 @@ import com.climb.api.repository.CargoRepository;
 import com.climb.api.repository.OAuth2PendingRegistrationRepository;
 import com.climb.api.repository.PermissaoRepository;
 import com.climb.api.repository.UsuarioOAuthRepository;
+import com.climb.api.repository.UsuarioOAuthAvatarProjection;
 import com.climb.api.repository.UsuarioRepository;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -86,17 +89,11 @@ public class UsuarioService {
     }
 
     public List<UsuarioResponseDTO> listar() {
-        return repository.findAll()
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponses(repository.findAll());
     }
 
     public List<UsuarioResponseDTO> listarAcessosGerenciaveis() {
-        return repository.findAllBySituacaoInOrderByNomeCompletoAsc(SITUACOES_GERENCIAVEIS)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponses(repository.findAllBySituacaoInOrderByNomeCompletoAsc(SITUACOES_GERENCIAVEIS));
     }
 
     public UsuarioResponseDTO buscarPorIdDTO(Long id) {
@@ -307,11 +304,7 @@ public class UsuarioService {
     }
 
     public List<UsuarioResponseDTO> listarUsuariosPendentes() {
-        return repository.findAll()
-                .stream()
-                .filter(u -> "ESPERANDO_APROVACAO".equals(u.getSituacao()))
-                .map(this::toResponse)
-                .toList();
+        return toResponses(repository.findAllBySituacaoOrderByNomeCompletoAsc("ESPERANDO_APROVACAO"));
     }
 
     private void exigirSituacao(Usuario usuario, String esperada, String mensagem) {
@@ -382,22 +375,50 @@ public class UsuarioService {
         return dto;
     }
 
+    private List<UsuarioResponseDTO> toResponses(List<Usuario> usuarios) {
+        List<Long> idsSemFoto = usuarios.stream()
+                .filter(usuario -> usuario.getId() != null)
+                .filter(usuario -> usuario.getFotoPerfilUrl() == null || usuario.getFotoPerfilUrl().isBlank())
+                .map(Usuario::getId)
+                .toList();
+        Map<Long, String> avataresGoogle = new HashMap<>();
+        if (!idsSemFoto.isEmpty()) {
+            for (UsuarioOAuthAvatarProjection avatar : usuarioOAuthRepository
+                    .findAvataresByUsuarioIdsAndProvider(idsSemFoto, OAuthProvider.GOOGLE)) {
+                if (avatar.getAvatarUrl() != null && !avatar.getAvatarUrl().isBlank()) {
+                    avataresGoogle.put(avatar.getUsuarioId(), avatar.getAvatarUrl());
+                }
+            }
+        }
+        return usuarios.stream().map(usuario -> {
+            UsuarioResponseDTO dto = usuarioMapper.toResponse(usuario);
+            dto.setFotoPerfil(resolverFotoPerfil(usuario, avataresGoogle.get(usuario.getId())));
+            return dto;
+        }).toList();
+    }
+
     public String buscarFotoPerfil(Usuario usuario) {
         if (usuario == null || usuario.getId() == null) {
             return null;
         }
-
         if (usuario.getFotoPerfilUrl() != null && !usuario.getFotoPerfilUrl().isBlank()) {
-            String foto = usuario.getFotoPerfilUrl();
-            return foto.startsWith("http://") || foto.startsWith("https://")
-                    ? foto
-                    : storageService.gerarUrlTemporariaDownload(foto);
+            return resolverFotoPerfil(usuario, null);
         }
-
-        return usuarioOAuthRepository
+        String avatarGoogle = usuarioOAuthRepository
                 .findByUsuarioIdAndProvider(usuario.getId(), OAuthProvider.GOOGLE)
                 .map(UsuarioOAuth::getAvatarUrl)
                 .orElse(null);
+        return resolverFotoPerfil(usuario, avatarGoogle);
+    }
+
+    private String resolverFotoPerfil(Usuario usuario, String avatarGoogle) {
+        if (usuario.getFotoPerfilUrl() == null || usuario.getFotoPerfilUrl().isBlank()) {
+            return avatarGoogle;
+        }
+        String foto = usuario.getFotoPerfilUrl();
+        return foto.startsWith("http://") || foto.startsWith("https://")
+                ? foto
+                : storageService.gerarUrlTemporariaDownload(foto);
     }
 
     Cargo buscarCargoOuFalhar(Long cargoId) {

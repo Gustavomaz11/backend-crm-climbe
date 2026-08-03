@@ -13,8 +13,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
@@ -59,7 +57,8 @@ class JwtAuthenticationFilterTest {
         when(jwtUtil.extractTokenType("token")).thenReturn(JwtUtil.TYPE_ACCESS);
         when(jwtUtil.extractEmail("token")).thenReturn(usuario.getEmail());
         when(jwtUtil.extractUserId("token")).thenReturn(usuario.getId());
-        when(usuarioRepository.findById(usuario.getId())).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.existsByIdAndSituacao(usuario.getId(), "ATIVO"))
+                .thenReturn("ATIVO".equals(usuario.getSituacao()));
     }
 
     private void executarFiltro() throws Exception {

@@ -1,8 +1,6 @@
 package com.climb.api.service;
 
 import com.climb.api.model.PermissaoCodigo;
-import com.climb.api.model.UsuarioPermissao;
-import com.climb.api.repository.UsuarioPermissaoRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
 
@@ -12,28 +10,22 @@ import java.util.*;
 public class RbacService {
 
     private final UsuarioRepository usuarioRepository;
-    private final UsuarioPermissaoRepository usuarioPermissaoRepository;
 
-    public RbacService(
-            UsuarioRepository usuarioRepository,
-            UsuarioPermissaoRepository usuarioPermissaoRepository) {
+    public RbacService(UsuarioRepository usuarioRepository) {
         this.usuarioRepository = usuarioRepository;
-        this.usuarioPermissaoRepository = usuarioPermissaoRepository;
     }
 
     public Set<PermissaoCodigo> getPermissoesDoUsuario(Long usuarioId) {
 
-        usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado: id=" + usuarioId));
-
+        List<String> codigos = usuarioRepository.findCodigosPermissoesById(usuarioId);
+        if (codigos.isEmpty()) {
+            throw new RuntimeException("Usuário não encontrado: id=" + usuarioId);
+        }
         Set<PermissaoCodigo> permissoes = EnumSet.noneOf(PermissaoCodigo.class);
-
-        List<UsuarioPermissao> permissoesIndividuais =
-                usuarioPermissaoRepository.findByUsuario_Id(usuarioId);
-
-        for (UsuarioPermissao up : permissoesIndividuais) {
+        for (String codigoPersistido : codigos) {
+            if (codigoPersistido == null) continue;
             try {
-                PermissaoCodigo codigo = PermissaoCodigo.valueOf(up.getPermissao().getCodigo());
+                PermissaoCodigo codigo = PermissaoCodigo.valueOf(codigoPersistido);
                 permissoes.add(codigo);
             } catch (IllegalArgumentException e) {
                 // Código inválido no banco — ignora

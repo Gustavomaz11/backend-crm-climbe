@@ -1,7 +1,6 @@
 package com.climb.api.config;
 
 import com.climb.api.service.JwtUtil;
-import com.climb.api.model.Usuario;
 import com.climb.api.repository.UsuarioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,13 +48,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     if (JwtUtil.TYPE_ACCESS.equals(tokenType)) {
                         Long userId = jwtUtil.extractUserId(token);
-                        Usuario usuario = usuarioAtivo(userId);
-                        if (usuario == null) {
+                        if (!usuarioAtivo(userId)) {
                             filterChain.doFilter(request, response);
                             return;
                         }
                         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                                usuario.getEmail(), null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                                email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
                         auth.setDetails(userId);
                         SecurityContextHolder.getContext().setAuthentication(auth);
                     } else if (JwtUtil.TYPE_PENDING_REGISTRATION.equals(tokenType)) {
@@ -74,9 +72,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private Usuario usuarioAtivo(Long userId) {
-        return usuarioRepository.findById(userId)
-                .filter(usuario -> "ATIVO".equals(usuario.getSituacao()))
-                .orElse(null);
+    private boolean usuarioAtivo(Long userId) {
+        return usuarioRepository.existsByIdAndSituacao(userId, "ATIVO");
     }
 }

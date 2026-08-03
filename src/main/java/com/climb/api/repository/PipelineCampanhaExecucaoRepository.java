@@ -14,6 +14,7 @@ import java.util.Optional;
 public interface PipelineCampanhaExecucaoRepository extends JpaRepository<PipelineCampanhaExecucao, Long> {
     Optional<PipelineCampanhaExecucao> findByCampanhaIdCampanhaAndNegocioIdNegocio(Long campanhaId, Long negocioId);
 
+    @EntityGraph(attributePaths = {"negocio"})
     List<PipelineCampanhaExecucao> findByCampanhaIdCampanha(Long campanhaId);
 
     long countByCampanhaIdCampanhaAndStatus(Long campanhaId, PipelineExecucaoStatus status);

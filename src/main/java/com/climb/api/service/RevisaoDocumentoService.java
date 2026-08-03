@@ -19,8 +19,11 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class RevisaoDocumentoService {
@@ -344,7 +347,17 @@ public class RevisaoDocumentoService {
                 .filter(v -> v.getNumero() == revisao.getVersaoAtual())
                 .findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Versão atual não encontrada"));
         int totalPaginas = totalPaginas(atual);
-        List<RevisaoVersaoResponseDTO> versoesDto = versoes.stream().map(this::toVersaoResponse).toList();
+        Map<Long, List<RevisaoDocumentoAnotacao>> anotacoesPorVersao = anotacaoRepository
+                .findByRevisaoIdWithVersao(revisao.getId()).stream()
+                .collect(Collectors.groupingBy(
+                        anotacao -> anotacao.getVersao().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+        List<RevisaoVersaoResponseDTO> versoesDto = versoes.stream()
+                .map(versao -> toVersaoResponse(
+                        versao,
+                        anotacoesPorVersao.getOrDefault(versao.getId(), List.of())))
+                .toList();
         return new RevisaoDocumentoResponseDTO(
                 revisao.getId(), revisao.getTipo().name(), revisao.getReferenciaId(), revisao.getEmpresaNome(),
                 revisao.getDestinatarioEmail(), revisao.getDestinatarioNome(), revisao.getStatus().name(),
@@ -355,9 +368,10 @@ public class RevisaoDocumentoService {
         );
     }
 
-    private RevisaoVersaoResponseDTO toVersaoResponse(RevisaoDocumentoVersao versao) {
-        List<RevisaoAnotacaoResponseDTO> anotacoes = anotacaoRepository
-                .findByVersaoIdOrderByPaginaAscIdAsc(versao.getId()).stream()
+    private RevisaoVersaoResponseDTO toVersaoResponse(
+            RevisaoDocumentoVersao versao,
+            List<RevisaoDocumentoAnotacao> anotacoesPersistidas) {
+        List<RevisaoAnotacaoResponseDTO> anotacoes = anotacoesPersistidas.stream()
                 .map(a -> new RevisaoAnotacaoResponseDTO(a.getId(), a.getPagina(), a.getPosicaoX(), a.getPosicaoY(),
                         a.getLargura(), a.getAltura(), a.getCor(), a.getComentario()))
                 .toList();

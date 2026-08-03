@@ -614,14 +614,19 @@ public class ContratoService {
         List<Usuario> removidos = contrato.getParticipantes().stream()
                 .filter(participante -> participante.getId() != null && !novosIds.contains(participante.getId()))
                 .toList();
+        if (removidos.isEmpty()) return;
 
-        for (Usuario removido : removidos) {
-            if (taskRepository.existsByContrato_IdContratoAndResponsavel_Id(contrato.getIdContrato(), removido.getId())) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Não é possível remover " + removido.getNomeCompleto() + " porque há tarefas vinculadas a este participante"
-                );
-            }
-        }
+        Set<Long> removidosComTasks = taskRepository.findResponsavelIdsComTasks(
+                contrato.getIdContrato(),
+                removidos.stream().map(Usuario::getId).collect(Collectors.toSet()));
+        removidos.stream()
+                .filter(removido -> removidosComTasks.contains(removido.getId()))
+                .findFirst()
+                .ifPresent(removido -> {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Não é possível remover " + removido.getNomeCompleto()
+                                    + " porque há tarefas vinculadas a este participante");
+                });
     }
 }

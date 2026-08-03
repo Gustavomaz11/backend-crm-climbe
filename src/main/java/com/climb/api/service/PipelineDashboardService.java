@@ -2,7 +2,6 @@ package com.climb.api.service;
 
 import com.climb.api.model.PipelineVendasNegocio;
 import com.climb.api.model.PipelineVendasMovimentacaoEtapa;
-import com.climb.api.model.PipelineVendasTarefa;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.dto.PipelineDashboardFiltroDTO;
 import com.climb.api.model.dto.PipelineDashboardResponseDTO;
@@ -10,16 +9,16 @@ import com.climb.api.model.enums.PipelineTarefaStatus;
 import com.climb.api.repository.PipelineVendasMovimentacaoEtapaRepository;
 import com.climb.api.repository.PipelineVendasNegocioRepository;
 import com.climb.api.repository.PipelineVendasTarefaRepository;
+import com.climb.api.repository.PipelineFiltroOptionProjection;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.util.Comparator;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
-import java.util.function.Function;
+import java.util.TreeSet;
 
 @Service
 public class PipelineDashboardService {
@@ -45,63 +44,54 @@ public class PipelineDashboardService {
     public PipelineDashboardResponseDTO buscar(Long usuarioId, PipelineDashboardFiltroDTO filtro) {
         exigirPermissao(usuarioId);
         validarPeriodo(filtro);
-        List<PipelineVendasNegocio> todos = negocioRepository.findAllByOrderByCriadoEmDesc();
-        List<PipelineVendasNegocio> negocios = todos.stream()
-                .filter(negocio -> corresponde(negocio, filtro))
-                .toList();
+        List<PipelineVendasNegocio> negocios = negocioRepository.findDashboardNegocios(
+                inicio(filtro), fimExclusivo(filtro), filtro.responsavelId(), filtro.funilId(), filtro.empresaId(),
+                filtro.situacao(), normalizar(filtro.estrategia()), normalizar(filtro.servico()),
+                normalizar(filtro.origem()));
         List<Long> ids = negocios.stream().map(PipelineVendasNegocio::getIdNegocio).toList();
         List<PipelineVendasMovimentacaoEtapa> movimentacoes = ids.isEmpty()
                 ? List.of()
                 : movimentacaoRepository.findByNegocioIdNegocioIn(ids);
         long tarefasAtrasadas = contarTarefasAtrasadas(ids);
-        return calculator.calcular(negocios, movimentacoes, tarefasAtrasadas, opcoes(todos));
+        return calculator.calcular(negocios, movimentacoes, tarefasAtrasadas, opcoes());
     }
 
-    private boolean corresponde(PipelineVendasNegocio negocio, PipelineDashboardFiltroDTO filtro) {
-        LocalDate criacao = negocio.getCriadoEm().toLocalDate();
-        if (filtro.dataInicio() != null && criacao.isBefore(filtro.dataInicio())) return false;
-        if (filtro.dataFim() != null && criacao.isAfter(filtro.dataFim())) return false;
-        if (filtro.responsavelId() != null && !Objects.equals(filtro.responsavelId(), negocio.getResponsavel().getId())) return false;
-        if (filtro.funilId() != null && !Objects.equals(filtro.funilId(), negocio.getFunil().getIdFunil())) return false;
-        if (filtro.empresaId() != null && (negocio.getEmpresa() == null
-                || !Objects.equals(filtro.empresaId(), negocio.getEmpresa().getIdEmpresa()))) return false;
-        if (filtro.situacao() != null && filtro.situacao() != negocio.getResultado()) return false;
-        return textoIgual(filtro.estrategia(), negocio.getEstrategiaComercial())
-                && textoIgual(filtro.servico(), negocio.getServicoInteresse())
-                && textoIgual(filtro.origem(), negocio.getOrigemNegocio());
+    private LocalDateTime inicio(PipelineDashboardFiltroDTO filtro) {
+        return filtro.dataInicio() == null ? null : filtro.dataInicio().atStartOfDay();
+    }
+
+    private LocalDateTime fimExclusivo(PipelineDashboardFiltroDTO filtro) {
+        return filtro.dataFim() == null ? null : filtro.dataFim().plusDays(1).atStartOfDay();
     }
 
     private long contarTarefasAtrasadas(List<Long> negocioIds) {
         if (negocioIds.isEmpty()) return 0;
-        LocalDate hoje = LocalDate.now();
-        return tarefaRepository.findAllByOrderByPrazoAscCriadoEmDesc().stream()
-                .filter(tarefa -> negocioIds.contains(tarefa.getNegocio().getIdNegocio()))
-                .filter(tarefa -> tarefa.getPrazo() != null && tarefa.getPrazo().isBefore(hoje))
-                .filter(this::naoFinalizada)
-                .count();
+        return tarefaRepository.countByNegocioIdNegocioInAndPrazoBeforeAndStatusNotIn(
+                negocioIds,
+                LocalDate.now(),
+                List.of(PipelineTarefaStatus.CONCLUIDA, PipelineTarefaStatus.CANCELADA));
     }
 
-    private boolean naoFinalizada(PipelineVendasTarefa tarefa) {
-        return tarefa.getStatus() != PipelineTarefaStatus.CONCLUIDA
-                && tarefa.getStatus() != PipelineTarefaStatus.CANCELADA;
-    }
-
-    private PipelineDashboardResponseDTO.OpcoesFiltro opcoes(List<PipelineVendasNegocio> negocios) {
+    private PipelineDashboardResponseDTO.OpcoesFiltro opcoes() {
+        TreeSet<String> estrategias = new TreeSet<>();
+        TreeSet<String> servicos = new TreeSet<>();
+        TreeSet<String> origens = new TreeSet<>();
+        for (PipelineFiltroOptionProjection opcao : negocioRepository.findDashboardFilterOptions()) {
+            adicionarOpcao(estrategias, opcao.getEstrategia());
+            adicionarOpcao(servicos, opcao.getServico());
+            adicionarOpcao(origens, opcao.getOrigem());
+        }
         return new PipelineDashboardResponseDTO.OpcoesFiltro(
-                valores(negocios, PipelineVendasNegocio::getEstrategiaComercial),
-                valores(negocios, PipelineVendasNegocio::getServicoInteresse),
-                valores(negocios, PipelineVendasNegocio::getOrigemNegocio)
+                List.copyOf(estrategias), List.copyOf(servicos), List.copyOf(origens)
         );
     }
 
-    private List<String> valores(List<PipelineVendasNegocio> negocios,
-                                 Function<PipelineVendasNegocio, String> extrator) {
-        return negocios.stream().map(extrator).filter(Objects::nonNull).map(String::trim)
-                .filter(valor -> !valor.isBlank()).distinct().sorted(Comparator.naturalOrder()).toList();
+    private void adicionarOpcao(TreeSet<String> opcoes, String valor) {
+        if (valor != null && !valor.isBlank()) opcoes.add(valor.trim());
     }
 
-    private boolean textoIgual(String filtro, String valor) {
-        return filtro == null || filtro.isBlank() || (valor != null && filtro.trim().equalsIgnoreCase(valor.trim()));
+    private String normalizar(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.trim();
     }
 
     private void validarPeriodo(PipelineDashboardFiltroDTO filtro) {

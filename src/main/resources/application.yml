@@ -7,10 +7,22 @@ spring:
     multipart:
       max-file-size: ${MAX_UPLOAD_FILE_SIZE:25MB}
       max-request-size: ${MAX_UPLOAD_REQUEST_SIZE:25MB}
+  jpa:
+    properties:
+      hibernate:
+        default_batch_fetch_size: ${HIBERNATE_BATCH_FETCH_SIZE:50}
+        query.in_clause_parameter_padding: true
+        jdbc.batch_size: ${HIBERNATE_JDBC_BATCH_SIZE:25}
+        order_inserts: true
+        order_updates: true
 
 server:
   port: ${PORT:8080}
   forward-headers-strategy: framework
+  compression:
+    enabled: true
+    min-response-size: 1024
+    mime-types: application/json,application/problem+json,text/html,text/plain,text/css,application/javascript
 
 management:
   endpoints:

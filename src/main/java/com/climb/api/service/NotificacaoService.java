@@ -7,6 +7,7 @@ import com.climb.api.model.dto.NotificacaoResponseDTO;
 import com.climb.api.repository.NotificacaoRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -104,10 +105,9 @@ public class NotificacaoService {
         return NotificacaoResponseDTO.from(repository.save(notificacao));
     }
 
+    @Transactional
     public void marcarTodasComoLidasDoUsuario(Long usuarioId) {
-        List<Notificacao> notificacoes = repository.findByUsuario_IdAndLidaFalseOrderByDataCriacaoDescIdNotificacaoDesc(usuarioId);
-        notificacoes.forEach(this::marcarLida);
-        repository.saveAll(notificacoes);
+        repository.marcarTodasComoLidas(usuarioId, LocalDateTime.now());
     }
 
     public void deletar(Long id) {

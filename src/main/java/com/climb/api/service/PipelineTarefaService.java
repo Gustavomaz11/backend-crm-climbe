@@ -48,13 +48,14 @@ public class PipelineTarefaService {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
         PipelineTarefaVisao visaoEfetiva = visao == null ? PipelineTarefaVisao.TODAS : visao;
         LocalDate hoje = LocalDate.now();
-        return repository.findAllByOrderByPrazoAscCriadoEmDesc().stream()
+        return repository.findFiltradas(
+                        visaoEfetiva == PipelineTarefaVisao.TODAS,
+                        visaoEfetiva == PipelineTarefaVisao.HOJE,
+                        visaoEfetiva == PipelineTarefaVisao.ATRASADAS,
+                        visaoEfetiva == PipelineTarefaVisao.FUTURAS,
+                        visaoEfetiva == PipelineTarefaVisao.CONCLUIDAS,
+                        hoje, responsavelId, negocioId, funilId, normalizar(tipo)).stream()
                 .distinct()
-                .filter(tarefa -> negocioId == null || negocioId.equals(tarefa.getNegocio().getIdNegocio()))
-                .filter(tarefa -> funilId == null || funilId.equals(tarefa.getNegocio().getFunil().getIdFunil()))
-                .filter(tarefa -> responsavelId == null || responsavelId.equals(tarefa.getResponsavel().getId()))
-                .filter(tarefa -> tipo == null || tipo.isBlank() || tarefa.getTipo().equalsIgnoreCase(tipo.trim()))
-                .filter(tarefa -> correspondeVisao(tarefa, visaoEfetiva, hoje))
                 .map(this::toResponse)
                 .toList();
     }
@@ -151,22 +152,6 @@ public class PipelineTarefaService {
                     return subtarefa;
                 })
                 .toList();
-    }
-
-    private boolean correspondeVisao(PipelineVendasTarefa tarefa, PipelineTarefaVisao visao, LocalDate hoje) {
-        boolean aberta = tarefa.getStatus() != PipelineTarefaStatus.CONCLUIDA
-                && tarefa.getStatus() != PipelineTarefaStatus.CANCELADA;
-        return switch (visao) {
-            case TODAS -> true;
-            case HOJE -> aberta && (hoje.equals(tarefa.getPrazo()) || hoje.equals(tarefa.getDataInicio()));
-            case ATRASADAS -> aberta && tarefa.getPrazo() != null && tarefa.getPrazo().isBefore(hoje);
-            case FUTURAS -> aberta && dataDeReferencia(tarefa) != null && dataDeReferencia(tarefa).isAfter(hoje);
-            case CONCLUIDAS -> tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA;
-        };
-    }
-
-    private LocalDate dataDeReferencia(PipelineVendasTarefa tarefa) {
-        return tarefa.getPrazo() != null ? tarefa.getPrazo() : tarefa.getDataInicio();
     }
 
     private void atualizarDataConclusao(PipelineVendasTarefa tarefa) {

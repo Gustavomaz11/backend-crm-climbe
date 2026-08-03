@@ -15,6 +15,7 @@ import com.climb.api.repository.CargoRepository;
 import com.climb.api.repository.OAuth2PendingRegistrationRepository;
 import com.climb.api.repository.PermissaoRepository;
 import com.climb.api.repository.UsuarioOAuthRepository;
+import com.climb.api.repository.UsuarioOAuthAvatarProjection;
 import com.climb.api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -34,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -239,6 +242,26 @@ class UsuarioServiceAprovacaoTest {
         assertSame(novoCargo, usuario.getCargo());
         assertEquals(Set.of(permissao), usuario.getPermissoes());
         assertEquals("ATIVO", usuario.getSituacao());
+    }
+
+    @Test
+    void deveCarregarAvataresGoogleEmLoteAoListarUsuarios() {
+        Usuario primeiro = usuario(7L, "ATIVO", cargo(2L, "CEO"), Set.of());
+        Usuario segundo = usuario(8L, "ATIVO", cargo(3L, "Analista"), Set.of());
+        UsuarioOAuthAvatarProjection avatar = mock(UsuarioOAuthAvatarProjection.class);
+        when(avatar.getUsuarioId()).thenReturn(7L);
+        when(avatar.getAvatarUrl()).thenReturn("https://google.test/avatar.png");
+        when(usuarioRepository.findAll()).thenReturn(List.of(primeiro, segundo));
+        when(usuarioOAuthRepository.findAvataresByUsuarioIdsAndProvider(
+                List.of(7L, 8L), OAuthProvider.GOOGLE)).thenReturn(List.of(avatar));
+        when(usuarioMapper.toResponse(any(Usuario.class))).thenReturn(
+                new UsuarioResponseDTO(), new UsuarioResponseDTO());
+
+        List<UsuarioResponseDTO> resultado = service.listar();
+
+        assertEquals("https://google.test/avatar.png", resultado.getFirst().getFotoPerfil());
+        verify(usuarioOAuthRepository).findAvataresByUsuarioIdsAndProvider(
+                List.of(7L, 8L), OAuthProvider.GOOGLE);
     }
 
     private OAuth2PendingRegistration pendingAprovado(Cargo cargo, Set<Permissao> permissoes) {
