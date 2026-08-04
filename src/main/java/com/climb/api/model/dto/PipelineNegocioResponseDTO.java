@@ -4,6 +4,7 @@ import com.climb.api.model.enums.PipelineVendasResultado;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record PipelineNegocioResponseDTO(
         Long id,
@@ -23,6 +24,7 @@ public record PipelineNegocioResponseDTO(
         String origemNegocio,
         String estrategiaComercial,
         String servicoInteresse,
+        List<String> servicosInteresse,
         BigDecimal valorEstimadoProposta,
         String observacoes,
         PipelineVendasResultado resultado,

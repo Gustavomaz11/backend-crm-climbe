@@ -31,6 +31,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     List<Usuario> findAllBySituacaoInOrderByNomeCompletoAsc(Collection<String> situacoes);
 
+    List<Usuario> findAllBySituacaoAndCargo_IdOrderByNomeCompletoAsc(String situacao, Long cargoId);
+
     @Query("""
             select usuario.id
             from Usuario usuario

@@ -8,6 +8,7 @@ import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.PipelineVendasEtapaRepository;
 import com.climb.api.repository.PipelineVendasFunilRepository;
 import com.climb.api.repository.PipelineVendasNegocioRepository;
+import com.climb.api.repository.PropostaRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,8 +28,10 @@ public class PipelineVendasService {
     private final PipelineVendasEtapaRepository etapaRepository;
     private final PipelineVendasFunilRepository funilRepository;
     private final PipelineVendasNegocioRepository negocioRepository;
+    private final PropostaRepository propostaRepository;
     private final UsuarioRepository usuarioRepository;
     private final EmpresaRepository empresaRepository;
+    private final PipelineEmpresaCadastroService empresaCadastroService;
     private final ContratoService contratoService;
     private final PipelineHistoricoService historicoService;
     private final PipelineMotivoPerdaService motivoPerdaService;
@@ -37,8 +41,10 @@ public class PipelineVendasService {
     public PipelineVendasService(PipelineVendasEtapaRepository etapaRepository,
                                  PipelineVendasFunilRepository funilRepository,
                                  PipelineVendasNegocioRepository negocioRepository,
+                                 PropostaRepository propostaRepository,
                                  UsuarioRepository usuarioRepository,
                                  EmpresaRepository empresaRepository,
+                                 PipelineEmpresaCadastroService empresaCadastroService,
                                  ContratoService contratoService,
                                  PipelineHistoricoService historicoService,
                                  PipelineMotivoPerdaService motivoPerdaService,
@@ -47,8 +53,10 @@ public class PipelineVendasService {
         this.etapaRepository = etapaRepository;
         this.funilRepository = funilRepository;
         this.negocioRepository = negocioRepository;
+        this.propostaRepository = propostaRepository;
         this.usuarioRepository = usuarioRepository;
         this.empresaRepository = empresaRepository;
+        this.empresaCadastroService = empresaCadastroService;
         this.contratoService = contratoService;
         this.historicoService = historicoService;
         this.motivoPerdaService = motivoPerdaService;
@@ -87,7 +95,7 @@ public class PipelineVendasService {
         negocio.setCriadoEm(agora);
         negocio.setUltimaMovimentacaoEm(agora);
         negocio.setResultado(PipelineVendasResultado.ABERTO);
-        aplicarDados(negocio, dto);
+        aplicarDados(negocio, dto, resolverEmpresa(dto));
         PipelineVendasEtapa etapa = resolverEtapaCriacao(dto);
         if (etapa.getResultado() != PipelineVendasResultado.ABERTO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Um negócio deve ser criado em uma etapa aberta");
@@ -111,7 +119,7 @@ public class PipelineVendasService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Não é possível trocar o funil de um negócio existente");
         }
         NegocioSnapshot anterior = NegocioSnapshot.of(negocio);
-        aplicarDados(negocio, dto);
+        aplicarDados(negocio, dto, resolverEmpresa(dto));
 
         if (dto.etapaId() != null && !Objects.equals(dto.etapaId(), anterior.etapaId())) {
             exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_MOVIMENTAR);
@@ -120,6 +128,7 @@ public class PipelineVendasService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Use as ações de ganhar ou perder para concluir o negócio");
             }
+            validarPropostaAntesDaMovimentacao(negocio, novaEtapa);
             validarCamposObrigatorios(negocio, novaEtapa);
             LocalDateTime momento = LocalDateTime.now();
             aplicarEtapa(negocio, novaEtapa, momento);
@@ -142,6 +151,7 @@ public class PipelineVendasService {
         PipelineVendasEtapa novaEtapa = buscarEtapaDoFunil(etapaId, negocio.getFunil().getIdFunil());
         if (Objects.equals(negocio.getEtapa().getIdEtapa(), etapaId)) return toResponse(negocio);
         exigirPermissaoDeConclusaoSeNecessario(usuarioId, negocio.getResultado(), novaEtapa.getResultado());
+        validarPropostaAntesDaMovimentacao(negocio, novaEtapa);
         validarCamposObrigatorios(negocio, novaEtapa);
         PipelineVendasEtapa etapaAnterior = negocio.getEtapa();
         PipelineVendasResultado resultadoAnterior = negocio.getResultado();
@@ -269,8 +279,8 @@ public class PipelineVendasService {
         }
     }
 
-    private void aplicarDados(PipelineVendasNegocio negocio, PipelineNegocioRequestDTO dto) {
-        negocio.setEmpresa(dto.empresaId() == null ? null : buscarEmpresa(dto.empresaId()));
+    private void aplicarDados(PipelineVendasNegocio negocio, PipelineNegocioRequestDTO dto, Empresa empresa) {
+        negocio.setEmpresa(empresa);
         negocio.setNomeEmpresa(dto.nomeEmpresa().trim());
         negocio.setNomeContato(dto.nomeContato().trim());
         negocio.setTelefone(dto.telefone().trim());
@@ -279,7 +289,7 @@ public class PipelineVendasService {
         negocio.setDataReuniao(dto.dataReuniao());
         negocio.setOrigemNegocio(dto.origemNegocio().trim());
         negocio.setEstrategiaComercial(dto.estrategiaComercial().trim());
-        negocio.setServicoInteresse(dto.servicoInteresse().trim());
+        negocio.setServicosInteresse(normalizarServicos(dto));
         negocio.setValorEstimadoProposta(dto.valorEstimadoProposta());
         negocio.setObservacoes(normalizarTextoOpcional(dto.observacoes()));
     }
@@ -353,12 +363,25 @@ public class PipelineVendasService {
 
     private void validarCamposObrigatorios(PipelineVendasNegocio negocio, PipelineVendasEtapa etapa) {
         List<String> ausentes = (etapa.getCamposObrigatorios() == null ? List.<String>of() : etapa.getCamposObrigatorios()).stream()
+                .filter(campo -> !"servicoInteresse".equals(campo))
                 .filter(campo -> campoAusente(negocio, campo))
                 .toList();
         if (!ausentes.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Preencha os campos obrigatórios da etapa " + etapa.getNome() + ": " + String.join(", ", ausentes));
         }
+    }
+
+    private void validarPropostaAntesDaMovimentacao(PipelineVendasNegocio negocio, PipelineVendasEtapa novaEtapa) {
+        if (!etapaEhPropostaApresentada(novaEtapa)) return;
+        if (propostaRepository.existsByNegocioIdNegocio(negocio.getIdNegocio())) return;
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Crie uma proposta para este negócio antes de movê-lo para Proposta apresentada");
+    }
+
+    private boolean etapaEhPropostaApresentada(PipelineVendasEtapa etapa) {
+        String codigo = etapa.getCodigo() == null ? "" : etapa.getCodigo().toUpperCase();
+        return codigo.startsWith("PROPOSTA_APRESENTADA");
     }
 
     private boolean campoAusente(PipelineVendasNegocio negocio, String campo) {
@@ -371,7 +394,6 @@ public class PipelineVendasService {
             case "dataReuniao" -> negocio.getDataReuniao() == null;
             case "origemNegocio" -> textoAusente(negocio.getOrigemNegocio());
             case "estrategiaComercial" -> textoAusente(negocio.getEstrategiaComercial());
-            case "servicoInteresse" -> textoAusente(negocio.getServicoInteresse());
             case "valorEstimadoProposta" -> negocio.getValorEstimadoProposta() == null;
             case "observacoes" -> textoAusente(negocio.getObservacoes());
             default -> false;
@@ -390,6 +412,27 @@ public class PipelineVendasService {
     private Empresa buscarEmpresa(Long empresaId) {
         return empresaRepository.findById(empresaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
+    }
+
+    private Empresa resolverEmpresa(PipelineNegocioRequestDTO dto) {
+        if (dto.empresaId() != null) return buscarEmpresa(dto.empresaId());
+        if (Boolean.TRUE.equals(dto.cadastrarEmpresa())) {
+            return empresaCadastroService.cadastrar(dto);
+        }
+        return null;
+    }
+
+    private List<String> normalizarServicos(PipelineNegocioRequestDTO dto) {
+        List<String> informados = dto.servicosInteresse() == null || dto.servicosInteresse().isEmpty()
+                ? List.of(dto.servicoInteresse() == null ? "" : dto.servicoInteresse())
+                : dto.servicosInteresse();
+        LinkedHashSet<String> normalizados = new LinkedHashSet<>();
+        informados.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(servico -> !servico.isBlank())
+                .forEach(normalizados::add);
+        return List.copyOf(normalizados);
     }
 
     private Empresa resolverEmpresaConversao(PipelineVendasNegocio negocio, Long empresaId) {
@@ -425,7 +468,8 @@ public class PipelineVendasService {
                 negocio.getResponsavel().getId(), negocio.getResponsavel().getNomeCompleto(),
                 negocio.getEtapa().getIdEtapa(), negocio.getEtapa().getCodigo(), negocio.getEtapa().getNome(),
                 negocio.getDataReuniao(), negocio.getOrigemNegocio(), negocio.getEstrategiaComercial(),
-                negocio.getServicoInteresse(), negocio.getValorEstimadoProposta(), negocio.getObservacoes(),
+                negocio.getServicoInteresse(), negocio.getServicosInteresse(),
+                negocio.getValorEstimadoProposta(), negocio.getObservacoes(),
                 negocio.getResultado(),
                 negocio.getMotivoPerda() == null ? null : negocio.getMotivoPerda().getIdMotivo(),
                 negocio.getMotivoPerda() == null ? null : negocio.getMotivoPerda().getNome(),

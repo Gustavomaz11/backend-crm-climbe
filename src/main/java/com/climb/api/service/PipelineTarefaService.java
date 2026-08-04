@@ -203,6 +203,9 @@ public class PipelineTarefaService {
     }
 
     private void validarDatas(LocalDate inicio, LocalDate prazo) {
+        if (prazo == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O prazo é obrigatório");
+        }
         if (inicio != null && prazo != null && prazo.isBefore(inicio)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O prazo não pode ser anterior à data de início");
         }

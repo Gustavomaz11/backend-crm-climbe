@@ -52,6 +52,11 @@ app:
     expiration-cron: "${CONTRACT_EXPIRATION_CRON:0 0 8 * * *}"
   document-review:
     expiration-days: ${DOCUMENT_REVIEW_EXPIRATION_DAYS:30}
+  pipeline:
+    task-reminders:
+      zone: ${PIPELINE_TASK_REMINDER_ZONE:America/Sao_Paulo}
+      weekly-cron: "${PIPELINE_TASK_WEEKLY_REMINDER_CRON:0 0 8 * * *}"
+      overdue-cron: "${PIPELINE_TASK_OVERDUE_REMINDER_CRON:0 10 8 * * *}"
 
 jwt:
   secret: ${JWT_SECRET:your-secret-key-change-in-production-minimum-256-bits-long}

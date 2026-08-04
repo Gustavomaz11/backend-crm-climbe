@@ -23,6 +23,10 @@ public class Proposta {
     @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "negocio_id")
+    private PipelineVendasNegocio negocio;
+
     @ManyToOne
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
@@ -84,6 +88,9 @@ public class Proposta {
 
     public Empresa getEmpresa() { return empresa; }
     public void setEmpresa(Empresa empresa) { this.empresa = empresa; }
+
+    public PipelineVendasNegocio getNegocio() { return negocio; }
+    public void setNegocio(PipelineVendasNegocio negocio) { this.negocio = negocio; }
 
     public Usuario getUsuario() { return usuario; }
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }

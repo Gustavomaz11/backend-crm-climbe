@@ -2,11 +2,13 @@ package com.climb.api.service;
 
 import com.climb.api.model.*;
 import com.climb.api.model.dto.PipelineNegocioRequestDTO;
+import com.climb.api.model.dto.PipelineNegocioResponseDTO;
 import com.climb.api.model.enums.PipelineVendasResultado;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.PipelineVendasEtapaRepository;
 import com.climb.api.repository.PipelineVendasFunilRepository;
 import com.climb.api.repository.PipelineVendasNegocioRepository;
+import com.climb.api.repository.PropostaRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,8 +33,10 @@ class PipelineVendasServiceTest {
     @Mock private PipelineVendasEtapaRepository etapaRepository;
     @Mock private PipelineVendasFunilRepository funilRepository;
     @Mock private PipelineVendasNegocioRepository negocioRepository;
+    @Mock private PropostaRepository propostaRepository;
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private EmpresaRepository empresaRepository;
+    @Mock private PipelineEmpresaCadastroService empresaCadastroService;
     @Mock private ContratoService contratoService;
     @Mock private PipelineHistoricoService historicoService;
     @Mock private PipelineMotivoPerdaService motivoPerdaService;
@@ -47,8 +51,10 @@ class PipelineVendasServiceTest {
                 etapaRepository,
                 funilRepository,
                 negocioRepository,
+                propostaRepository,
                 usuarioRepository,
                 empresaRepository,
+                empresaCadastroService,
                 contratoService,
                 historicoService,
                 motivoPerdaService,
@@ -80,6 +86,90 @@ class PipelineVendasServiceTest {
         assertNotNull(captor.getValue().getCriadoEm());
         assertNotNull(captor.getValue().getUltimaMovimentacaoEm());
         verify(movimentacaoEtapaService).iniciar(eq(captor.getValue()), any(LocalDateTime.class));
+    }
+
+    @Test
+    void deveCadastrarEmpresaEManterMultiplosServicosAoCriarNegocio() {
+        Usuario usuario = usuario(1L, "Gestor");
+        Empresa empresa = new Empresa();
+        empresa.setIdEmpresa(30L);
+        PipelineVendasEtapa etapaInicial = etapa(10L, "REUNIAO_MARCADA", PipelineVendasResultado.ABERTO);
+        PipelineNegocioRequestDTO request = new PipelineNegocioRequestDTO(
+                null, null, "Apex Ventures", "Maria Silva", "11999999999", "maria@apex.com",
+                1L, null, LocalDateTime.now().plusDays(1), "Indicação", "Ativa", "BPO",
+                new BigDecimal("150000.00"), null, List.of("BPO", "CFO"), true,
+                "12.345.678/0001-95"
+        );
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_CRIAR)).thenReturn(true);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(empresaCadastroService.cadastrar(request)).thenReturn(empresa);
+        when(funilRepository.findByAtivoTrueOrderByPosicaoAsc()).thenReturn(List.of(etapaInicial.getFunil()));
+        when(etapaRepository.findByFunilIdFunilAndAtivoTrueOrderByPosicaoAsc(1L)).thenReturn(List.of(etapaInicial));
+        when(negocioRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PipelineNegocioResponseDTO response = service.criar(1L, request);
+
+        assertEquals(30L, response.empresaId());
+        assertEquals(List.of("BPO", "CFO"), response.servicosInteresse());
+        verify(empresaCadastroService).cadastrar(request);
+    }
+
+    @Test
+    void devePermitirCriarNegocioSemServicoDeInteresse() {
+        Usuario usuario = usuario(1L, "Gestor");
+        PipelineVendasEtapa etapaInicial = etapa(10L, "REUNIAO_MARCADA", PipelineVendasResultado.ABERTO);
+        etapaInicial.setCamposObrigatorios(List.of("servicoInteresse"));
+        PipelineNegocioRequestDTO request = new PipelineNegocioRequestDTO(
+                null, null, "Apex Ventures", "Maria Silva", "11999999999", "maria@apex.com",
+                1L, null, null, "Indicação", "Ativa", "",
+                null, null, List.of(), false, null
+        );
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_CRIAR)).thenReturn(true);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(funilRepository.findByAtivoTrueOrderByPosicaoAsc()).thenReturn(List.of(etapaInicial.getFunil()));
+        when(etapaRepository.findByFunilIdFunilAndAtivoTrueOrderByPosicaoAsc(1L)).thenReturn(List.of(etapaInicial));
+        when(negocioRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PipelineNegocioResponseDTO response = service.criar(1L, request);
+
+        assertTrue(response.servicosInteresse().isEmpty());
+        assertEquals("", response.servicoInteresse());
+    }
+
+    @Test
+    void deveExigirPropostaAntesDeMoverParaPropostaApresentada() {
+        Usuario usuario = usuario(1L, "Gestor");
+        PipelineVendasNegocio negocio = negocio(100L, usuario,
+                etapa(10L, "PROPOSTA_EM_ELABORACAO", PipelineVendasResultado.ABERTO));
+        PipelineVendasEtapa apresentada = etapa(20L, "PROPOSTA_APRESENTADA", PipelineVendasResultado.ABERTO);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_MOVIMENTAR)).thenReturn(true);
+        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(etapaRepository.findById(20L)).thenReturn(Optional.of(apresentada));
+        when(propostaRepository.existsByNegocioIdNegocio(100L)).thenReturn(false);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.mover(100L, 1L, 20L, null, null));
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains("Crie uma proposta"));
+        verify(negocioRepository, never()).save(any());
+    }
+
+    @Test
+    void devePermitirMoverParaPropostaApresentadaQuandoExisteProposta() {
+        Usuario usuario = usuario(1L, "Gestor");
+        PipelineVendasNegocio negocio = negocio(100L, usuario,
+                etapa(10L, "PROPOSTA_EM_ELABORACAO", PipelineVendasResultado.ABERTO));
+        PipelineVendasEtapa apresentada = etapa(20L, "PROPOSTA_APRESENTADA", PipelineVendasResultado.ABERTO);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_MOVIMENTAR)).thenReturn(true);
+        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(etapaRepository.findById(20L)).thenReturn(Optional.of(apresentada));
+        when(propostaRepository.existsByNegocioIdNegocio(100L)).thenReturn(true);
+        when(negocioRepository.save(negocio)).thenReturn(negocio);
+
+        service.mover(100L, 1L, 20L, null, null);
+
+        assertEquals(apresentada, negocio.getEtapa());
     }
 
     @Test

@@ -75,4 +75,20 @@ public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVe
             List<Long> negocioIds,
             LocalDate prazo,
             List<PipelineTarefaStatus> status);
+
+    @EntityGraph(attributePaths = {
+            "negocio", "negocio.funil", "negocio.servicosInteresse", "responsavel", "responsavel.cargo"
+    })
+    @Query("""
+            select distinct tarefa
+            from PipelineVendasTarefa tarefa
+            where tarefa.prazo is not null
+              and tarefa.prazo <= :limite
+              and tarefa.status not in (
+                    com.climb.api.model.enums.PipelineTarefaStatus.CONCLUIDA,
+                    com.climb.api.model.enums.PipelineTarefaStatus.CANCELADA
+              )
+            order by tarefa.responsavel.id, tarefa.prazo, tarefa.idTarefa
+            """)
+    List<PipelineVendasTarefa> findAbertasComPrazoAte(@Param("limite") LocalDate limite);
 }

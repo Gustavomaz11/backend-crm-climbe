@@ -3,6 +3,7 @@ package com.climb.api.service;
 import com.climb.api.model.Empresa;
 import com.climb.api.model.HistoricoAprovacaoProposta;
 import com.climb.api.model.PermissaoCodigo;
+import com.climb.api.model.PipelineVendasNegocio;
 import com.climb.api.model.Proposta;
 import com.climb.api.model.PropostaReajuste;
 import com.climb.api.model.Usuario;
@@ -15,6 +16,7 @@ import com.climb.api.model.dto.PropostaReajusteDTO;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
+import com.climb.api.repository.PipelineVendasNegocioRepository;
 import com.climb.api.repository.PropostaRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
@@ -39,6 +41,7 @@ public class PropostaService {
     private final PropostaRepository repository;
     private final EmpresaRepository empresaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final PipelineVendasNegocioRepository negocioRepository;
     private final HistoricoAprovacaoPropostaRepository historicoRepository;
     private final RbacService rbacService;
     private final CloudflareR2ArquivoStorageService arquivoStorageService;
@@ -47,6 +50,7 @@ public class PropostaService {
     public PropostaService(PropostaRepository repository,
                            EmpresaRepository empresaRepository,
                            UsuarioRepository usuarioRepository,
+                           PipelineVendasNegocioRepository negocioRepository,
                            HistoricoAprovacaoPropostaRepository historicoRepository,
                            RbacService rbacService,
                            CloudflareR2ArquivoStorageService arquivoStorageService,
@@ -54,6 +58,7 @@ public class PropostaService {
         this.repository = repository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.negocioRepository = negocioRepository;
         this.historicoRepository = historicoRepository;
         this.rbacService = rbacService;
         this.arquivoStorageService = arquivoStorageService;
@@ -102,6 +107,7 @@ public class PropostaService {
         return new PropostaResponseDTO(
                 proposta.getIdProposta(),
                 proposta.getEmpresa() != null ? proposta.getEmpresa().getIdEmpresa() : null,
+                proposta.getNegocio() != null ? proposta.getNegocio().getIdNegocio() : null,
                 proposta.getUsuario() != null ? proposta.getUsuario().getId() : null,
                 proposta.getUrl(),
                 proposta.getValuation(),
@@ -133,8 +139,17 @@ public class PropostaService {
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
     }
 
-    public List<PropostaResponseDTO> listar() {
-        return repository.findAll()
+    @Transactional(readOnly = true)
+    public List<PropostaResponseDTO> listar(Long empresaId, Long negocioId) {
+        List<Proposta> propostas;
+        if (negocioId != null) {
+            propostas = repository.findByNegocioIdNegocioOrderByDataCriacaoDescIdPropostaDesc(negocioId);
+        } else if (empresaId != null) {
+            propostas = repository.findByEmpresaIdEmpresaOrderByDataCriacaoDescIdPropostaDesc(empresaId);
+        } else {
+            propostas = repository.findAll();
+        }
+        return propostas
                 .stream()
                 .map(this::toResponseDTO)
                 .toList();
@@ -177,8 +192,10 @@ public class PropostaService {
         validarValuation(dto.valuation());
         validarStatusParaCriacao(dto.status());
 
+        Empresa empresa = buscarEmpresa(dto.empresaId());
         Proposta proposta = new Proposta();
-        proposta.setEmpresa(buscarEmpresa(dto.empresaId()));
+        proposta.setEmpresa(empresa);
+        proposta.setNegocio(resolverNegocio(dto.negocioId(), empresa));
         proposta.setUsuario(buscarUsuario(dto.usuarioId()));
         proposta.setStatus(dto.status());
         proposta.setUrl(dto.url());
@@ -189,7 +206,7 @@ public class PropostaService {
     }
 
     @Transactional
-    public PropostaResponseDTO criarComArquivo(Long empresaId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo,
+    public PropostaResponseDTO criarComArquivo(Long empresaId, Long negocioId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo,
                                                BigDecimal valuation, PropostaComercialRequestDTO configuracao) {
         if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRUD)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
@@ -199,6 +216,7 @@ public class PropostaService {
         validarConfiguracaoComercial(configuracao);
 
         Empresa empresa = buscarEmpresa(empresaId);
+        PipelineVendasNegocio negocio = resolverNegocio(negocioId, empresa);
         Usuario usuario = buscarUsuario(usuarioId);
         revisaoDocumentoService.validarEnvio(empresa, arquivo);
 
@@ -207,6 +225,7 @@ public class PropostaService {
 
         Proposta proposta = new Proposta();
         proposta.setEmpresa(empresa);
+        proposta.setNegocio(negocio);
         proposta.setUsuario(usuario);
         proposta.setStatus(PropostaStatus.PENDENTE);
         proposta.setUrl(upload.url());
@@ -325,7 +344,9 @@ public class PropostaService {
         Proposta proposta = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Proposta não encontrada"));
 
-        proposta.setEmpresa(buscarEmpresa(dto.empresaId()));
+        Empresa empresa = buscarEmpresa(dto.empresaId());
+        proposta.setEmpresa(empresa);
+        proposta.setNegocio(resolverNegocio(dto.negocioId(), empresa));
         proposta.setUsuario(buscarUsuario(dto.usuarioId()));
         proposta.setStatus(dto.status());
         proposta.setUrl(dto.url());
@@ -381,6 +402,17 @@ public class PropostaService {
         if (empresaId == null || empresaId <= 0) {
             throw new RuntimeException("Selecione uma empresa para a proposta");
         }
+    }
+
+    private PipelineVendasNegocio resolverNegocio(Long negocioId, Empresa empresa) {
+        if (negocioId == null) return null;
+        PipelineVendasNegocio negocio = negocioRepository.findById(negocioId)
+                .orElseThrow(() -> new RuntimeException("Negócio do pipeline não encontrado"));
+        Long empresaDoNegocio = negocio.getEmpresa() == null ? null : negocio.getEmpresa().getIdEmpresa();
+        if (!Objects.equals(empresaDoNegocio, empresa.getIdEmpresa())) {
+            throw new RuntimeException("O negócio informado não pertence à empresa da proposta");
+        }
+        return negocio;
     }
 
     private void validarValuation(BigDecimal valuation) {

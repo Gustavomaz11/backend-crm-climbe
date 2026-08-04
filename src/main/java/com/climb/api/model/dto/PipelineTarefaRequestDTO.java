@@ -15,7 +15,7 @@ public record PipelineTarefaRequestDTO(
         String descricao,
         @NotNull Long responsavelId,
         LocalDate dataInicio,
-        LocalDate prazo,
+        @NotNull LocalDate prazo,
         @NotNull PipelineTarefaPrioridade prioridade,
         @NotNull PipelineTarefaStatus status,
         @NotBlank @Size(max = 100) String tipo,

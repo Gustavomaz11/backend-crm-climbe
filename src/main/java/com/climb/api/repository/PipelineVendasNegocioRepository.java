@@ -11,17 +11,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineVendasNegocio, Long> {
-    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "empresa", "contrato", "motivoPerda"})
+    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "empresa", "contrato", "motivoPerda", "servicosInteresse"})
     List<PipelineVendasNegocio> findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(Long funilId);
     long countByEtapaIdEtapa(Long etapaId);
 
-    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "empresa", "contrato", "motivoPerda"})
+    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "empresa", "contrato", "motivoPerda", "servicosInteresse"})
     List<PipelineVendasNegocio> findAllByOrderByCriadoEmDesc();
 
-    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel"})
+    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "servicosInteresse"})
     List<PipelineVendasNegocio> findByResultadoOrderByCriadoEmDesc(PipelineVendasResultado resultado);
 
-    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "motivoPerda"})
+    @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "motivoPerda", "servicosInteresse"})
     @Query("""
             select negocio
             from PipelineVendasNegocio negocio
@@ -32,7 +32,7 @@ public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineV
               and (:empresaId is null or negocio.empresa.idEmpresa = :empresaId)
               and (:resultado is null or negocio.resultado = :resultado)
               and (:estrategia is null or lower(trim(negocio.estrategiaComercial)) = lower(:estrategia))
-              and (:servico is null or lower(trim(negocio.servicoInteresse)) = lower(:servico))
+              and (:servico is null or :servico member of negocio.servicosInteresse)
               and (:origem is null or lower(trim(negocio.origemNegocio)) = lower(:origem))
             order by negocio.criadoEm desc
             """)
@@ -48,11 +48,11 @@ public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineV
             @Param("origem") String origem);
 
     @Query("""
-            select negocio.estrategiaComercial as estrategia,
-                   negocio.servicoInteresse as servico,
+            select distinct negocio.estrategiaComercial as estrategia,
+                   servico as servico,
                    negocio.origemNegocio as origem
             from PipelineVendasNegocio negocio
-            group by negocio.estrategiaComercial, negocio.servicoInteresse, negocio.origemNegocio
+            join negocio.servicosInteresse servico
             """)
     List<PipelineFiltroOptionProjection> findDashboardFilterOptions();
 }

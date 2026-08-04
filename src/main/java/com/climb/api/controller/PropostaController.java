@@ -34,8 +34,10 @@ public class PropostaController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PropostaResponseDTO>>> listar() {
-        return ResponseEntity.ok(ApiResponse.ok(service.listar()));
+    public ResponseEntity<ApiResponse<List<PropostaResponseDTO>>> listar(
+            @RequestParam(value = "empresaId", required = false) Long empresaId,
+            @RequestParam(value = "negocioId", required = false) Long negocioId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.listar(empresaId, negocioId)));
     }
 
     @GetMapping("/{id}")
@@ -80,12 +82,13 @@ public class PropostaController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> criarComUpload(
             @RequestParam(value = "empresaId", required = false) Long empresaId,
+            @RequestParam(value = "negocioId", required = false) Long negocioId,
             @RequestParam(value = "valuation", required = false) BigDecimal valuation,
             @Valid @RequestPart(value = "configuracao", required = false) PropostaComercialRequestDTO configuracao,
             @RequestParam("arquivo") MultipartFile arquivo) {
         try {
             Long usuarioId = getAuthenticatedUserId();
-            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criarComArquivo(empresaId, usuarioId, arquivo, valuation, configuracao)));
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criarComArquivo(empresaId, negocioId, usuarioId, arquivo, valuation, configuracao)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(e.getMessage()));
         } catch (RuntimeException e) {

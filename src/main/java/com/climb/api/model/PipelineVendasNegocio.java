@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 @Entity
 @Table(name = "pipeline_vendas_negocios")
@@ -54,6 +57,15 @@ public class PipelineVendasNegocio {
 
     @Column(name = "servico_interesse", nullable = false, length = 180)
     private String servicoInteresse;
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+            name = "pipeline_vendas_negocio_servicos",
+            joinColumns = @JoinColumn(name = "negocio_id")
+    )
+    @Column(name = "servico", nullable = false, length = 180)
+    @OrderColumn(name = "ordem")
+    private List<String> servicosInteresse = new ArrayList<>();
 
     @Column(name = "valor_estimado_proposta", precision = 15, scale = 2)
     private BigDecimal valorEstimadoProposta;
@@ -113,8 +125,18 @@ public class PipelineVendasNegocio {
     public void setOrigemNegocio(String origemNegocio) { this.origemNegocio = origemNegocio; }
     public String getEstrategiaComercial() { return estrategiaComercial; }
     public void setEstrategiaComercial(String estrategiaComercial) { this.estrategiaComercial = estrategiaComercial; }
-    public String getServicoInteresse() { return servicoInteresse; }
-    public void setServicoInteresse(String servicoInteresse) { this.servicoInteresse = servicoInteresse; }
+    public String getServicoInteresse() {
+        return servicosInteresse.isEmpty() ? servicoInteresse : String.join(", ", servicosInteresse);
+    }
+    public void setServicoInteresse(String servicoInteresse) {
+        setServicosInteresse(servicoInteresse == null ? List.of() : List.of(servicoInteresse));
+    }
+    public List<String> getServicosInteresse() { return List.copyOf(servicosInteresse); }
+    public void setServicosInteresse(Collection<String> servicosInteresse) {
+        this.servicosInteresse.clear();
+        if (servicosInteresse != null) this.servicosInteresse.addAll(servicosInteresse);
+        this.servicoInteresse = String.join(", ", this.servicosInteresse);
+    }
     public BigDecimal getValorEstimadoProposta() { return valorEstimadoProposta; }
     public void setValorEstimadoProposta(BigDecimal valorEstimadoProposta) { this.valorEstimadoProposta = valorEstimadoProposta; }
     public String getObservacoes() { return observacoes; }

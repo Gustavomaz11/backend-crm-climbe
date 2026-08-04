@@ -10,6 +10,7 @@ import java.util.Set;
 public record PropostaResponseDTO(
         Long idProposta,
         Long empresaId,
+        Long negocioId,
         Long usuarioId,
         String url,
         BigDecimal valuation,

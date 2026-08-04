@@ -142,7 +142,7 @@ public class PipelineFunilService {
         etapa.setObjetivo(normalizar(dto.objetivo()));
         etapa.setCriteriosConclusao(normalizar(dto.criteriosConclusao()));
         etapa.setTempoMaximoPermanenciaDias(dto.tempoMaximoPermanenciaDias());
-        etapa.setCamposObrigatorios(dto.camposObrigatorios() == null ? new ArrayList<>() : new ArrayList<>(dto.camposObrigatorios()));
+        etapa.setCamposObrigatorios(camposObrigatoriosSemServico(dto.camposObrigatorios()));
         etapa.setResultado(dto.sucesso() ? PipelineVendasResultado.GANHO : dto.perda() ? PipelineVendasResultado.PERDIDO : PipelineVendasResultado.ABERTO);
         etapa.setPosicao(posicao);
         etapa.setAtivo(dto.ativo());
@@ -156,7 +156,7 @@ public class PipelineFunilService {
         copia.setObjetivo(original.getObjetivo());
         copia.setCriteriosConclusao(original.getCriteriosConclusao());
         copia.setTempoMaximoPermanenciaDias(original.getTempoMaximoPermanenciaDias());
-        copia.setCamposObrigatorios(new ArrayList<>(camposObrigatorios(original)));
+        copia.setCamposObrigatorios(camposObrigatoriosSemServico(camposObrigatorios(original)));
         copia.setResultado(original.getResultado());
         copia.setPosicao(original.getPosicao());
         copia.setAtivo(original.getAtivo());
@@ -195,5 +195,12 @@ public class PipelineFunilService {
 
     private List<String> camposObrigatorios(PipelineVendasEtapa etapa) {
         return etapa.getCamposObrigatorios() == null ? List.of() : etapa.getCamposObrigatorios();
+    }
+
+    private ArrayList<String> camposObrigatoriosSemServico(List<String> campos) {
+        if (campos == null) return new ArrayList<>();
+        return campos.stream()
+                .filter(campo -> !"servicoInteresse".equals(campo))
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 }

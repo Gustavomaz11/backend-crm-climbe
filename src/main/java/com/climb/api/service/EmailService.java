@@ -94,6 +94,15 @@ public class EmailService {
                 montarTemplate(titulo, corpo, textoBotao, urlBotao, rodape));
     }
 
+    public boolean enviarEmailComConteudoHtml(String emailDestino,
+                                               String assunto,
+                                               String titulo,
+                                               String corpoHtml,
+                                               String rodape) {
+        return enviarEmailHtml(emailDestino, assunto,
+                montarTemplate(titulo, corpoHtml, null, null, rodape));
+    }
+
     public boolean enviarEmailHtml(String emailDestino, String assunto, String html) {
         if (emailDestino == null || emailDestino.isBlank()) {
             log.warn("Envio de e-mail ignorado: destinatário vazio. Assunto: {}", assunto);

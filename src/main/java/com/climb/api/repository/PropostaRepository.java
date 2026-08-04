@@ -11,4 +11,10 @@ public interface PropostaRepository extends JpaRepository<Proposta, Long> {
 
     List<Proposta> findByStatus(PropostaStatus status);
 
+    List<Proposta> findByEmpresaIdEmpresaOrderByDataCriacaoDescIdPropostaDesc(Long empresaId);
+
+    List<Proposta> findByNegocioIdNegocioOrderByDataCriacaoDescIdPropostaDesc(Long negocioId);
+
+    boolean existsByNegocioIdNegocio(Long negocioId);
+
 }

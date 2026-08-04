@@ -163,6 +163,24 @@ class PipelineTarefaServiceTest {
         assertEquals(400, exception.getStatusCode().value());
     }
 
+    @Test
+    void deveExigirPrazoMesmoSemDataDeInicio() {
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_CRIAR)).thenReturn(true);
+        PipelineTarefaRequestDTO invalido = new PipelineTarefaRequestDTO(
+                "Enviar proposta", null, 2L, null, null,
+                PipelineTarefaPrioridade.ALTA, PipelineTarefaStatus.PENDENTE, "Proposta", null, List.of()
+        );
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.criar(10L, 1L, invalido)
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertEquals("O prazo é obrigatório", exception.getReason());
+        verifyNoInteractions(negocioRepository, usuarioRepository, repository);
+    }
+
     private PipelineTarefaRequestDTO request(PipelineTarefaStatus status) {
         return new PipelineTarefaRequestDTO(
                 "Enviar proposta", "Revisar valores", 2L, LocalDate.now(), LocalDate.now().plusDays(1),

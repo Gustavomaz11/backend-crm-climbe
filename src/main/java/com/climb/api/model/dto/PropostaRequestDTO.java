@@ -10,6 +10,7 @@ import java.time.LocalDate;
 
 public record PropostaRequestDTO(
         @NotNull Long empresaId,
+        Long negocioId,
         @NotNull Long usuarioId,
         String url,
         @NotNull(message = "Informe o valuation da proposta")
