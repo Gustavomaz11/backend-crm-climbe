@@ -6,8 +6,11 @@ import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.PipelineVendasNegocio;
 import com.climb.api.model.Proposta;
 import com.climb.api.model.PropostaReajuste;
+import com.climb.api.model.RevisaoDocumento;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.enums.PropostaStatus;
+import com.climb.api.model.enums.RevisaoDocumentoStatus;
+import com.climb.api.model.enums.RevisaoDocumentoTipo;
 import com.climb.api.model.dto.PropostaAprovacaoRequestDTO;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
@@ -18,6 +21,7 @@ import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
 import com.climb.api.repository.PipelineVendasNegocioRepository;
 import com.climb.api.repository.PropostaRepository;
+import com.climb.api.repository.RevisaoDocumentoRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +47,7 @@ public class PropostaService {
     private final UsuarioRepository usuarioRepository;
     private final PipelineVendasNegocioRepository negocioRepository;
     private final HistoricoAprovacaoPropostaRepository historicoRepository;
+    private final RevisaoDocumentoRepository revisaoDocumentoRepository;
     private final RbacService rbacService;
     private final CloudflareR2ArquivoStorageService arquivoStorageService;
     private final RevisaoDocumentoService revisaoDocumentoService;
@@ -52,6 +57,7 @@ public class PropostaService {
                            UsuarioRepository usuarioRepository,
                            PipelineVendasNegocioRepository negocioRepository,
                            HistoricoAprovacaoPropostaRepository historicoRepository,
+                           RevisaoDocumentoRepository revisaoDocumentoRepository,
                            RbacService rbacService,
                            CloudflareR2ArquivoStorageService arquivoStorageService,
                            RevisaoDocumentoService revisaoDocumentoService) {
@@ -60,6 +66,7 @@ public class PropostaService {
         this.usuarioRepository = usuarioRepository;
         this.negocioRepository = negocioRepository;
         this.historicoRepository = historicoRepository;
+        this.revisaoDocumentoRepository = revisaoDocumentoRepository;
         this.rbacService = rbacService;
         this.arquivoStorageService = arquivoStorageService;
         this.revisaoDocumentoService = revisaoDocumentoService;
@@ -104,6 +111,14 @@ public class PropostaService {
     }
 
     private PropostaResponseDTO toResponseDTO(Proposta proposta) {
+        RevisaoDocumentoStatus revisaoStatus = proposta.getIdProposta() == null ? null : revisaoDocumentoRepository
+                .findByTipoAndReferenciaId(RevisaoDocumentoTipo.PROPOSTA, proposta.getIdProposta())
+                .map(RevisaoDocumento::getStatus)
+                .orElse(null);
+        return toResponseDTO(proposta, revisaoStatus);
+    }
+
+    private PropostaResponseDTO toResponseDTO(Proposta proposta, RevisaoDocumentoStatus revisaoStatus) {
         return new PropostaResponseDTO(
                 proposta.getIdProposta(),
                 proposta.getEmpresa() != null ? proposta.getEmpresa().getIdEmpresa() : null,
@@ -112,6 +127,7 @@ public class PropostaService {
                 proposta.getUrl(),
                 proposta.getValuation(),
                 proposta.getStatus(),
+                revisaoStatus,
                 proposta.getDataCriacao(),
                 proposta.getServico(),
                 proposta.getMesInicio(),
@@ -149,10 +165,23 @@ public class PropostaService {
         } else {
             propostas = repository.findAll();
         }
+        Map<Long, RevisaoDocumentoStatus> statusRevisao = buscarStatusRevisao(propostas);
         return propostas
                 .stream()
-                .map(this::toResponseDTO)
+                .map(proposta -> toResponseDTO(proposta, statusRevisao.get(proposta.getIdProposta())))
                 .toList();
+    }
+
+    private Map<Long, RevisaoDocumentoStatus> buscarStatusRevisao(List<Proposta> propostas) {
+        List<Long> propostaIds = propostas.stream()
+                .map(Proposta::getIdProposta)
+                .filter(Objects::nonNull)
+                .toList();
+        if (propostaIds.isEmpty()) return Collections.emptyMap();
+        return revisaoDocumentoRepository
+                .findByTipoAndReferenciaIdIn(RevisaoDocumentoTipo.PROPOSTA, propostaIds)
+                .stream()
+                .collect(Collectors.toMap(RevisaoDocumento::getReferenciaId, RevisaoDocumento::getStatus));
     }
 
     public PropostaResponseDTO buscarPorId(Long id) {
@@ -177,9 +206,10 @@ public class PropostaService {
             throw new RuntimeException("Status é obrigatório");
         }
 
-        return repository.findByStatus(status)
-                .stream()
-                .map(this::toResponseDTO)
+        List<Proposta> propostas = repository.findByStatus(status);
+        Map<Long, RevisaoDocumentoStatus> statusRevisao = buscarStatusRevisao(propostas);
+        return propostas.stream()
+                .map(proposta -> toResponseDTO(proposta, statusRevisao.get(proposta.getIdProposta())))
                 .toList();
     }
 

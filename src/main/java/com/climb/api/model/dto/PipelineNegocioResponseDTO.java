@@ -33,6 +33,8 @@ public record PipelineNegocioResponseDTO(
         String observacaoPerda,
         LocalDateTime encerradoEm,
         Long contratoId,
+        boolean possuiProposta,
+        boolean propostaAjustesPendentes,
         LocalDateTime criadoEm,
         LocalDateTime ultimaMovimentacaoEm
 ) {

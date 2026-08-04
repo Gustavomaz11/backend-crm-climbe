@@ -1,6 +1,7 @@
 package com.climb.api.model.dto;
 
 import com.climb.api.model.enums.PropostaStatus;
+import com.climb.api.model.enums.RevisaoDocumentoStatus;
 import com.climb.api.model.enums.ServicoComercial;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ public record PropostaResponseDTO(
         String url,
         BigDecimal valuation,
         PropostaStatus status,
+        RevisaoDocumentoStatus revisaoStatus,
         LocalDate dataCriacao,
         ServicoComercial servico,
         LocalDate mesInicio,

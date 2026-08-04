@@ -9,6 +9,7 @@ import com.climb.api.repository.PipelineVendasEtapaRepository;
 import com.climb.api.repository.PipelineVendasFunilRepository;
 import com.climb.api.repository.PipelineVendasNegocioRepository;
 import com.climb.api.repository.PropostaRepository;
+import com.climb.api.repository.RevisaoDocumentoRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,9 +19,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +32,7 @@ public class PipelineVendasService {
     private final PipelineVendasFunilRepository funilRepository;
     private final PipelineVendasNegocioRepository negocioRepository;
     private final PropostaRepository propostaRepository;
+    private final RevisaoDocumentoRepository revisaoDocumentoRepository;
     private final UsuarioRepository usuarioRepository;
     private final EmpresaRepository empresaRepository;
     private final PipelineEmpresaCadastroService empresaCadastroService;
@@ -42,6 +46,7 @@ public class PipelineVendasService {
                                  PipelineVendasFunilRepository funilRepository,
                                  PipelineVendasNegocioRepository negocioRepository,
                                  PropostaRepository propostaRepository,
+                                 RevisaoDocumentoRepository revisaoDocumentoRepository,
                                  UsuarioRepository usuarioRepository,
                                  EmpresaRepository empresaRepository,
                                  PipelineEmpresaCadastroService empresaCadastroService,
@@ -54,6 +59,7 @@ public class PipelineVendasService {
         this.funilRepository = funilRepository;
         this.negocioRepository = negocioRepository;
         this.propostaRepository = propostaRepository;
+        this.revisaoDocumentoRepository = revisaoDocumentoRepository;
         this.usuarioRepository = usuarioRepository;
         this.empresaRepository = empresaRepository;
         this.empresaCadastroService = empresaCadastroService;
@@ -70,10 +76,12 @@ public class PipelineVendasService {
         PipelineVendasFunil funil = buscarFunilAtivo(funilId);
         List<PipelineVendasEtapa> etapas = etapaRepository
                 .findByFunilIdFunilAndAtivoTrueOrderByPosicaoAsc(funil.getIdFunil());
-        Map<Long, List<PipelineNegocioResponseDTO>> negociosPorEtapa = negocioRepository
-                .findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(funil.getIdFunil())
+        List<PipelineVendasNegocio> negocios = negocioRepository
+                .findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(funil.getIdFunil());
+        IndicadoresProposta indicadores = buscarIndicadoresProposta(negocios);
+        Map<Long, List<PipelineNegocioResponseDTO>> negociosPorEtapa = negocios
                 .stream()
-                .map(this::toResponse)
+                .map(negocio -> toResponse(negocio, indicadores))
                 .collect(Collectors.groupingBy(PipelineNegocioResponseDTO::etapaId));
 
         return new PipelineBoardResponseDTO(funil.getIdFunil(), funil.getNome(), etapas.stream()
@@ -460,6 +468,10 @@ public class PipelineVendasService {
     }
 
     private PipelineNegocioResponseDTO toResponse(PipelineVendasNegocio negocio) {
+        return toResponse(negocio, buscarIndicadoresProposta(List.of(negocio)));
+    }
+
+    private PipelineNegocioResponseDTO toResponse(PipelineVendasNegocio negocio, IndicadoresProposta indicadores) {
         return new PipelineNegocioResponseDTO(
                 negocio.getIdNegocio(),
                 negocio.getFunil().getIdFunil(), negocio.getFunil().getNome(),
@@ -475,8 +487,36 @@ public class PipelineVendasService {
                 negocio.getMotivoPerda() == null ? null : negocio.getMotivoPerda().getNome(),
                 negocio.getObservacaoPerda(), negocio.getEncerradoEm(),
                 negocio.getContrato() != null ? negocio.getContrato().getIdContrato() : null,
+                indicadores.possuiProposta(negocio.getIdNegocio()),
+                indicadores.possuiAjustesPendentes(negocio.getIdNegocio()),
                 negocio.getCriadoEm(), negocio.getUltimaMovimentacaoEm()
         );
+    }
+
+    private IndicadoresProposta buscarIndicadoresProposta(List<PipelineVendasNegocio> negocios) {
+        List<Long> negocioIds = negocios.stream()
+                .map(PipelineVendasNegocio::getIdNegocio)
+                .filter(Objects::nonNull)
+                .toList();
+        if (negocioIds.isEmpty()) return IndicadoresProposta.vazio();
+        return new IndicadoresProposta(
+                new HashSet<>(propostaRepository.findNegocioIdsComProposta(negocioIds)),
+                new HashSet<>(revisaoDocumentoRepository.findNegocioIdsComAjustesSolicitados(negocioIds))
+        );
+    }
+
+    private record IndicadoresProposta(Set<Long> negocioIdsComProposta, Set<Long> negocioIdsComAjustes) {
+        static IndicadoresProposta vazio() {
+            return new IndicadoresProposta(Set.of(), Set.of());
+        }
+
+        boolean possuiProposta(Long negocioId) {
+            return negocioId != null && negocioIdsComProposta.contains(negocioId);
+        }
+
+        boolean possuiAjustesPendentes(Long negocioId) {
+            return negocioId != null && negocioIdsComAjustes.contains(negocioId);
+        }
     }
 
     private record NegocioSnapshot(

@@ -4,13 +4,17 @@ import com.climb.api.model.Empresa;
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.PipelineVendasNegocio;
 import com.climb.api.model.Proposta;
+import com.climb.api.model.RevisaoDocumento;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.enums.PropostaStatus;
+import com.climb.api.model.enums.RevisaoDocumentoStatus;
+import com.climb.api.model.enums.RevisaoDocumentoTipo;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
 import com.climb.api.repository.PipelineVendasNegocioRepository;
 import com.climb.api.repository.PropostaRepository;
+import com.climb.api.repository.RevisaoDocumentoRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +38,7 @@ class PropostaServiceTest {
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private PipelineVendasNegocioRepository negocioRepository;
     @Mock private HistoricoAprovacaoPropostaRepository historicoRepository;
+    @Mock private RevisaoDocumentoRepository revisaoDocumentoRepository;
     @Mock private RbacService rbacService;
     @Mock private CloudflareR2ArquivoStorageService storageService;
     @Mock private RevisaoDocumentoService revisaoDocumentoService;
@@ -41,7 +47,7 @@ class PropostaServiceTest {
     @BeforeEach
     void setUp() {
         service = new PropostaService(repository, empresaRepository, usuarioRepository, negocioRepository,
-                historicoRepository, rbacService, storageService, revisaoDocumentoService);
+                historicoRepository, revisaoDocumentoRepository, rbacService, storageService, revisaoDocumentoService);
     }
 
     @Test
@@ -69,5 +75,30 @@ class PropostaServiceTest {
         var response = service.criar(request);
 
         assertEquals(3L, response.negocioId());
+    }
+
+    @Test
+    void deveExporStatusDaRevisaoSolicitadaPeloCliente() {
+        Empresa empresa = new Empresa();
+        empresa.setIdEmpresa(1L);
+        Usuario usuario = new Usuario();
+        usuario.setId(2L);
+        Proposta proposta = new Proposta();
+        proposta.setIdProposta(4L);
+        proposta.setEmpresa(empresa);
+        proposta.setUsuario(usuario);
+        proposta.setStatus(PropostaStatus.PENDENTE);
+        RevisaoDocumento revisao = new RevisaoDocumento();
+        revisao.setTipo(RevisaoDocumentoTipo.PROPOSTA);
+        revisao.setReferenciaId(4L);
+        revisao.setStatus(RevisaoDocumentoStatus.AJUSTES_SOLICITADOS);
+        when(repository.findByEmpresaIdEmpresaOrderByDataCriacaoDescIdPropostaDesc(1L))
+                .thenReturn(List.of(proposta));
+        when(revisaoDocumentoRepository.findByTipoAndReferenciaIdIn(
+                RevisaoDocumentoTipo.PROPOSTA, List.of(4L))).thenReturn(List.of(revisao));
+
+        var response = service.listar(1L, null);
+
+        assertEquals(RevisaoDocumentoStatus.AJUSTES_SOLICITADOS, response.getFirst().revisaoStatus());
     }
 }

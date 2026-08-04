@@ -9,6 +9,7 @@ import com.climb.api.repository.PipelineVendasEtapaRepository;
 import com.climb.api.repository.PipelineVendasFunilRepository;
 import com.climb.api.repository.PipelineVendasNegocioRepository;
 import com.climb.api.repository.PropostaRepository;
+import com.climb.api.repository.RevisaoDocumentoRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ class PipelineVendasServiceTest {
     @Mock private PipelineVendasFunilRepository funilRepository;
     @Mock private PipelineVendasNegocioRepository negocioRepository;
     @Mock private PropostaRepository propostaRepository;
+    @Mock private RevisaoDocumentoRepository revisaoDocumentoRepository;
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private EmpresaRepository empresaRepository;
     @Mock private PipelineEmpresaCadastroService empresaCadastroService;
@@ -52,6 +54,7 @@ class PipelineVendasServiceTest {
                 funilRepository,
                 negocioRepository,
                 propostaRepository,
+                revisaoDocumentoRepository,
                 usuarioRepository,
                 empresaRepository,
                 empresaCadastroService,
@@ -267,6 +270,26 @@ class PipelineVendasServiceTest {
 
         assertEquals(400, exception.getStatusCode().value());
         verify(negocioRepository, never()).save(any());
+    }
+
+    @Test
+    void deveSinalizarNoBoardQuandoClienteSolicitouAjustesNaProposta() {
+        Usuario usuario = usuario(1L, "Gestor");
+        PipelineVendasEtapa etapa = etapa(10L, "PROPOSTA_APRESENTADA", PipelineVendasResultado.ABERTO);
+        PipelineVendasNegocio negocio = negocio(100L, usuario, etapa);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL)).thenReturn(true);
+        when(funilRepository.findByAtivoTrueOrderByPosicaoAsc()).thenReturn(List.of(etapa.getFunil()));
+        when(etapaRepository.findByFunilIdFunilAndAtivoTrueOrderByPosicaoAsc(1L)).thenReturn(List.of(etapa));
+        when(negocioRepository.findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(1L))
+                .thenReturn(List.of(negocio));
+        when(propostaRepository.findNegocioIdsComProposta(List.of(100L))).thenReturn(List.of(100L));
+        when(revisaoDocumentoRepository.findNegocioIdsComAjustesSolicitados(List.of(100L)))
+                .thenReturn(List.of(100L));
+
+        PipelineNegocioResponseDTO response = service.buscarBoard(1L, null).etapas().getFirst().negocios().getFirst();
+
+        assertTrue(response.possuiProposta());
+        assertTrue(response.propostaAjustesPendentes());
     }
 
     private PipelineNegocioRequestDTO request(Long responsavelId) {
