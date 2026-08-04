@@ -6,8 +6,12 @@ import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.enums.RevisaoDocumentoStatus;
 import com.climb.api.model.enums.RevisaoDocumentoTipo;
 import com.climb.api.repository.*;
+import com.climb.api.config.ZapSignProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -15,6 +19,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -27,6 +33,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class RevisaoDocumentoService {
+    private static final Logger log = LoggerFactory.getLogger(RevisaoDocumentoService.class);
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final DateTimeFormatter DATA_EMAIL = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm");
 
@@ -40,6 +47,8 @@ public class RevisaoDocumentoService {
     private final DocumentoPreviewService previewService;
     private final EmailService emailService;
     private final RbacService rbacService;
+    private final ZapSignClient zapSignClient;
+    private final ZapSignProperties zapSignProperties;
     private final String frontendUrl;
     private final int diasExpiracao;
 
@@ -53,6 +62,8 @@ public class RevisaoDocumentoService {
                                    DocumentoPreviewService previewService,
                                    EmailService emailService,
                                    RbacService rbacService,
+                                   ZapSignClient zapSignClient,
+                                   ZapSignProperties zapSignProperties,
                                    @Value("${app.frontend-url:http://localhost:5173}") String frontendUrl,
                                    @Value("${app.document-review.expiration-days:30}") int diasExpiracao) {
         this.revisaoRepository = revisaoRepository;
@@ -65,6 +76,8 @@ public class RevisaoDocumentoService {
         this.previewService = previewService;
         this.emailService = emailService;
         this.rbacService = rbacService;
+        this.zapSignClient = zapSignClient;
+        this.zapSignProperties = zapSignProperties;
         this.frontendUrl = frontendUrl;
         this.diasExpiracao = diasExpiracao;
     }
@@ -116,9 +129,10 @@ public class RevisaoDocumentoService {
         return toResponse(revisao);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public RevisaoDocumentoResponseDTO buscarPublica(String token) {
         RevisaoDocumento revisao = buscarTokenValido(token);
+        sincronizarAssinaturaSilenciosamente(revisao);
         return toResponse(revisao);
     }
 
@@ -135,6 +149,7 @@ public class RevisaoDocumentoService {
         RevisaoDocumento revisao = buscarTokenValido(token);
         garantirAguardandoCliente(revisao);
         RevisaoDocumentoVersao versao = versaoAtual(revisao);
+        garantirAssinaturaNaoIniciada(revisao, versao);
         int totalPaginas = totalPaginas(versao);
 
         for (RevisaoAnotacaoRequestDTO item : request.anotacoes()) {
@@ -165,6 +180,11 @@ public class RevisaoDocumentoService {
         RevisaoDocumento revisao = buscarTokenValido(token);
         garantirAguardandoCliente(revisao);
         RevisaoDocumentoVersao versao = versaoAtual(revisao);
+
+        if (revisao.getTipo() == RevisaoDocumentoTipo.CONTRATO) {
+            return iniciarAssinaturaContrato(revisao, versao);
+        }
+
         concluirResposta(revisao, versao, RevisaoDocumentoStatus.APROVADO, null, null);
         atualizarStatusDominio(revisao, RevisaoDocumentoStatus.APROVADO);
         notificarEquipe(revisao, documentoNome(revisao) + " aprovado pelo cliente",
@@ -173,10 +193,27 @@ public class RevisaoDocumentoService {
     }
 
     @Transactional
+    public void processarWebhookZapSign(String secret, ZapSignWebhookRequestDTO request) {
+        validarSegredoWebhook(secret);
+        if (request == null || !"doc_signed".equalsIgnoreCase(request.eventType())) {
+            return;
+        }
+        if (!StringUtils.hasText(request.token())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token do documento ZapSign não informado");
+        }
+
+        RevisaoDocumentoVersao versao = versaoRepository.findByZapsignDocumentoToken(request.token())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Documento ZapSign não vinculado a uma revisão"));
+        sincronizarAssinatura(versao, true);
+    }
+
+    @Transactional
     public RevisaoDocumentoResponseDTO reprovar(String token, RevisaoReprovacaoRequestDTO request) {
         RevisaoDocumento revisao = buscarTokenValido(token);
         garantirAguardandoCliente(revisao);
         RevisaoDocumentoVersao versao = versaoAtual(revisao);
+        garantirAssinaturaNaoIniciada(revisao, versao);
         String justificativa = request.justificativa().trim();
         concluirResposta(revisao, versao, RevisaoDocumentoStatus.REPROVADO, null, justificativa);
         atualizarStatusDominio(revisao, RevisaoDocumentoStatus.REPROVADO);
@@ -301,6 +338,112 @@ public class RevisaoDocumentoService {
         }
     }
 
+    private RevisaoDocumentoResponseDTO iniciarAssinaturaContrato(RevisaoDocumento revisao,
+                                                                   RevisaoDocumentoVersao versao) {
+        if (StringUtils.hasText(versao.getZapsignDocumentoToken())) {
+            return toResponse(revisao);
+        }
+        if (!MediaType.APPLICATION_PDF_VALUE.equalsIgnoreCase(versao.getContentType())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "A assinatura pela ZapSign exige que o contrato esteja em formato PDF");
+        }
+
+        String nomeSignatario = StringUtils.hasText(revisao.getDestinatarioNome())
+                ? revisao.getDestinatarioNome().trim()
+                : revisao.getEmpresaNome();
+        String cpf = revisao.getEmpresa() == null ? null : revisao.getEmpresa().getRepresentanteCpf();
+        if (StringUtils.hasText(cpf) && cpf.replaceAll("\\D", "").length() != 11) {
+            cpf = null;
+        }
+        String redirectLink = frontendUrl.replaceAll("/+$", "") + "/revisao/" + revisao.getToken()
+                + "?assinatura=concluida";
+        String externalId = "climbe-revisao-%d-versao-%d".formatted(revisao.getId(), versao.getNumero());
+
+        ZapSignClient.Documento documento = zapSignClient.criarDocumento(
+                versao.getNomeArquivo(),
+                storageService.baixar(versao.getArquivoUrl()),
+                nomeSignatario,
+                revisao.getDestinatarioEmail(),
+                cpf,
+                redirectLink,
+                externalId
+        );
+        String signatarioToken = documento.primeiroSignatarioToken();
+        if (!StringUtils.hasText(signatarioToken)) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "A ZapSign não retornou o link do signatário");
+        }
+
+        versao.setZapsignDocumentoToken(documento.token());
+        versao.setZapsignSignatarioToken(signatarioToken);
+        versao.setZapsignStatus(documento.status());
+        versao.setZapsignCriadoEm(LocalDateTime.now());
+        versaoRepository.save(versao);
+        return toResponse(revisao);
+    }
+
+    private void sincronizarAssinaturaSilenciosamente(RevisaoDocumento revisao) {
+        if (revisao.getTipo() != RevisaoDocumentoTipo.CONTRATO
+                || revisao.getStatus() != RevisaoDocumentoStatus.AGUARDANDO_CLIENTE) {
+            return;
+        }
+        RevisaoDocumentoVersao versao = versaoAtual(revisao);
+        if (!StringUtils.hasText(versao.getZapsignDocumentoToken())) {
+            return;
+        }
+        try {
+            sincronizarAssinatura(versao, false);
+        } catch (ResponseStatusException exception) {
+            log.warn("Não foi possível sincronizar a assinatura ZapSign da revisão {}", revisao.getId());
+        }
+    }
+
+    private void sincronizarAssinatura(RevisaoDocumentoVersao versao, boolean exigirAssinado) {
+        ZapSignClient.Documento documento = zapSignClient.detalharDocumento(versao.getZapsignDocumentoToken());
+        versao.setZapsignStatus(documento.status());
+        versaoRepository.save(versao);
+
+        if (!documento.assinado()) {
+            if (exigirAssinado) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "A ZapSign ainda não confirmou a assinatura completa do documento");
+            }
+            return;
+        }
+
+        RevisaoDocumento revisao = versao.getRevisao();
+        if (revisao.getStatus() == RevisaoDocumentoStatus.APROVADO) {
+            if (versao.getZapsignAssinadoEm() == null) {
+                versao.setZapsignAssinadoEm(LocalDateTime.now());
+                versaoRepository.save(versao);
+            }
+            return;
+        }
+        if (revisao.getStatus() != RevisaoDocumentoStatus.AGUARDANDO_CLIENTE
+                || revisao.getVersaoAtual() != versao.getNumero()) {
+            return;
+        }
+
+        versao.setZapsignAssinadoEm(LocalDateTime.now());
+        concluirResposta(revisao, versao, RevisaoDocumentoStatus.APROVADO, null, null);
+        atualizarStatusDominio(revisao, RevisaoDocumentoStatus.APROVADO);
+        notificarEquipe(revisao, "Contrato assinado e aprovado pelo cliente",
+                "O cliente assinou na ZapSign a versão " + revisao.getVersaoAtual() + " do contrato.");
+    }
+
+    private void validarSegredoWebhook(String recebido) {
+        String esperado = zapSignProperties.getWebhookSecret();
+        if (!StringUtils.hasText(esperado)) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Webhook da ZapSign não configurado");
+        }
+        byte[] esperadoBytes = esperado.getBytes(StandardCharsets.UTF_8);
+        byte[] recebidoBytes = recebido == null ? new byte[0] : recebido.getBytes(StandardCharsets.UTF_8);
+        if (!MessageDigest.isEqual(esperadoBytes, recebidoBytes)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Webhook da ZapSign não autorizado");
+        }
+    }
+
     private void enviarAoCliente(RevisaoDocumento revisao, boolean novaVersao) {
         String tipo = documentoNome(revisao).toLowerCase(Locale.ROOT);
         String link = frontendUrl.replaceAll("/+$", "") + "/revisao/" + revisao.getToken();
@@ -364,8 +507,17 @@ public class RevisaoDocumentoService {
                 revisao.getVersaoAtual(), atual.getNomeArquivo(), atual.getContentType(), totalPaginas,
                 revisao.getJustificativa(), revisao.getTokenExpiraEm(), revisao.getCriadoEm(),
                 revisao.getAtualizadoEm(), revisao.getRespondidoEm(), revisao.getEmailStatus(),
-                revisao.getEmailEnviadoEm(), versoesDto
+                revisao.getEmailEnviadoEm(), assinaturaUrl(revisao, atual), versoesDto
         );
+    }
+
+    private String assinaturaUrl(RevisaoDocumento revisao, RevisaoDocumentoVersao versao) {
+        if (revisao.getTipo() != RevisaoDocumentoTipo.CONTRATO
+                || revisao.getStatus() != RevisaoDocumentoStatus.AGUARDANDO_CLIENTE
+                || !StringUtils.hasText(versao.getZapsignSignatarioToken())) {
+            return null;
+        }
+        return zapSignClient.montarUrlAssinatura(versao.getZapsignSignatarioToken());
     }
 
     private RevisaoVersaoResponseDTO toVersaoResponse(
@@ -406,6 +558,14 @@ public class RevisaoDocumentoService {
     private void garantirAguardandoCliente(RevisaoDocumento revisao) {
         if (revisao.getStatus() != RevisaoDocumentoStatus.AGUARDANDO_CLIENTE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta versão já recebeu uma resposta");
+        }
+    }
+
+    private void garantirAssinaturaNaoIniciada(RevisaoDocumento revisao, RevisaoDocumentoVersao versao) {
+        if (revisao.getTipo() == RevisaoDocumentoTipo.CONTRATO
+                && StringUtils.hasText(versao.getZapsignDocumentoToken())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "A assinatura deste contrato já foi iniciada na ZapSign");
         }
     }
 

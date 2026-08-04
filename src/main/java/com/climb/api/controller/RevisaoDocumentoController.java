@@ -4,6 +4,7 @@ import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.RevisaoClienteRequestDTO;
 import com.climb.api.model.dto.RevisaoDocumentoResponseDTO;
 import com.climb.api.model.dto.RevisaoReprovacaoRequestDTO;
+import com.climb.api.model.dto.ZapSignWebhookRequestDTO;
 import com.climb.api.model.enums.RevisaoDocumentoTipo;
 import com.climb.api.service.RevisaoDocumentoService;
 import jakarta.validation.Valid;
@@ -56,6 +57,14 @@ public class RevisaoDocumentoController {
             @PathVariable String token,
             @Valid @RequestBody RevisaoReprovacaoRequestDTO request) {
         return ResponseEntity.ok(ApiResponse.ok(service.reprovar(token, request)));
+    }
+
+    @PostMapping("/public/zapsign/webhook")
+    public ResponseEntity<ApiResponse<Void>> webhookZapSign(
+            @RequestHeader(value = "X-ZapSign-Webhook-Secret", required = false) String secret,
+            @RequestBody ZapSignWebhookRequestDTO request) {
+        service.processarWebhookZapSign(secret, request);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     @GetMapping("/{tipo}/{referenciaId}")

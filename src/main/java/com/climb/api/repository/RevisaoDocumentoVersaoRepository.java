@@ -8,5 +8,6 @@ import java.util.Optional;
 
 public interface RevisaoDocumentoVersaoRepository extends JpaRepository<RevisaoDocumentoVersao, Long> {
     Optional<RevisaoDocumentoVersao> findByRevisaoIdAndNumero(Long revisaoId, int numero);
+    Optional<RevisaoDocumentoVersao> findByZapsignDocumentoToken(String zapsignDocumentoToken);
     List<RevisaoDocumentoVersao> findByRevisaoIdOrderByNumeroDesc(Long revisaoId);
 }

@@ -22,6 +22,7 @@ public record RevisaoDocumentoResponseDTO(
         LocalDateTime respondidoEm,
         String emailStatus,
         LocalDateTime emailEnviadoEm,
+        String assinaturaUrl,
         List<RevisaoVersaoResponseDTO> versoes
 ) {
 }

@@ -51,6 +51,21 @@ public class RevisaoDocumentoVersao {
     @Column(name = "respondido_em")
     private LocalDateTime respondidoEm;
 
+    @Column(name = "zapsign_documento_token", unique = true, length = 100)
+    private String zapsignDocumentoToken;
+
+    @Column(name = "zapsign_signatario_token", length = 100)
+    private String zapsignSignatarioToken;
+
+    @Column(name = "zapsign_status", length = 30)
+    private String zapsignStatus;
+
+    @Column(name = "zapsign_criado_em")
+    private LocalDateTime zapsignCriadoEm;
+
+    @Column(name = "zapsign_assinado_em")
+    private LocalDateTime zapsignAssinadoEm;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public RevisaoDocumento getRevisao() { return revisao; }
@@ -77,4 +92,14 @@ public class RevisaoDocumentoVersao {
     public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }
     public LocalDateTime getRespondidoEm() { return respondidoEm; }
     public void setRespondidoEm(LocalDateTime respondidoEm) { this.respondidoEm = respondidoEm; }
+    public String getZapsignDocumentoToken() { return zapsignDocumentoToken; }
+    public void setZapsignDocumentoToken(String zapsignDocumentoToken) { this.zapsignDocumentoToken = zapsignDocumentoToken; }
+    public String getZapsignSignatarioToken() { return zapsignSignatarioToken; }
+    public void setZapsignSignatarioToken(String zapsignSignatarioToken) { this.zapsignSignatarioToken = zapsignSignatarioToken; }
+    public String getZapsignStatus() { return zapsignStatus; }
+    public void setZapsignStatus(String zapsignStatus) { this.zapsignStatus = zapsignStatus; }
+    public LocalDateTime getZapsignCriadoEm() { return zapsignCriadoEm; }
+    public void setZapsignCriadoEm(LocalDateTime zapsignCriadoEm) { this.zapsignCriadoEm = zapsignCriadoEm; }
+    public LocalDateTime getZapsignAssinadoEm() { return zapsignAssinadoEm; }
+    public void setZapsignAssinadoEm(LocalDateTime zapsignAssinadoEm) { this.zapsignAssinadoEm = zapsignAssinadoEm; }
 }
