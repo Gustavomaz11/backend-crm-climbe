@@ -19,4 +19,6 @@ public interface CargoRepository extends JpaRepository<Cargo, Long> {
 
     Optional<Cargo> findByIdAndAtivoTrue(Long id);
 
+    List<Cargo> findAllByGrupoIdAndAtivoTrue(Long grupoId);
+
 }

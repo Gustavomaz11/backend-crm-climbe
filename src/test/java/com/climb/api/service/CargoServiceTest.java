@@ -4,6 +4,7 @@ import com.climb.api.model.Cargo;
 import com.climb.api.model.dto.CargoHierarquiaItemRequestDTO;
 import com.climb.api.model.dto.CargoHierarquiaRequestDTO;
 import com.climb.api.repository.CargoRepository;
+import com.climb.api.repository.GrupoCargoRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,6 +25,9 @@ class CargoServiceTest {
 
     @Mock
     private CargoRepository repository;
+
+    @Mock
+    private GrupoCargoRepository grupoRepository;
 
     @InjectMocks
     private CargoService service;

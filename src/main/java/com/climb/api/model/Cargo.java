@@ -22,6 +22,9 @@ public class Cargo {
     @Column(name = "ordem_hierarquia", nullable = false)
     private int ordemHierarquia;
 
+    @Column(name = "grupo_id")
+    private Long grupoId;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -36,4 +39,7 @@ public class Cargo {
 
     public int getOrdemHierarquia() { return ordemHierarquia; }
     public void setOrdemHierarquia(int ordemHierarquia) { this.ordemHierarquia = ordemHierarquia; }
+
+    public Long getGrupoId() { return grupoId; }
+    public void setGrupoId(Long grupoId) { this.grupoId = grupoId; }
 }

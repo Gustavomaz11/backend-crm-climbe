@@ -4,6 +4,7 @@ import com.climb.api.model.Cargo;
 import com.climb.api.model.dto.CargoHierarquiaItemRequestDTO;
 import com.climb.api.model.dto.CargoHierarquiaRequestDTO;
 import com.climb.api.repository.CargoRepository;
+import com.climb.api.repository.GrupoCargoRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,9 +22,11 @@ import java.util.stream.Collectors;
 public class CargoService {
 
     private final CargoRepository repository;
+    private final GrupoCargoRepository grupoRepository;
 
-    public CargoService(CargoRepository repository) {
+    public CargoService(CargoRepository repository, GrupoCargoRepository grupoRepository) {
         this.repository = repository;
+        this.grupoRepository = grupoRepository;
     }
 
     public List<Cargo> listar() {
@@ -34,7 +37,9 @@ public class CargoService {
         return repository.findById(id).orElseThrow();
     }
 
+    @Transactional
     public Cargo criar(Cargo cargo) {
+        validarGrupo(cargo.getGrupoId());
         cargo.setAtivo(true);
         cargo.setCargoSuperiorId(null);
         int proximaOrdem = repository
@@ -125,5 +130,11 @@ public class CargoService {
 
     private ResponseStatusException hierarquiaInvalida(String mensagem) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, mensagem);
+    }
+
+    private void validarGrupo(Long grupoId) {
+        if (grupoId != null && grupoRepository.findByIdAndAtivoTrue(grupoId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Grupo de cargos ativo nao encontrado");
+        }
     }
 }
