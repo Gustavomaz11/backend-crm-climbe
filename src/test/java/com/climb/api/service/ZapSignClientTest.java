@@ -12,7 +12,9 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 class ZapSignClientTest {
@@ -45,6 +47,49 @@ class ZapSignClientTest {
                     assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
                     assertThat(exception.getReason()).contains("credencial da ZapSign foi recusada");
                 });
+        server.verify();
+    }
+
+    @Test
+    void informaQuandoPlanoDeApiForObrigatorio() {
+        ZapSignProperties properties = properties();
+        RestClient.Builder builder = RestClient.builder().baseUrl(properties.getApiUrl());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        ZapSignClient client = new ZapSignClient(properties, builder.build());
+        server.expect(once(), requestTo("https://api.zapsign.com.br/api/v1/docs/"))
+                .andRespond(withStatus(HttpStatus.PAYMENT_REQUIRED)
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body("API plan required"));
+
+        assertThatThrownBy(() -> client.criarDocumento(
+                "contrato.pdf", new byte[]{1}, "Cliente", "cliente@example.com",
+                null, "https://app.example.com/revisao/token", "revisao-1"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                    assertThat(exception.getReason()).contains("plano de API da ZapSign");
+                });
+        server.verify();
+    }
+
+    @Test
+    void enviaFlagSandboxQuandoConfigurada() {
+        ZapSignProperties properties = properties();
+        properties.setSandbox(true);
+        RestClient.Builder builder = RestClient.builder().baseUrl(properties.getApiUrl());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        ZapSignClient client = new ZapSignClient(properties, builder.build());
+        server.expect(once(), requestTo("https://api.zapsign.com.br/api/v1/docs/"))
+                .andExpect(content().json("{\"sandbox\":true}"))
+                .andRespond(withSuccess("""
+                        {"token":"doc-token","status":"pending",
+                         "signers":[{"token":"signer-token","status":"new"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        ZapSignClient.Documento documento = client.criarDocumento(
+                "contrato.pdf", new byte[]{1}, "Cliente", "cliente@example.com",
+                null, "https://app.example.com/revisao/token", "revisao-1");
+
+        assertThat(documento.token()).isEqualTo("doc-token");
         server.verify();
     }
 

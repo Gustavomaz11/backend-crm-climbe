@@ -76,6 +76,9 @@ public class ZapSignClient {
         body.put("lang", "pt-br");
         body.put("external_id", externalId);
         body.put("signers", List.of(signatario));
+        if (properties.isSandbox()) {
+            body.put("sandbox", true);
+        }
 
         try {
             DocumentoResponse response = restClient.post()
@@ -144,6 +147,7 @@ public class ZapSignClient {
 
         String mensagem = switch (status) {
             case 401, 403 -> "A credencial da ZapSign foi recusada ou não possui permissão para criar documentos";
+            case 402 -> "É necessário contratar um plano de API da ZapSign para assinar contratos em produção";
             case 400, 422 -> "A ZapSign recusou os dados enviados para assinatura do contrato";
             case 413 -> "O PDF excede o tamanho máximo aceito pela ZapSign";
             case 429 -> "O limite de requisições da ZapSign foi atingido. Tente novamente em instantes";

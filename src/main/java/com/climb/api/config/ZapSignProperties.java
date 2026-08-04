@@ -10,6 +10,7 @@ public class ZapSignProperties {
     private String apiToken;
     private String signingUrl = "https://app.zapsign.com.br/verificar";
     private String webhookSecret;
+    private boolean sandbox;
 
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
@@ -19,4 +20,6 @@ public class ZapSignProperties {
     public void setSigningUrl(String signingUrl) { this.signingUrl = signingUrl; }
     public String getWebhookSecret() { return webhookSecret; }
     public void setWebhookSecret(String webhookSecret) { this.webhookSecret = webhookSecret; }
+    public boolean isSandbox() { return sandbox; }
+    public void setSandbox(boolean sandbox) { this.sandbox = sandbox; }
 }

@@ -57,6 +57,7 @@ app:
     api-token: ${API_ZAPSIGN:}
     signing-url: ${ZAPSIGN_SIGNING_URL:https://app.zapsign.com.br/verificar}
     webhook-secret: ${ZAPSIGN_WEBHOOK_SECRET:}
+    sandbox: ${ZAPSIGN_SANDBOX:false}
   pipeline:
     task-reminders:
       zone: ${PIPELINE_TASK_REMINDER_ZONE:America/Sao_Paulo}
