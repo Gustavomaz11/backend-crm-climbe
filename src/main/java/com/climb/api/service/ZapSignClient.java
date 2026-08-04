@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
@@ -28,11 +29,19 @@ public class ZapSignClient {
     private final RestClient restClient;
 
     public ZapSignClient(ZapSignProperties properties) {
+        this(properties, criarRestClient(properties));
+    }
+
+    ZapSignClient(ZapSignProperties properties, RestClient restClient) {
         this.properties = properties;
+        this.restClient = restClient;
+    }
+
+    private static RestClient criarRestClient(ZapSignProperties properties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(10));
         requestFactory.setReadTimeout(Duration.ofSeconds(30));
-        this.restClient = RestClient.builder()
+        return RestClient.builder()
                 .baseUrl(properties.getApiUrl())
                 .requestFactory(requestFactory)
                 .build();
@@ -75,6 +84,8 @@ public class ZapSignClient {
                     .retrieve()
                     .body(DocumentoResponse.class);
             return validarDocumento(response);
+        } catch (RestClientResponseException exception) {
+            throw traduzirRespostaErro("criar documento", exception);
         } catch (RestClientException exception) {
             log.warn("Falha ao criar documento na ZapSign: {}", exception.getClass().getSimpleName());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
@@ -91,6 +102,8 @@ public class ZapSignClient {
                     .retrieve()
                     .body(DocumentoResponse.class);
             return validarDocumento(response);
+        } catch (RestClientResponseException exception) {
+            throw traduzirRespostaErro("consultar documento", exception);
         } catch (RestClientException exception) {
             log.warn("Falha ao consultar documento na ZapSign: {}", exception.getClass().getSimpleName());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
@@ -120,6 +133,21 @@ public class ZapSignClient {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "A integração com a ZapSign não está configurada");
         }
+    }
+
+    private ResponseStatusException traduzirRespostaErro(String operacao,
+                                                          RestClientResponseException exception) {
+        int status = exception.getStatusCode().value();
+        log.warn("ZapSign recusou a operação '{}': HTTP {}", operacao, status);
+
+        String mensagem = switch (status) {
+            case 401, 403 -> "A credencial da ZapSign foi recusada ou não possui permissão para criar documentos";
+            case 400, 422 -> "A ZapSign recusou os dados enviados para assinatura do contrato";
+            case 413 -> "O PDF excede o tamanho máximo aceito pela ZapSign";
+            case 429 -> "O limite de requisições da ZapSign foi atingido. Tente novamente em instantes";
+            default -> "A ZapSign está temporariamente indisponível. Tente novamente";
+        };
+        return new ResponseStatusException(HttpStatus.BAD_GATEWAY, mensagem, exception);
     }
 
     private String somenteDigitos(String value) {
