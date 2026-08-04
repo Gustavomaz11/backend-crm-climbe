@@ -2,6 +2,7 @@ package com.climb.api.service;
 
 import com.climb.api.config.ZapSignProperties;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -15,6 +16,17 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 class ZapSignClientTest {
+    @Test
+    void permiteQueSpringInjeteConstrutorDeProducao() {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(ZapSignProperties.class, this::properties);
+            context.register(ZapSignClient.class);
+            context.refresh();
+
+            assertThat(context.getBean(ZapSignClient.class)).isNotNull();
+        }
+    }
+
     @Test
     void informaQuandoCredencialForRecusada() {
         ZapSignProperties properties = properties();

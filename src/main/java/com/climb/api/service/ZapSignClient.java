@@ -4,6 +4,7 @@ import com.climb.api.config.ZapSignProperties;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -28,6 +29,7 @@ public class ZapSignClient {
     private final ZapSignProperties properties;
     private final RestClient restClient;
 
+    @Autowired
     public ZapSignClient(ZapSignProperties properties) {
         this(properties, criarRestClient(properties));
     }
