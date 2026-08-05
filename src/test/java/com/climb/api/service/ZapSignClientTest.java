@@ -72,6 +72,28 @@ class ZapSignClientTest {
     }
 
     @Test
+    void informaCampoRecusadoSemExporDadosSensiveis() {
+        ZapSignProperties properties = properties();
+        RestClient.Builder builder = RestClient.builder().baseUrl(properties.getApiUrl());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        ZapSignClient client = new ZapSignClient(properties, builder.build());
+        server.expect(once(), requestTo("https://api.zapsign.com.br/api/v1/docs/"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"redirect_link\":[\"Informe uma URL válida para cliente@example.com\"]}"));
+
+        assertThatThrownBy(() -> client.criarDocumento(
+                "contrato.pdf", new byte[]{1}, "Cliente", "cliente@example.com",
+                null, "url-invalida", "revisao-1"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                    assertThat(exception.getReason()).contains("redirect_link");
+                    assertThat(exception.getReason()).contains("<email>");
+                    assertThat(exception.getReason()).doesNotContain("cliente@example.com");
+                });
+        server.verify();
+    }
+
+    @Test
     void enviaFlagSandboxQuandoConfigurada() {
         ZapSignProperties properties = properties();
         properties.setSandbox(true);
