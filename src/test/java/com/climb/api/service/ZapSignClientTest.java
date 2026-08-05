@@ -1,6 +1,8 @@
 package com.climb.api.service;
 
 import com.climb.api.config.ZapSignProperties;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpStatus;
@@ -8,6 +10,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -18,6 +24,43 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 class ZapSignClientTest {
+    @Test
+    void enviaJsonComTamanhoConhecidoParaPdfBase64() throws Exception {
+        AtomicReference<String> contentLength = new AtomicReference<>();
+        AtomicReference<String> transferEncoding = new AtomicReference<>();
+        AtomicReference<byte[]> requestBody = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/api/v1/docs/", exchange -> {
+            contentLength.set(exchange.getRequestHeaders().getFirst("Content-Length"));
+            transferEncoding.set(exchange.getRequestHeaders().getFirst("Transfer-Encoding"));
+            requestBody.set(exchange.getRequestBody().readAllBytes());
+            byte[] response = """
+                    {"token":"doc-token","status":"pending",
+                     "signers":[{"token":"signer-token","status":"new"}]}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            ZapSignProperties properties = properties();
+            properties.setApiUrl("http://localhost:" + server.getAddress().getPort());
+            ZapSignClient client = new ZapSignClient(properties);
+
+            client.criarDocumento("contrato.pdf", new byte[342_328], "Cliente", "cliente@example.com",
+                    null, "https://app.example.com/revisao/token", "revisao-1");
+
+            assertThat(transferEncoding.get()).isNull();
+            assertThat(contentLength.get()).isEqualTo(String.valueOf(requestBody.get().length));
+            assertThat(new ObjectMapper().readTree(requestBody.get()).path("base64_pdf").asText()).isNotBlank();
+        } finally {
+            server.stop(0);
+        }
+    }
+
     @Test
     void permiteQueSpringInjeteConstrutorDeProducao() {
         try (var context = new AnnotationConfigApplicationContext()) {

@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -45,7 +46,7 @@ public class ZapSignClient {
         requestFactory.setReadTimeout(Duration.ofSeconds(30));
         return RestClient.builder()
                 .baseUrl(properties.getApiUrl())
-                .requestFactory(requestFactory)
+                .requestFactory(new BufferingClientHttpRequestFactory(requestFactory))
                 .build();
     }
 
