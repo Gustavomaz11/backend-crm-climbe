@@ -4,5 +4,6 @@ public enum PipelineExecucaoStatus {
     ATIVA,
     CONCLUIDA,
     SEM_RESPOSTA,
+    INTERROMPIDA,
     PAUSADA
 }

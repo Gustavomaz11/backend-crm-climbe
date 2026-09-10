@@ -7,5 +7,7 @@ public record PipelineCampanhaLeadDTO(
         String responsavel,
         String servico,
         String funil,
-        String etapa
+        String etapa,
+        String tipoFunil,
+        Long campanhaOrigemId
 ) {}

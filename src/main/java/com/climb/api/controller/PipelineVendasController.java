@@ -77,6 +77,12 @@ public class PipelineVendasController {
         ));
     }
 
+    public record ConversaoPreVendaInput(Long funilId, Long responsavelId) {}
+    @PostMapping("/negocios/{negocioId}/converter-venda")
+    public ResponseEntity<ApiResponse<PipelineNegocioResponseDTO>> converterVenda(@PathVariable Long negocioId, @RequestBody ConversaoPreVendaInput dto) {
+        return ResponseEntity.ok(ApiResponse.ok(service.ganharPreVenda(negocioId, authenticatedUser.getUserId(), dto.funilId(), dto.responsavelId())));
+    }
+
     @PostMapping("/negocios/{negocioId}/converter-contrato")
     public ResponseEntity<ApiResponse<PipelineNegocioResponseDTO>> converterContrato(
             @PathVariable Long negocioId,
@@ -87,4 +93,11 @@ public class PipelineVendasController {
                 "Negócio convertido em contrato"
         ));
     }
+    @GetMapping("/negocios/{id}")
+    public ApiResponse<PipelineNegocioResponseDTO> buscar(@PathVariable Long id) { return ApiResponse.ok(service.buscar(id, authenticatedUser.getUserId())); }
+    @PostMapping("/negocios/lote")
+    public ApiResponse<java.util.List<PipelineNegocioResponseDTO>> lote(@Valid @RequestBody java.util.List<@Valid PipelineNegocioRequestDTO> dados) { return ApiResponse.ok(service.criarLote(authenticatedUser.getUserId(), dados)); }
+    @PostMapping("/negocios/{id}/reiniciar-cadencia")
+    public ApiResponse<String> reiniciar(@PathVariable Long id) { service.reiniciarCadencia(id, authenticatedUser.getUserId()); return ApiResponse.ok("Cadência reiniciada"); }
+
 }

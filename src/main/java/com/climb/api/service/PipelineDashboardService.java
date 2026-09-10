@@ -48,6 +48,7 @@ public class PipelineDashboardService {
                 inicio(filtro), fimExclusivo(filtro), filtro.responsavelId(), filtro.funilId(), filtro.empresaId(),
                 filtro.situacao(), normalizar(filtro.estrategia()), normalizar(filtro.servico()),
                 normalizar(filtro.origem()));
+        if (filtro.campanhaId() != null) negocios = negocios.stream().filter(n -> n.getCampanhaOrigem() != null && n.getCampanhaOrigem().getIdCampanha().equals(filtro.campanhaId())).toList();
         List<Long> ids = negocios.stream().map(PipelineVendasNegocio::getIdNegocio).toList();
         List<PipelineVendasMovimentacaoEtapa> movimentacoes = ids.isEmpty()
                 ? List.of()

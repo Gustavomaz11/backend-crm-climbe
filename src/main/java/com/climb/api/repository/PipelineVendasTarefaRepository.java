@@ -91,4 +91,15 @@ public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVe
             order by tarefa.responsavel.id, tarefa.prazo, tarefa.idTarefa
             """)
     List<PipelineVendasTarefa> findAbertasComPrazoAte(@Param("limite") LocalDate limite);
+    @EntityGraph(attributePaths = {"negocio", "negocio.campanhaOrigem", "campanha", "responsavel"})
+    @Query("""
+        select tarefa from PipelineVendasTarefa tarefa
+        where tarefa.status = com.climb.api.model.enums.PipelineTarefaStatus.CANCELADA
+        and (:inicio is null or tarefa.canceladoEm >= :inicio)
+        and (:fim is null or tarefa.canceladoEm < :fim)
+        and (:campanhaId is null or tarefa.campanha.idCampanha = :campanhaId or tarefa.negocio.campanhaOrigem.idCampanha = :campanhaId)
+        and (:responsavelId is null or tarefa.responsavel.id = :responsavelId)
+        order by tarefa.canceladoEm desc
+        """)
+    List<PipelineVendasTarefa> findCancelamentos(java.time.LocalDateTime inicio, java.time.LocalDateTime fim, Long campanhaId, Long responsavelId);
 }

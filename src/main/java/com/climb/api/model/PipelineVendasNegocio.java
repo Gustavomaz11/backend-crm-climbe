@@ -32,10 +32,10 @@ public class PipelineVendasNegocio {
     @Column(name = "nome_contato", nullable = false, length = 180)
     private String nomeContato;
 
-    @Column(nullable = false, length = 50)
+    @Column(length = 50)
     private String telefone;
 
-    @Column(nullable = false, length = 180)
+    @Column(length = 180)
     private String email;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -157,4 +157,41 @@ public class PipelineVendasNegocio {
     public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }
     public LocalDateTime getUltimaMovimentacaoEm() { return ultimaMovimentacaoEm; }
     public void setUltimaMovimentacaoEm(LocalDateTime ultimaMovimentacaoEm) { this.ultimaMovimentacaoEm = ultimaMovimentacaoEm; }
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pessoa_id")
+    private PessoaCliente pessoa;
+    public PessoaCliente getPessoa() { return pessoa; }
+    public void setPessoa(PessoaCliente value) { this.pessoa = value; }
+
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "campanha_origem_id")
+    private PipelineCampanha campanhaOrigem;
+    public PipelineCampanha getCampanhaOrigem() { return campanhaOrigem; }
+    public void setCampanhaOrigem(PipelineCampanha value) { this.campanhaOrigem = value; }
+
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pre_venda_origem_id", unique = true)
+    private PipelineVendasNegocio preVendaOrigem;
+    public PipelineVendasNegocio getPreVendaOrigem() { return preVendaOrigem; }
+    public void setPreVendaOrigem(PipelineVendasNegocio value) { this.preVendaOrigem = value; }
+
+
+    @ManyToMany
+    @JoinTable(name = "pipeline_negocio_tags", joinColumns = @JoinColumn(name = "negocio_id"), inverseJoinColumns = @JoinColumn(name = "tag_id"))
+    private java.util.Set<PipelineTag> tags = new java.util.LinkedHashSet<>();
+    public java.util.Set<PipelineTag> getTags() { return tags; }
+    public void setTags(java.util.Set<PipelineTag> value) { this.tags = value; }
+
+
+    @ElementCollection
+    @CollectionTable(name = "pipeline_negocio_campos", joinColumns = @JoinColumn(name = "negocio_id"))
+    @MapKeyColumn(name = "campo_id")
+    @Column(name = "valor", length = 4000)
+    private java.util.Map<Long, String> campos = new java.util.LinkedHashMap<>();
+    public java.util.Map<Long, String> getCampos() { return campos; }
+    public void setCampos(java.util.Map<Long, String> value) { this.campos = value; }
+
 }

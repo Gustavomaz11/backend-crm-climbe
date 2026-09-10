@@ -17,8 +17,11 @@ public interface PipelineCampanhaExecucaoRepository extends JpaRepository<Pipeli
     @EntityGraph(attributePaths = {"negocio"})
     List<PipelineCampanhaExecucao> findByCampanhaIdCampanha(Long campanhaId);
 
+    List<PipelineCampanhaExecucao> findByNegocioIdNegocio(Long negocioId);
+
     long countByCampanhaIdCampanhaAndStatus(Long campanhaId, PipelineExecucaoStatus status);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<PipelineCampanhaExecucao> findByTarefaAtualIdTarefa(Long tarefaId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

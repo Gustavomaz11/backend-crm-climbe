@@ -63,6 +63,53 @@ class PipelineCadenciaEngineTest {
         assertEquals("Criar ligação", execucao.getTarefaAtual().getTitulo());
     }
 
+    @Test
+    void cancelamentoLiberaProximaTarefaSemContarComoConclusao() {
+        var execucao = execucaoComDuasTarefas();
+        when(execucaoRepository.buscarAtivasParaProcessamento()).thenReturn(List.of(execucao));
+        engine.processarPendentes();
+        var primeira = execucao.getTarefaAtual();
+        primeira.setStatus(PipelineTarefaStatus.CANCELADA);
+        when(execucaoRepository.findByTarefaAtualIdTarefa(primeira.getIdTarefa())).thenReturn(Optional.of(execucao));
+        engine.tarefaConcluida(primeira);
+        engine.processarPendentes();
+        verify(tarefaRepository, times(2)).save(any());
+        assertEquals(PipelineTarefaStatus.CANCELADA, primeira.getStatus());
+        assertEquals("Criar ligação", execucao.getTarefaAtual().getTitulo());
+    }
+
+    @Test
+    void execucaoMantemVersaoEScriptMesmoAposEdicaoDaCampanha() {
+        var execucao = execucaoComDuasTarefas();
+        var antiga = execucao.getCampanha().getEtapas().getFirst();
+        antiga.setScriptModelo("Mensagem original para {{nome_pessoa}}");
+        PipelineScript script = new PipelineScript(); script.setModeloMensagem("Texto modificado"); antiga.setScript(script);
+        execucao.getCampanha().setVersao(2);
+        var nova = tarefa(0, "Nova sequência", null, "Contato"); nova.setVersao(2);
+        execucao.getCampanha().getEtapas().add(nova);
+        when(execucaoRepository.buscarAtivasParaProcessamento()).thenReturn(List.of(execucao));
+        engine.processarPendentes();
+        assertEquals("Enviar mensagem para Maria", execucao.getTarefaAtual().getTitulo());
+        assertTrue(execucao.getTarefaAtual().getDescricao().contains("Mensagem original para Maria"));
+    }
+
+    @Test
+    void sairDaEtapaCancelaPendenciaEInterrompeFluxo() {
+        var execucao = execucaoComDuasTarefas();
+        PipelineVendasEtapa etapa = new PipelineVendasEtapa(); etapa.setCodigo("TENTATIVA_CONTATO");
+        execucao.getNegocio().setEtapa(etapa); execucao.setEtapaFunilCodigo("TENTATIVA_CONTATO");
+        execucao.getCampanha().getEtapas().forEach(e -> e.setEtapaFunilCodigo("TENTATIVA_CONTATO"));
+        when(execucaoRepository.buscarAtivasParaProcessamento()).thenReturn(List.of(execucao));
+        engine.processarPendentes();
+        var tarefa = execucao.getTarefaAtual();
+        etapa.setCodigo("LEAD_CONECTADO");
+        when(execucaoRepository.findByNegocioIdNegocio(10L)).thenReturn(List.of(execucao));
+        engine.encerrarForaDaEtapa(execucao.getNegocio());
+        assertEquals(PipelineExecucaoStatus.INTERROMPIDA, execucao.getStatus());
+        assertEquals(PipelineTarefaStatus.CANCELADA, tarefa.getStatus());
+        assertEquals("MOVIMENTACAO_ETAPA", tarefa.getMotivoCancelamento());
+    }
+
     private PipelineCampanhaExecucao execucaoComDuasTarefas() {
         Usuario responsavel = new Usuario();
         responsavel.setId(1L);

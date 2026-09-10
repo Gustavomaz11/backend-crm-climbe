@@ -58,7 +58,8 @@ public class PipelineCampanhaService {
                 .map(negocio -> new PipelineCampanhaLeadDTO(
                         negocio.getIdNegocio(), negocio.getNomeEmpresa(), negocio.getNomeContato(),
                         negocio.getResponsavel().getNomeCompleto(), negocio.getServicoInteresse(),
-                        negocio.getFunil().getNome(), negocio.getEtapa().getNome()))
+                        negocio.getFunil().getNome(), negocio.getEtapa().getNome(), negocio.getFunil().getTipo(),
+                        negocio.getCampanhaOrigem() == null ? null : negocio.getCampanhaOrigem().getIdCampanha()))
                 .toList();
     }
 
@@ -110,11 +111,21 @@ public class PipelineCampanhaService {
         campanha.setNome(dto.nome().trim());
         campanha.setEstrategia(dto.estrategia().trim());
         campanha.setDescricao(normalizar(dto.descricao()));
-        campanha.setLeads(resolverLeads(dto.leadIds()));
+        Set<Long> membrosAnteriores = campanha.getLeads().stream().map(PipelineVendasNegocio::getIdNegocio).collect(Collectors.toSet());
+        campanha.setLeads(resolverLeads(dto.leadIds(), membrosAnteriores));
+        if (dto.etapas().stream().anyMatch(e -> e.etapaFunilCodigo() != null && !e.etapaFunilCodigo().isBlank())) {
+            campanha.getLeads().forEach(lead -> {
+                if (!lead.getFunil().isPreVendas()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fluxos por etapa exigem leads de pré-vendas");
+                if (lead.getCampanhaOrigem() != null && !Objects.equals(lead.getCampanhaOrigem().getIdCampanha(), campanha.getIdCampanha())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Crie outro lead da pessoa para associar uma nova campanha");
+                if (lead.getCampanhaOrigem() == null) lead.setEstrategiaComercial(campanha.getEstrategia());
+                lead.setCampanhaOrigem(campanha);
+            });
+        }
         campanha.setParticipantes(resolverParticipantes(dto.participanteIds()));
         campanha.setScripts(resolverScripts(idsScripts(dto)));
         campanha.setDiasExecucao(new LinkedHashSet<>(dto.diasExecucao()));
-        campanha.substituirEtapas(criarEtapas(dto));
+        if (campanha.getIdCampanha() != null) campanha.setVersao(campanha.getVersao() + 1);
+        criarEtapas(dto).forEach(etapa -> { etapa.setCampanha(campanha); etapa.setVersao(campanha.getVersao()); campanha.getEtapas().add(etapa); });
         campanha.setAtivo(dto.ativo());
     }
 
@@ -123,6 +134,7 @@ public class PipelineCampanhaService {
             PipelineCadenciaEtapaRequestDTO etapaDto = dto.etapas().get(indice);
             PipelineCadenciaEtapa etapa = new PipelineCadenciaEtapa();
             etapa.setOrdem(indice);
+            etapa.setEtapaFunilCodigo(etapaDto.etapaFunilCodigo() == null ? "" : etapaDto.etapaFunilCodigo());
             etapa.setTipo(etapaDto.tipo());
             etapa.setTitulo(normalizar(etapaDto.titulo()));
             etapa.setDescricao(normalizar(etapaDto.descricao()));
@@ -131,6 +143,7 @@ public class PipelineCampanhaService {
             etapa.setDiasUteisEspera(etapaDto.diasUteisEspera() == null ? 0 : etapaDto.diasUteisEspera());
             etapa.setPrazoDiasUteis(etapaDto.prazoDiasUteis());
             etapa.setScript(etapaDto.scriptId() == null ? null : buscarScriptAtivo(etapaDto.scriptId()));
+            etapa.setScriptModelo(etapa.getScript() == null ? null : etapa.getScript().getModeloMensagem());
             return etapa;
         }).toList();
     }
@@ -141,9 +154,9 @@ public class PipelineCampanhaService {
         return ids;
     }
 
-    private Set<PipelineVendasNegocio> resolverLeads(Set<Long> ids) {
+    private Set<PipelineVendasNegocio> resolverLeads(Set<Long> ids, Set<Long> membrosAnteriores) {
         Set<PipelineVendasNegocio> leads = new LinkedHashSet<>(negocioRepository.findAllById(ids));
-        if (leads.size() != ids.size() || leads.stream().anyMatch(item -> item.getResultado() != PipelineVendasResultado.ABERTO)) {
+        if (leads.size() != ids.size() || leads.stream().anyMatch(item -> item.getResultado() != PipelineVendasResultado.ABERTO && !membrosAnteriores.contains(item.getIdNegocio()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione apenas leads abertos e existentes");
         }
         return leads;

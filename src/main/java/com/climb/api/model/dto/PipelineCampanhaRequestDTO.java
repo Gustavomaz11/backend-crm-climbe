@@ -13,7 +13,7 @@ public record PipelineCampanhaRequestDTO(
         @NotBlank @Size(max = 160) String nome,
         @NotBlank @Size(max = 180) String estrategia,
         @Size(max = 500) String descricao,
-        @NotEmpty Set<Long> leadIds,
+        @NotNull Set<Long> leadIds,
         @NotEmpty Set<Long> participanteIds,
         @NotEmpty Set<Integer> diasExecucao,
         Set<Long> scriptIds,

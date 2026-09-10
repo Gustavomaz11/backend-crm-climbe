@@ -6,5 +6,10 @@ public record PipelineFunilResumoResponseDTO(
         String descricao,
         String estrategia,
         Integer posicao,
-        boolean ativo
-) {}
+        boolean ativo,
+        String tipo
+) {
+    public PipelineFunilResumoResponseDTO(Long id, String nome, String descricao, String estrategia, Integer posicao, boolean ativo) {
+        this(id, nome, descricao, estrategia, posicao, ativo, "VENDAS");
+    }
+}

@@ -438,6 +438,7 @@ public class PropostaService {
         if (negocioId == null) return null;
         PipelineVendasNegocio negocio = negocioRepository.findById(negocioId)
                 .orElseThrow(() -> new RuntimeException("Negócio do pipeline não encontrado"));
+        if (negocio.getFunil().isPreVendas()) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Propostas são disponíveis somente em vendas");
         Long empresaDoNegocio = negocio.getEmpresa() == null ? null : negocio.getEmpresa().getIdEmpresa();
         if (!Objects.equals(empresaDoNegocio, empresa.getIdEmpresa())) {
             throw new RuntimeException("O negócio informado não pertence à empresa da proposta");

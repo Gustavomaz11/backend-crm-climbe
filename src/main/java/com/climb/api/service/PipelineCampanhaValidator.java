@@ -16,10 +16,15 @@ class PipelineCampanhaValidator {
         if (dto.etapas().stream().noneMatch(etapa -> etapa.tipo() == PipelineCadenciaTipo.TAREFA)) {
             erro("A cadência deve possuir ao menos uma tarefa");
         }
-        PipelineCadenciaTipo ultimoTipo = dto.etapas().getLast().tipo();
-        if (ultimoTipo != PipelineCadenciaTipo.ENCERRAR && ultimoTipo != PipelineCadenciaTipo.SEM_RESPOSTA) {
-            erro("A última etapa deve encerrar o fluxo ou marcar como sem resposta");
-        }
+        var grupos = dto.etapas().stream().collect(java.util.stream.Collectors.groupingBy(e -> e.etapaFunilCodigo() == null ? "" : e.etapaFunilCodigo()));
+        if (grupos.containsKey("") && grupos.size() > 1) erro("Não misture cadência geral com fluxos por etapa");
+        grupos.forEach((codigo, etapas) -> {
+            if (!java.util.Set.of("", "LISTA_LEADS", "TENTATIVA_CONTATO", "LEAD_CONECTADO", "REUNIAO_MARCADA", "REUNIAO_REALIZADA").contains(codigo)) erro("Etapa de pré-vendas inválida");
+            if (etapas.stream().noneMatch(e -> e.tipo() == PipelineCadenciaTipo.TAREFA)) erro("Cada fluxo precisa de uma tarefa");
+            var ultimo = etapas.getLast().tipo();
+            if (ultimo != PipelineCadenciaTipo.ENCERRAR && ultimo != PipelineCadenciaTipo.SEM_RESPOSTA) erro("Cada fluxo deve terminar com encerramento");
+            if (etapas.subList(0, etapas.size() - 1).stream().anyMatch(e -> e.tipo() == PipelineCadenciaTipo.ENCERRAR || e.tipo() == PipelineCadenciaTipo.SEM_RESPOSTA)) erro("O encerramento deve ser o último passo");
+        });
         dto.etapas().forEach(this::validarEtapa);
     }
 

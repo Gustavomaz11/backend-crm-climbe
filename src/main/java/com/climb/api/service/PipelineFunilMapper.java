@@ -16,7 +16,7 @@ class PipelineFunilMapper {
     PipelineFunilResumoResponseDTO toResumo(PipelineVendasFunil funil) {
         return new PipelineFunilResumoResponseDTO(
                 funil.getIdFunil(), funil.getNome(), funil.getDescricao(), funil.getEstrategia(),
-                funil.getPosicao(), Boolean.TRUE.equals(funil.getAtivo())
+                funil.getPosicao(), Boolean.TRUE.equals(funil.getAtivo()), funil.getTipo()
         );
     }
 
@@ -25,7 +25,7 @@ class PipelineFunilMapper {
                 funil.getIdFunil(), funil.getNome(), funil.getDescricao(), funil.getEstrategia(),
                 funil.getPosicao(), Boolean.TRUE.equals(funil.getAtivo()),
                 funil.getEtapas().stream().map(this::toEtapaResponse).toList(),
-                funil.getCriadoEm(), funil.getAtualizadoEm()
+                funil.getCriadoEm(), funil.getAtualizadoEm(), funil.getTipo()
         );
     }
 

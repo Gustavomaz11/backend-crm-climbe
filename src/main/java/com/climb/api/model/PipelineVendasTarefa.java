@@ -137,4 +137,28 @@ public class PipelineVendasTarefa {
     public LocalDateTime getConcluidoEm() { return concluidoEm; }
     public void setConcluidoEm(LocalDateTime concluidoEm) { this.concluidoEm = concluidoEm; }
     public List<PipelineVendasSubtarefa> getSubtarefas() { return subtarefas; }
+
+    @Column(name = "motivo_cancelamento", length = 80)
+    private String motivoCancelamento;
+    public String getMotivoCancelamento() { return motivoCancelamento; }
+    public void setMotivoCancelamento(String value) { this.motivoCancelamento = value; }
+
+
+    @Column(name = "comentario_cancelamento", length = 1000)
+    private String comentarioCancelamento;
+    public String getComentarioCancelamento() { return comentarioCancelamento; }
+    public void setComentarioCancelamento(String value) { this.comentarioCancelamento = value; }
+
+
+    @Column(name = "cancelado_em")
+    private LocalDateTime canceladoEm;
+    public LocalDateTime getCanceladoEm() { return canceladoEm; }
+    public void setCanceladoEm(LocalDateTime value) { this.canceladoEm = value; }
+
+
+    @Column(name = "cancelado_por")
+    private Long canceladoPor;
+    public Long getCanceladoPor() { return canceladoPor; }
+    public void setCanceladoPor(Long value) { this.canceladoPor = value; }
+
 }

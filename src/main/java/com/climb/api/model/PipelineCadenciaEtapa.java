@@ -68,4 +68,22 @@ public class PipelineCadenciaEtapa {
     public void setPrazoDiasUteis(Integer prazoDiasUteis) { this.prazoDiasUteis = prazoDiasUteis; }
     public PipelineScript getScript() { return script; }
     public void setScript(PipelineScript script) { this.script = script; }
+
+    @Column(nullable = false)
+    private Integer versao = 1;
+    public Integer getVersao() { return versao; }
+    public void setVersao(Integer value) { this.versao = value; }
+
+
+    @Column(name = "etapa_funil_codigo", nullable = false, length = 80)
+    private String etapaFunilCodigo = "";
+    public String getEtapaFunilCodigo() { return etapaFunilCodigo; }
+    public void setEtapaFunilCodigo(String value) { this.etapaFunilCodigo = value; }
+
+
+    @Column(name = "script_modelo", columnDefinition = "TEXT")
+    private String scriptModelo;
+    public String getScriptModelo() { return scriptModelo; }
+    public void setScriptModelo(String value) { this.scriptModelo = value; }
+
 }

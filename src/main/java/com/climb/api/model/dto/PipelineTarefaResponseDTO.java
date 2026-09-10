@@ -24,5 +24,10 @@ public record PipelineTarefaResponseDTO(
         List<PipelineSubtarefaResponseDTO> subtarefas,
         LocalDateTime criadoEm,
         LocalDateTime atualizadoEm,
-        LocalDateTime concluidoEm
-) {}
+        LocalDateTime concluidoEm,
+        Long campanhaId, String campanhaNome, String contato, String telefone, String email, String motivoCancelamento, String comentarioCancelamento, LocalDateTime canceladoEm
+) {
+    public PipelineTarefaResponseDTO(Long id, Long negocioId, String negocioNome, String titulo, String descricao, Long responsavelId, String responsavelNome, LocalDate dataInicio, LocalDate prazo, PipelineTarefaPrioridade prioridade, PipelineTarefaStatus status, String tipo, String observacoes, List<PipelineSubtarefaResponseDTO> subtarefas, LocalDateTime criadoEm, LocalDateTime atualizadoEm, LocalDateTime concluidoEm) {
+        this(id, negocioId, negocioNome, titulo, descricao, responsavelId, responsavelNome, dataInicio, prazo, prioridade, status, tipo, observacoes, subtarefas, criadoEm, atualizadoEm, concluidoEm, null, null, null, null, null, null, null, null);
+    }
+}

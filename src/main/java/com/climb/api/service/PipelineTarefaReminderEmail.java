@@ -126,7 +126,7 @@ public class PipelineTarefaReminderEmail {
     }
 
     private String link(PipelineVendasTarefa tarefa) {
-        return frontendUrl + "/pipeline-vendas?funilId=" + tarefa.getNegocio().getFunil().getIdFunil()
+        return frontendUrl + (tarefa.getNegocio().getFunil().isPreVendas() ? "/pipeline-pre-vendas?funilId=" : "/pipeline-vendas?funilId=") + tarefa.getNegocio().getFunil().getIdFunil()
                 + "&negocioId=" + tarefa.getNegocio().getIdNegocio()
                 + "&tarefaId=" + tarefa.getIdTarefa();
     }

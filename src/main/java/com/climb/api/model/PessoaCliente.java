@@ -20,10 +20,10 @@ public class PessoaCliente {
     @Column(length = 14, unique = true)
     private String cpf;
 
-    @Column(nullable = false, length = 180)
+    @Column(length = 180)
     private String email;
 
-    @Column(nullable = false, length = 50)
+    @Column(length = 50)
     private String telefone;
 
     @Column(length = 120)

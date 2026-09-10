@@ -69,4 +69,11 @@ public class PipelineVendasFunil {
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
     public List<PipelineVendasEtapa> getEtapas() { return etapas; }
+
+    @Column(nullable = false, length = 20)
+    private String tipo = "VENDAS";
+    public String getTipo() { return tipo; }
+    public void setTipo(String value) { this.tipo = value; }
+
+    public boolean isPreVendas() { return "PRE_VENDAS".equals(tipo); }
 }

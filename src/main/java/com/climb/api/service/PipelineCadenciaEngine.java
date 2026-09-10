@@ -48,12 +48,14 @@ public class PipelineCadenciaEngine {
     }
 
     private void processar(PipelineCampanhaExecucao execucao, LocalDateTime agora) {
-        if (!Boolean.TRUE.equals(execucao.getCampanha().getAtivo())) {
-            pausar(execucao);
+        if ((!execucao.getEtapaFunilCodigo().isEmpty() && !execucao.getEtapaFunilCodigo().equals(execucao.getNegocio().getEtapa().getCodigo()))
+                || execucao.getNegocio().getResultado() != PipelineVendasResultado.ABERTO) {
+            cancelarPendente(execucao);
+            finalizar(execucao, PipelineExecucaoStatus.INTERROMPIDA, agora, "Fluxo encerrado por movimentação ou conclusão");
             return;
         }
-        if (execucao.getNegocio().getResultado() != PipelineVendasResultado.ABERTO) {
-            finalizar(execucao, PipelineExecucaoStatus.CONCLUIDA, agora, "Cadência encerrada: negócio concluído");
+        if (!Boolean.TRUE.equals(execucao.getCampanha().getAtivo())) {
+            pausar(execucao);
             return;
         }
         if (!liberarTarefaConcluida(execucao, agora)) return;
@@ -63,7 +65,8 @@ public class PipelineCadenciaEngine {
 
     private boolean liberarTarefaConcluida(PipelineCampanhaExecucao execucao, LocalDateTime agora) {
         if (execucao.getTarefaAtual() == null) return true;
-        if (execucao.getTarefaAtual().getStatus() != PipelineTarefaStatus.CONCLUIDA) return false;
+        if (execucao.getTarefaAtual().getStatus() != PipelineTarefaStatus.CONCLUIDA
+                && execucao.getTarefaAtual().getStatus() != PipelineTarefaStatus.CANCELADA) return false;
         execucao.setTarefaAtual(null);
         execucao.setOrdemAtual(execucao.getOrdemAtual() + 1);
         execucao.setProximaExecucaoEm(agora);
@@ -127,8 +130,7 @@ public class PipelineCadenciaEngine {
 
     private String descricaoRenderizada(PipelineCadenciaEtapa etapa, PipelineCampanhaExecucao execucao) {
         String descricao = renderer.renderizar(etapa.getDescricao(), execucao.getNegocio(), execucao.getParticipante());
-        String script = etapa.getScript() == null ? null : renderer.renderizar(
-                etapa.getScript().getModeloMensagem(), execucao.getNegocio(), execucao.getParticipante());
+        String script = renderer.renderizar(etapa.getScriptModelo(), execucao.getNegocio(), execucao.getParticipante());
         if (descricao == null) return script;
         if (script == null) return descricao;
         return descricao + "\n\nScript sugerido:\n" + script;
@@ -145,8 +147,8 @@ public class PipelineCadenciaEngine {
 
     private PipelineCadenciaEtapa etapaAtual(PipelineCampanhaExecucao execucao) {
         return execucao.getCampanha().getEtapas().stream()
-                .filter(etapa -> etapa.getOrdem().equals(execucao.getOrdemAtual()))
-                .min(Comparator.comparing(PipelineCadenciaEtapa::getOrdem)).orElse(null);
+                .filter(etapa -> etapa.getVersao().equals(execucao.getVersao()) && etapa.getEtapaFunilCodigo().equals(execucao.getEtapaFunilCodigo()))
+                .sorted(Comparator.comparing(PipelineCadenciaEtapa::getOrdem)).skip(execucao.getOrdemAtual()).findFirst().orElse(null);
     }
 
     private void pausar(PipelineCampanhaExecucao execucao) {
@@ -166,5 +168,21 @@ public class PipelineCadenciaEngine {
         execucaoRepository.save(execucao);
         historicoService.registrar(execucao.getNegocio(), execucao.getCampanha().getCriadoPor().getId(),
                 PipelineHistoricoTipo.CADENCIA_CONCLUIDA, descricao + " — " + execucao.getCampanha().getNome());
+    }
+    private void cancelarPendente(PipelineCampanhaExecucao execucao) {
+        PipelineVendasTarefa tarefa = execucao.getTarefaAtual();
+        if (tarefa == null || tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA || tarefa.getStatus() == PipelineTarefaStatus.CANCELADA) return;
+        tarefa.setStatus(PipelineTarefaStatus.CANCELADA);
+        tarefa.setMotivoCancelamento("MOVIMENTACAO_ETAPA");
+        tarefa.setCanceladoEm(LocalDateTime.now());
+        tarefaRepository.save(tarefa);
+    }
+
+    @Transactional
+    public void encerrarForaDaEtapa(PipelineVendasNegocio negocio) {
+        execucaoRepository.findByNegocioIdNegocio(negocio.getIdNegocio()).stream()
+            .filter(e -> e.getStatus() == PipelineExecucaoStatus.ATIVA || e.getStatus() == PipelineExecucaoStatus.PAUSADA)
+            .filter(e -> negocio.getResultado() != PipelineVendasResultado.ABERTO || (!e.getEtapaFunilCodigo().isEmpty() && !e.getEtapaFunilCodigo().equals(negocio.getEtapa().getCodigo())))
+            .forEach(e -> { cancelarPendente(e); finalizar(e, PipelineExecucaoStatus.INTERROMPIDA, LocalDateTime.now(), "Fluxo encerrado por movimentação ou conclusão"); });
     }
 }

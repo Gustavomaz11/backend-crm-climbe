@@ -181,6 +181,24 @@ class PipelineTarefaServiceTest {
         verifyNoInteractions(negocioRepository, usuarioRepository, repository);
     }
 
+    @Test
+    void cancelamentoExigeMotivoEPreservaAuditoriaSemConclusao() {
+        var usuario = usuario(1L, "Operador");
+        var tarefa = tarefa(2L, negocio(10L, usuario), usuario, LocalDate.now(), PipelineTarefaStatus.PENDENTE);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_CONCLUIR)).thenReturn(true);
+        assertThrows(ResponseStatusException.class, () -> service.cancelar(2L, 1L, "", null));
+        when(repository.findById(2L)).thenReturn(Optional.of(tarefa));
+        when(repository.save(tarefa)).thenReturn(tarefa);
+        assertThrows(ResponseStatusException.class, () -> service.alterarStatus(2L, 1L, PipelineTarefaStatus.CANCELADA));
+        var dto = service.cancelar(2L, 1L, "SEM_CANAL_CONTATO", "Telefone não disponível");
+        assertEquals(PipelineTarefaStatus.CANCELADA, dto.status());
+        assertEquals("SEM_CANAL_CONTATO", dto.motivoCancelamento());
+        assertNotNull(dto.canceladoEm()); assertNull(dto.concluidoEm());
+        service.cancelar(2L, 1L, "SEM_CANAL_CONTATO", "Repetição da requisição");
+        verify(cadenciaEngine, times(1)).tarefaConcluida(tarefa);
+        verify(historicoService).registrar(eq(tarefa.getNegocio()), eq(1L), eq(PipelineHistoricoTipo.CANCELAMENTO_TAREFA), anyString());
+    }
+
     private PipelineTarefaRequestDTO request(PipelineTarefaStatus status) {
         return new PipelineTarefaRequestDTO(
                 "Enviar proposta", "Revisar valores", 2L, LocalDate.now(), LocalDate.now().plusDays(1),

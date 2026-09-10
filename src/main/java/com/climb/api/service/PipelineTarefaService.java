@@ -135,6 +135,9 @@ public class PipelineTarefaService {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_CONCLUIR);
         PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
         PipelineTarefaStatus statusAnterior = tarefa.getStatus();
+        validarReaberturaAutomatica(tarefa, status);
+        if (status == PipelineTarefaStatus.CANCELADA && tarefa.getMotivoCancelamento() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o motivo pela ação Cancelar tarefa");
+        if (status != PipelineTarefaStatus.CANCELADA) { tarefa.setMotivoCancelamento(null); tarefa.setComentarioCancelamento(null); tarefa.setCanceladoEm(null); tarefa.setCanceladoPor(null); }
         tarefa.setStatus(status);
         atualizarDataConclusao(tarefa);
         PipelineVendasTarefa salva = repository.save(tarefa);
@@ -146,13 +149,29 @@ public class PipelineTarefaService {
         return toResponse(salva);
     }
 
+    @Transactional
+    public PipelineTarefaResponseDTO cancelar(Long tarefaId, Long usuarioId, String motivo, String comentario) {
+        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_CONCLUIR);
+        if (motivo == null || !Set.of("SEM_CANAL_CONTATO", "DESNECESSARIA", "REPETIDA").contains(motivo)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um motivo de cancelamento");
+        if (comentario != null && comentario.length() > 1000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Comentário muito longo");
+        PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
+        if (tarefa.getStatus() == PipelineTarefaStatus.CANCELADA) return toResponse(tarefa);
+        if (tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA) throw new ResponseStatusException(HttpStatus.CONFLICT, "Uma tarefa concluída precisa ser reaberta antes do cancelamento");
+        tarefa.setMotivoCancelamento(motivo); tarefa.setComentarioCancelamento(normalizar(comentario));
+        tarefa.setCanceladoEm(LocalDateTime.now()); tarefa.setCanceladoPor(usuarioId);
+        return alterarStatus(tarefaId, usuarioId, PipelineTarefaStatus.CANCELADA);
+    }
+
     private void aplicarDados(PipelineVendasTarefa tarefa, PipelineTarefaRequestDTO dto) {
+        validarReaberturaAutomatica(tarefa, dto.status());
         tarefa.setTitulo(dto.titulo().trim());
         tarefa.setDescricao(normalizar(dto.descricao()));
         tarefa.setResponsavel(buscarUsuario(dto.responsavelId()));
         tarefa.setDataInicio(dto.dataInicio());
         tarefa.setPrazo(dto.prazo());
         tarefa.setPrioridade(dto.prioridade());
+        if (dto.status() == PipelineTarefaStatus.CANCELADA && tarefa.getStatus() != PipelineTarefaStatus.CANCELADA) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o motivo pela ação Cancelar tarefa");
+        if (tarefa.getStatus() == PipelineTarefaStatus.CANCELADA && dto.status() != tarefa.getStatus()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use a ação de reabrir tarefa");
         tarefa.setStatus(dto.status());
         tarefa.setTipo(dto.tipo().trim());
         tarefa.setObservacoes(normalizar(dto.observacoes()));
@@ -175,6 +194,12 @@ public class PipelineTarefaService {
                 .toList();
     }
 
+    private void validarReaberturaAutomatica(PipelineVendasTarefa tarefa, PipelineTarefaStatus novoStatus) {
+        if (tarefa.getEtapaCadencia() != null && tarefa.getStatus() != novoStatus
+                && (tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA || tarefa.getStatus() == PipelineTarefaStatus.CANCELADA))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Atividade automática encerrada. Crie uma tarefa manual ou reinicie a cadência");
+    }
+
     private void atualizarDataConclusao(PipelineVendasTarefa tarefa) {
         if (tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA && tarefa.getConcluidoEm() == null) {
             tarefa.setConcluidoEm(LocalDateTime.now());
@@ -186,10 +211,11 @@ public class PipelineTarefaService {
     private void registrarConclusaoSeNecessario(PipelineVendasTarefa tarefa,
                                                 Long usuarioId,
                                                 PipelineTarefaStatus statusAnterior) {
-        if (statusAnterior != PipelineTarefaStatus.CONCLUIDA
-                && tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA) {
-            historicoService.registrar(tarefa.getNegocio(), usuarioId, PipelineHistoricoTipo.CONCLUSAO_TAREFA,
-                    "Tarefa concluída: " + tarefa.getTitulo());
+        if (statusAnterior != tarefa.getStatus()
+                && (tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA || tarefa.getStatus() == PipelineTarefaStatus.CANCELADA)) {
+            historicoService.registrar(tarefa.getNegocio(), usuarioId, tarefa.getStatus() == PipelineTarefaStatus.CANCELADA ? PipelineHistoricoTipo.CANCELAMENTO_TAREFA : PipelineHistoricoTipo.CONCLUSAO_TAREFA,
+                    (tarefa.getStatus() == PipelineTarefaStatus.CANCELADA ? "Tarefa cancelada (" + tarefa.getMotivoCancelamento() + "): " : "Tarefa concluída: ") + tarefa.getTitulo()
+                            + (tarefa.getComentarioCancelamento() == null ? "" : " — " + tarefa.getComentarioCancelamento()));
             cadenciaEngine.tarefaConcluida(tarefa);
         }
     }
@@ -274,7 +300,11 @@ public class PipelineTarefaService {
                         .toList(),
                 tarefa.getCriadoEm(),
                 tarefa.getAtualizadoEm(),
-                tarefa.getConcluidoEm()
+                tarefa.getConcluidoEm(),
+                tarefa.getCampanha() == null ? null : tarefa.getCampanha().getIdCampanha(),
+                tarefa.getCampanha() == null ? null : tarefa.getCampanha().getNome(),
+                tarefa.getNegocio().getNomeContato(), tarefa.getNegocio().getTelefone(), tarefa.getNegocio().getEmail(),
+                tarefa.getMotivoCancelamento(), tarefa.getComentarioCancelamento(), tarefa.getCanceladoEm()
         );
     }
 }

@@ -63,8 +63,8 @@ public class PessoaClienteService {
     private void aplicarDados(PessoaCliente pessoa, PessoaClienteRequestDTO request, LocalDateTime atualizadoEm) {
         pessoa.setNome(request.nome().trim());
         pessoa.setCpf(normalizarCpf(request.cpf()));
-        pessoa.setEmail(request.email().trim().toLowerCase());
-        pessoa.setTelefone(request.telefone().trim());
+        pessoa.setEmail((request.email() == null ? "" : request.email().trim().toLowerCase()));
+        pessoa.setTelefone((request.telefone() == null ? "" : request.telefone().trim()));
         pessoa.setCargo(textoOpcional(request.cargo()));
         pessoa.setObservacoes(textoOpcional(request.observacoes()));
         pessoa.setAtivo(request.ativo() == null || request.ativo());

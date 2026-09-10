@@ -13,6 +13,10 @@ import java.util.List;
 public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineVendasNegocio, Long> {
     @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "empresa", "contrato", "motivoPerda", "servicosInteresse"})
     List<PipelineVendasNegocio> findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(Long funilId);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select n from PipelineVendasNegocio n where n.idNegocio = :id")
+    java.util.Optional<PipelineVendasNegocio> findByIdForUpdate(@Param("id") Long id);
+    java.util.Optional<PipelineVendasNegocio> findByPreVendaOrigemIdNegocio(Long id);
     long countByEtapaIdEtapa(Long etapaId);
 
     @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "empresa", "contrato", "motivoPerda", "servicosInteresse"})
@@ -28,7 +32,7 @@ public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineV
             where (:inicio is null or negocio.criadoEm >= :inicio)
               and (:fimExclusivo is null or negocio.criadoEm < :fimExclusivo)
               and (:responsavelId is null or negocio.responsavel.id = :responsavelId)
-              and (:funilId is null or negocio.funil.idFunil = :funilId)
+              and ((:funilId is null and negocio.funil.tipo = 'VENDAS') or negocio.funil.idFunil = :funilId)
               and (:empresaId is null or negocio.empresa.idEmpresa = :empresaId)
               and (:resultado is null or negocio.resultado = :resultado)
               and (:estrategia is null or lower(trim(negocio.estrategiaComercial)) = lower(:estrategia))

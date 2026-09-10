@@ -57,6 +57,7 @@ class PropostaServiceTest {
         Usuario usuario = new Usuario();
         usuario.setId(2L);
         PipelineVendasNegocio negocio = new PipelineVendasNegocio();
+        negocio.setFunil(new com.climb.api.model.PipelineVendasFunil());
         negocio.setIdNegocio(3L);
         negocio.setEmpresa(empresa);
         when(rbacService.temPermissao(2L, PermissaoCodigo.PROPOSTA_CRUD)).thenReturn(true);

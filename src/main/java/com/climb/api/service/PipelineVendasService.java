@@ -41,6 +41,8 @@ public class PipelineVendasService {
     private final PipelineMotivoPerdaService motivoPerdaService;
     private final PipelineMovimentacaoEtapaService movimentacaoEtapaService;
     private final RbacService rbacService;
+    private final PipelinePreVendaService preVendas;
+    private final PipelineCadastroService cadastros;
 
     public PipelineVendasService(PipelineVendasEtapaRepository etapaRepository,
                                  PipelineVendasFunilRepository funilRepository,
@@ -54,7 +56,7 @@ public class PipelineVendasService {
                                  PipelineHistoricoService historicoService,
                                  PipelineMotivoPerdaService motivoPerdaService,
                                  PipelineMovimentacaoEtapaService movimentacaoEtapaService,
-                                 RbacService rbacService) {
+                                 RbacService rbacService, PipelinePreVendaService preVendas, PipelineCadastroService cadastros) {
         this.etapaRepository = etapaRepository;
         this.funilRepository = funilRepository;
         this.negocioRepository = negocioRepository;
@@ -68,6 +70,8 @@ public class PipelineVendasService {
         this.motivoPerdaService = motivoPerdaService;
         this.movimentacaoEtapaService = movimentacaoEtapaService;
         this.rbacService = rbacService;
+        this.preVendas = preVendas;
+        this.cadastros = cadastros;
     }
 
     @Transactional(readOnly = true)
@@ -111,9 +115,12 @@ public class PipelineVendasService {
         negocio.setFunil(etapa.getFunil());
         negocio.setEtapa(etapa);
         negocio.setResultado(negocio.getEtapa().getResultado());
-        validarCamposObrigatorios(negocio, etapa);
+        cadastros.aplicar(negocio, dto);
+        if (negocio.getFunil().isPreVendas()) negocio.setValorEstimadoProposta(null);
+        PipelineCamposObrigatorios.validar(negocio, etapa);
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
         movimentacaoEtapaService.iniciar(salvo, agora);
+        preVendas.sincronizar(salvo);
         historicoService.registrar(salvo, usuarioId, PipelineHistoricoTipo.CRIACAO_NEGOCIO,
                 "Negócio criado na etapa " + salvo.getEtapa().getNome());
         return toResponse(salvo);
@@ -126,6 +133,7 @@ public class PipelineVendasService {
         if (dto.funilId() != null && !Objects.equals(dto.funilId(), negocio.getFunil().getIdFunil())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Não é possível trocar o funil de um negócio existente");
         }
+        if (negocio.getFunil().isPreVendas() && negocio.getResultado() != PipelineVendasResultado.ABERTO) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reative o lead antes de editar");
         NegocioSnapshot anterior = NegocioSnapshot.of(negocio);
         aplicarDados(negocio, dto, resolverEmpresa(dto));
 
@@ -137,13 +145,16 @@ public class PipelineVendasService {
                         "Use as ações de ganhar ou perder para concluir o negócio");
             }
             validarPropostaAntesDaMovimentacao(negocio, novaEtapa);
-            validarCamposObrigatorios(negocio, novaEtapa);
+            PipelineCamposObrigatorios.validar(negocio, novaEtapa);
             LocalDateTime momento = LocalDateTime.now();
             aplicarEtapa(negocio, novaEtapa, momento);
             movimentacaoEtapaService.mudar(negocio, novaEtapa, momento, false);
         }
 
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
+        cadastros.aplicar(salvo, dto);
+        if (salvo.getFunil().isPreVendas()) salvo.setValorEstimadoProposta(null);
+        preVendas.sincronizar(salvo);
         registrarAlteracoes(salvo, usuarioId, anterior);
         return toResponse(salvo);
     }
@@ -156,11 +167,12 @@ public class PipelineVendasService {
                                             String observacaoPerda) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_MOVIMENTAR);
         PipelineVendasNegocio negocio = buscarNegocio(negocioId);
+        if (negocio.getFunil().isPreVendas() && negocio.getResultado() != PipelineVendasResultado.ABERTO) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reative o lead antes de movimentar");
         PipelineVendasEtapa novaEtapa = buscarEtapaDoFunil(etapaId, negocio.getFunil().getIdFunil());
         if (Objects.equals(negocio.getEtapa().getIdEtapa(), etapaId)) return toResponse(negocio);
         exigirPermissaoDeConclusaoSeNecessario(usuarioId, negocio.getResultado(), novaEtapa.getResultado());
         validarPropostaAntesDaMovimentacao(negocio, novaEtapa);
-        validarCamposObrigatorios(negocio, novaEtapa);
+        PipelineCamposObrigatorios.validar(negocio, novaEtapa);
         PipelineVendasEtapa etapaAnterior = negocio.getEtapa();
         PipelineVendasResultado resultadoAnterior = negocio.getResultado();
         LocalDateTime momento = LocalDateTime.now();
@@ -169,6 +181,7 @@ public class PipelineVendasService {
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
         movimentacaoEtapaService.mudar(salvo, novaEtapa, momento,
                 novaEtapa.getResultado() != PipelineVendasResultado.ABERTO);
+        preVendas.sincronizar(salvo);
         registrarMovimentacao(salvo, usuarioId, etapaAnterior, resultadoAnterior);
         return toResponse(salvo);
     }
@@ -184,12 +197,13 @@ public class PipelineVendasService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe se o negócio foi ganho ou perdido");
         }
         PipelineVendasNegocio negocio = buscarNegocio(negocioId);
+        if (negocio.getFunil().isPreVendas()) return concluirPreVenda(negocio, usuarioId, resultado, motivoPerdaId, observacaoPerda, null, null);
         PipelineVendasEtapa etapaFinal = etapaRepository
                 .findFirstByFunilIdFunilAndResultadoAndAtivoTrueOrderByPosicaoAsc(
                         negocio.getFunil().getIdFunil(), resultado
                 )
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etapa final não configurada"));
-        validarCamposObrigatorios(negocio, etapaFinal);
+        PipelineCamposObrigatorios.validar(negocio, etapaFinal);
         PipelineVendasEtapa etapaAnterior = negocio.getEtapa();
         PipelineVendasResultado resultadoAnterior = negocio.getResultado();
         LocalDateTime momento = LocalDateTime.now();
@@ -197,6 +211,7 @@ public class PipelineVendasService {
         aplicarEtapa(negocio, etapaFinal, momento);
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
         movimentacaoEtapaService.mudar(salvo, etapaFinal, momento, true);
+        preVendas.sincronizar(salvo);
         registrarMovimentacao(salvo, usuarioId, etapaAnterior, resultadoAnterior);
         return toResponse(salvo);
     }
@@ -209,7 +224,7 @@ public class PipelineVendasService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O negócio já está ativo");
         }
         PipelineVendasEtapa novaEtapa = etapaId == null
-                ? buscarEtapaInicialAberta(negocio.getFunil().getIdFunil())
+                ? (negocio.getFunil().isPreVendas() ? negocio.getEtapa() : buscarEtapaInicialAberta(negocio.getFunil().getIdFunil()))
                 : buscarEtapaDoFunil(etapaId, negocio.getFunil().getIdFunil());
         if (novaEtapa.getResultado() != PipelineVendasResultado.ABERTO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione uma etapa aberta para reativar o negócio");
@@ -221,6 +236,7 @@ public class PipelineVendasService {
         aplicarEtapa(negocio, novaEtapa, momento);
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
         movimentacaoEtapaService.mudar(salvo, novaEtapa, momento, false);
+        preVendas.sincronizar(salvo);
         registrarMovimentacao(salvo, usuarioId, etapaAnterior, resultadoAnterior);
         return toResponse(salvo);
     }
@@ -232,6 +248,7 @@ public class PipelineVendasService {
         if (negocio.getResultado() != PipelineVendasResultado.GANHO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Somente negócios ganhos podem ser convertidos em contrato");
         }
+        if (negocio.getFunil().isPreVendas()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Converta o lead em negócio de vendas");
         if (negocio.getContrato() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este negócio já foi convertido em contrato");
         }
@@ -248,6 +265,29 @@ public class PipelineVendasService {
                 "Negócio convertido no contrato CT-" + contrato.getIdContrato());
         return toResponse(salvo);
     }
+
+    @Transactional
+    public PipelineNegocioResponseDTO ganharPreVenda(Long id, Long usuarioId, Long funilId, Long responsavelId) {
+        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_CONCLUIR);
+        PipelineVendasNegocio lead = buscarNegocio(id);
+        if (!lead.getFunil().isPreVendas()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um lead de pré-vendas");
+        return concluirPreVenda(lead, usuarioId, PipelineVendasResultado.GANHO, null, null, funilId, responsavelId);
+    }
+
+    private PipelineNegocioResponseDTO concluirPreVenda(PipelineVendasNegocio lead, Long usuarioId, PipelineVendasResultado resultado,
+            Long motivoId, String observacao, Long funilId, Long responsavelId) {
+        if (lead.getResultado() == resultado) return toResponse(lead);
+        if (lead.getResultado() != PipelineVendasResultado.ABERTO) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reative o lead antes de alterar seu resultado");
+        if (resultado == PipelineVendasResultado.GANHO) preVendas.converter(lead, usuarioId, funilId, responsavelId);
+        prepararResultado(lead, resultado, motivoId, observacao, LocalDateTime.now());
+        lead.setResultado(resultado); lead.setUltimaMovimentacaoEm(LocalDateTime.now());
+        lead.setEncerradoEm(lead.getUltimaMovimentacaoEm()); negocioRepository.save(lead);
+        movimentacaoEtapaService.mudar(lead, lead.getEtapa(), lead.getUltimaMovimentacaoEm(), true);
+        preVendas.sincronizar(lead);
+        historicoService.registrar(lead, usuarioId, resultado == PipelineVendasResultado.GANHO ? PipelineHistoricoTipo.FECHAMENTO : PipelineHistoricoTipo.PERDA, "Pré-venda encerrada: " + resultado);
+        return toResponse(lead);
+    }
+
 
     private void registrarAlteracoes(PipelineVendasNegocio negocio, Long usuarioId, NegocioSnapshot anterior) {
         if (!Objects.equals(anterior.responsavelId(), negocio.getResponsavel().getId())) {
@@ -291,8 +331,8 @@ public class PipelineVendasService {
         negocio.setEmpresa(empresa);
         negocio.setNomeEmpresa(dto.nomeEmpresa().trim());
         negocio.setNomeContato(dto.nomeContato().trim());
-        negocio.setTelefone(dto.telefone().trim());
-        negocio.setEmail(dto.email().trim().toLowerCase());
+        negocio.setTelefone(dto.telefone() == null ? "" : dto.telefone().trim());
+        negocio.setEmail(dto.email() == null ? "" : dto.email().trim().toLowerCase());
         negocio.setResponsavel(buscarUsuario(dto.responsavelId(), "Responsável não encontrado"));
         negocio.setDataReuniao(dto.dataReuniao());
         negocio.setOrigemNegocio(dto.origemNegocio().trim());
@@ -327,13 +367,14 @@ public class PipelineVendasService {
     }
 
     private PipelineVendasNegocio buscarNegocio(Long negocioId) {
-        return negocioRepository.findById(negocioId)
+        return negocioRepository.findByIdForUpdate(negocioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Negócio não encontrado"));
     }
 
     private PipelineVendasEtapa buscarEtapaInicialAberta(Long funilId) {
         return etapaRepository.findByFunilIdFunilAndAtivoTrueOrderByPosicaoAsc(funilId).stream()
                 .filter(etapa -> etapa.getResultado() == PipelineVendasResultado.ABERTO)
+                .sorted(java.util.Comparator.comparingInt(etapa -> !etapa.getFunil().isPreVendas() && etapa.getCodigo().startsWith("DIAGNOSTICO") ? -1 : etapa.getPosicao()))
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pipeline comercial sem etapa inicial aberta"));
     }
@@ -369,17 +410,6 @@ public class PipelineVendasService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nenhum funil comercial ativo configurado"));
     }
 
-    private void validarCamposObrigatorios(PipelineVendasNegocio negocio, PipelineVendasEtapa etapa) {
-        List<String> ausentes = (etapa.getCamposObrigatorios() == null ? List.<String>of() : etapa.getCamposObrigatorios()).stream()
-                .filter(campo -> !"servicoInteresse".equals(campo))
-                .filter(campo -> campoAusente(negocio, campo))
-                .toList();
-        if (!ausentes.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Preencha os campos obrigatórios da etapa " + etapa.getNome() + ": " + String.join(", ", ausentes));
-        }
-    }
-
     private void validarPropostaAntesDaMovimentacao(PipelineVendasNegocio negocio, PipelineVendasEtapa novaEtapa) {
         if (!etapaEhPropostaApresentada(novaEtapa)) return;
         if (propostaRepository.existsByNegocioIdNegocio(negocio.getIdNegocio())) return;
@@ -390,26 +420,6 @@ public class PipelineVendasService {
     private boolean etapaEhPropostaApresentada(PipelineVendasEtapa etapa) {
         String codigo = etapa.getCodigo() == null ? "" : etapa.getCodigo().toUpperCase();
         return codigo.startsWith("PROPOSTA_APRESENTADA");
-    }
-
-    private boolean campoAusente(PipelineVendasNegocio negocio, String campo) {
-        return switch (campo) {
-            case "nomeEmpresa" -> textoAusente(negocio.getNomeEmpresa());
-            case "nomeContato" -> textoAusente(negocio.getNomeContato());
-            case "telefone" -> textoAusente(negocio.getTelefone());
-            case "email" -> textoAusente(negocio.getEmail());
-            case "responsavelId" -> negocio.getResponsavel() == null;
-            case "dataReuniao" -> negocio.getDataReuniao() == null;
-            case "origemNegocio" -> textoAusente(negocio.getOrigemNegocio());
-            case "estrategiaComercial" -> textoAusente(negocio.getEstrategiaComercial());
-            case "valorEstimadoProposta" -> negocio.getValorEstimadoProposta() == null;
-            case "observacoes" -> textoAusente(negocio.getObservacoes());
-            default -> false;
-        };
-    }
-
-    private boolean textoAusente(String valor) {
-        return valor == null || valor.isBlank();
     }
 
     private Usuario buscarUsuario(Long usuarioId, String mensagem) {
@@ -489,7 +499,12 @@ public class PipelineVendasService {
                 negocio.getContrato() != null ? negocio.getContrato().getIdContrato() : null,
                 indicadores.possuiProposta(negocio.getIdNegocio()),
                 indicadores.possuiAjustesPendentes(negocio.getIdNegocio()),
-                negocio.getCriadoEm(), negocio.getUltimaMovimentacaoEm()
+                negocio.getCriadoEm(), negocio.getUltimaMovimentacaoEm(),
+                negocio.getFunil().getTipo(), negocio.getPessoa() == null ? null : negocio.getPessoa().getIdPessoa(),
+                negocio.getCampanhaOrigem() == null ? null : negocio.getCampanhaOrigem().getIdCampanha(),
+                negocio.getCampanhaOrigem() == null ? null : negocio.getCampanhaOrigem().getNome(),
+                negocio.getPreVendaOrigem() == null ? null : negocio.getPreVendaOrigem().getIdNegocio(),
+                preVendas.negocioGerado(negocio), Set.copyOf(negocio.getTags()), Map.copyOf(negocio.getCampos()), preVendas.status(negocio)
         );
     }
 
@@ -535,7 +550,11 @@ public class PipelineVendasService {
             String observacoes,
             Long etapaId,
             String etapaNome,
-            PipelineVendasResultado resultado
+            PipelineVendasResultado resultado,
+            Long pessoaId,
+            Long campanhaId,
+            Set<Long> tags,
+            Map<Long, String> campos
     ) {
         static NegocioSnapshot of(PipelineVendasNegocio negocio) {
             return new NegocioSnapshot(
@@ -544,7 +563,10 @@ public class PipelineVendasService {
                     negocio.getResponsavel().getId(), negocio.getResponsavel().getNomeCompleto(),
                     negocio.getDataReuniao(), negocio.getOrigemNegocio(), negocio.getEstrategiaComercial(),
                     negocio.getServicoInteresse(), negocio.getValorEstimadoProposta(), negocio.getObservacoes(),
-                    negocio.getEtapa().getIdEtapa(), negocio.getEtapa().getNome(), negocio.getResultado()
+                    negocio.getEtapa().getIdEtapa(), negocio.getEtapa().getNome(), negocio.getResultado(),
+                    negocio.getPessoa() == null ? null : negocio.getPessoa().getIdPessoa(),
+                    negocio.getCampanhaOrigem() == null ? null : negocio.getCampanhaOrigem().getIdCampanha(),
+                    negocio.getTags().stream().map(PipelineTag::getId).collect(Collectors.toSet()), Map.copyOf(negocio.getCampos())
             );
         }
 
@@ -559,7 +581,25 @@ public class PipelineVendasService {
                     || !Objects.equals(origem, negocio.getOrigemNegocio())
                     || !Objects.equals(estrategia, negocio.getEstrategiaComercial())
                     || !Objects.equals(servico, negocio.getServicoInteresse())
-                    || !Objects.equals(observacoes, negocio.getObservacoes());
+                    || !Objects.equals(observacoes, negocio.getObservacoes())
+                    || !Objects.equals(pessoaId, negocio.getPessoa() == null ? null : negocio.getPessoa().getIdPessoa())
+                    || !Objects.equals(campanhaId, negocio.getCampanhaOrigem() == null ? null : negocio.getCampanhaOrigem().getIdCampanha())
+                    || !Objects.equals(tags, negocio.getTags().stream().map(PipelineTag::getId).collect(Collectors.toSet()))
+                    || !Objects.equals(campos, negocio.getCampos());
         }
     }
+    @Transactional
+    public PipelineNegocioResponseDTO buscar(Long id, Long usuario) { exigirPermissao(usuario, PermissaoCodigo.COMERCIAL); return toResponse(buscarNegocio(id)); }
+    @Transactional
+    public List<PipelineNegocioResponseDTO> criarLote(Long usuario, List<PipelineNegocioRequestDTO> dados) {
+        exigirPermissao(usuario, PermissaoCodigo.COMERCIAL_CRIAR);
+        if (dados == null || dados.isEmpty() || dados.size() > 100) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione de 1 a 100 pessoas");
+        for (var dto : dados) {
+            if (dto.pessoaId() == null || !resolverEtapaCriacao(dto).getFunil().isPreVendas()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O lote deve conter pessoas em pré-vendas");
+        }
+        return dados.stream().map(dto -> criar(usuario, dto)).toList();
+    }
+    @Transactional
+    public void reiniciarCadencia(Long id, Long usuario) { preVendas.reiniciar(id, usuario); }
+
 }

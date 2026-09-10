@@ -78,6 +78,12 @@ public class PipelineAtividadesController {
         ));
     }
 
+    public record CancelamentoInput(String motivo, String comentario) {}
+    @PostMapping("/tarefas/{tarefaId}/cancelar")
+    public ResponseEntity<ApiResponse<PipelineTarefaResponseDTO>> cancelar(@PathVariable Long tarefaId, @RequestBody CancelamentoInput dto) {
+        return ResponseEntity.ok(ApiResponse.ok(tarefaService.cancelar(tarefaId, authenticatedUser.getUserId(), dto.motivo(), dto.comentario())));
+    }
+
     @GetMapping("/negocios/{negocioId}/comentarios")
     public ResponseEntity<ApiResponse<List<PipelineComentarioResponseDTO>>> listarComentarios(
             @PathVariable Long negocioId) {

@@ -62,7 +62,7 @@ class PipelineVendasServiceTest {
                 historicoService,
                 motivoPerdaService,
                 movimentacaoEtapaService,
-                rbacService
+                rbacService, mock(PipelinePreVendaService.class), mock(PipelineCadastroService.class)
         );
     }
 
@@ -146,7 +146,7 @@ class PipelineVendasServiceTest {
                 etapa(10L, "PROPOSTA_EM_ELABORACAO", PipelineVendasResultado.ABERTO));
         PipelineVendasEtapa apresentada = etapa(20L, "PROPOSTA_APRESENTADA", PipelineVendasResultado.ABERTO);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_MOVIMENTAR)).thenReturn(true);
-        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
         when(etapaRepository.findById(20L)).thenReturn(Optional.of(apresentada));
         when(propostaRepository.existsByNegocioIdNegocio(100L)).thenReturn(false);
 
@@ -165,7 +165,7 @@ class PipelineVendasServiceTest {
                 etapa(10L, "PROPOSTA_EM_ELABORACAO", PipelineVendasResultado.ABERTO));
         PipelineVendasEtapa apresentada = etapa(20L, "PROPOSTA_APRESENTADA", PipelineVendasResultado.ABERTO);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_MOVIMENTAR)).thenReturn(true);
-        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
         when(etapaRepository.findById(20L)).thenReturn(Optional.of(apresentada));
         when(propostaRepository.existsByNegocioIdNegocio(100L)).thenReturn(true);
         when(negocioRepository.save(negocio)).thenReturn(negocio);
@@ -183,7 +183,7 @@ class PipelineVendasServiceTest {
         LocalDateTime movimentacaoAnterior = negocio.getUltimaMovimentacaoEm();
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_MOVIMENTAR)).thenReturn(true);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_CONCLUIR)).thenReturn(true);
-        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
         when(etapaRepository.findById(20L)).thenReturn(Optional.of(fechado));
         when(negocioRepository.save(negocio)).thenReturn(negocio);
 
@@ -205,7 +205,7 @@ class PipelineVendasServiceTest {
         Contrato contrato = new Contrato();
         contrato.setIdContrato(50L);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_CONVERTER_CONTRATO)).thenReturn(true);
-        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
         when(empresaRepository.findById(30L)).thenReturn(Optional.of(empresa));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
         when(contratoService.criarAPartirDoPipeline(empresa, usuario, usuario)).thenReturn(contrato);
@@ -239,7 +239,7 @@ class PipelineVendasServiceTest {
         PipelineVendasEtapa proposta = etapa(20L, "PROPOSTA", PipelineVendasResultado.ABERTO);
         proposta.setCamposObrigatorios(List.of("email", "valorEstimadoProposta"));
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_MOVIMENTAR)).thenReturn(true);
-        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
         when(etapaRepository.findById(20L)).thenReturn(Optional.of(proposta));
 
         ResponseStatusException exception = assertThrows(
@@ -258,7 +258,7 @@ class PipelineVendasServiceTest {
         PipelineVendasNegocio negocio = negocio(100L, usuario, etapa(10L, "NEGOCIACAO", PipelineVendasResultado.ABERTO));
         PipelineVendasEtapa perdido = etapa(30L, "PERDIDO", PipelineVendasResultado.PERDIDO);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_CONCLUIR)).thenReturn(true);
-        when(negocioRepository.findById(100L)).thenReturn(Optional.of(negocio));
+        when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
         when(etapaRepository.findFirstByFunilIdFunilAndResultadoAndAtivoTrueOrderByPosicaoAsc(
                 1L, PipelineVendasResultado.PERDIDO)).thenReturn(Optional.of(perdido));
         when(motivoPerdaService.buscarAtivoObrigatorio(null))

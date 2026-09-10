@@ -14,5 +14,10 @@ public record PipelineCadenciaEtapaResponseDTO(
         int diasUteisEspera,
         Integer prazoDiasUteis,
         Long scriptId,
-        String scriptNome
-) {}
+        String scriptNome,
+        String etapaFunilCodigo
+) {
+    public PipelineCadenciaEtapaResponseDTO(Long id, int ordem, PipelineCadenciaTipo tipo, String titulo, String descricao, String tipoTarefa, PipelineTarefaPrioridade prioridade, int diasUteisEspera, Integer prazoDiasUteis, Long scriptId, String scriptNome) {
+        this(id, ordem, tipo, titulo, descricao, tipoTarefa, prioridade, diasUteisEspera, prazoDiasUteis, scriptId, scriptNome, null);
+    }
+}

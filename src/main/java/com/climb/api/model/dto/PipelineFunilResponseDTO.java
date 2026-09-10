@@ -12,5 +12,10 @@ public record PipelineFunilResponseDTO(
         boolean ativo,
         List<PipelineEtapaConfiguracaoResponseDTO> etapas,
         LocalDateTime criadoEm,
-        LocalDateTime atualizadoEm
-) {}
+        LocalDateTime atualizadoEm,
+        String tipo
+) {
+    public PipelineFunilResponseDTO(Long id, String nome, String descricao, String estrategia, Integer posicao, boolean ativo, List<PipelineEtapaConfiguracaoResponseDTO> etapas, LocalDateTime criadoEm, LocalDateTime atualizadoEm) {
+        this(id, nome, descricao, estrategia, posicao, ativo, etapas, criadoEm, atualizadoEm, "VENDAS");
+    }
+}

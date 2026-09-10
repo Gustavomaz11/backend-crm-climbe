@@ -40,19 +40,23 @@ public class PipelineCampanhaExecucaoManager {
                 .sorted(Comparator.comparing(Usuario::getId)).toList();
         Set<Long> leadsAtuais = campanha.getLeads().stream().map(PipelineVendasNegocio::getIdNegocio)
                 .collect(Collectors.toSet());
-        Map<Long, PipelineCampanhaExecucao> execucoesPorLead = existentes.stream()
+        Map<String, PipelineCampanhaExecucao> execucoesPorLead = existentes.stream()
                 .collect(Collectors.toMap(
-                        execucao -> execucao.getNegocio().getIdNegocio(),
+                        execucao -> execucao.getNegocio().getIdNegocio() + ":" + execucao.getEtapaFunilCodigo(),
                         execucao -> execucao));
         pausarRemovidos(existentes, leadsAtuais, alteradas);
+        if (participantes.isEmpty()) { salvarEmLote(alteradas); return; }
         int indice = 0;
         for (PipelineVendasNegocio lead : campanha.getLeads()) {
-            ativarOuCriar(
-                    campanha,
-                    lead,
-                    escolherParticipante(lead, participantes, indice++),
-                    execucoesPorLead.get(lead.getIdNegocio()),
-                    alteradas);
+            if (lead.getResultado() != com.climb.api.model.enums.PipelineVendasResultado.ABERTO) continue;
+            String codigo = escopo(campanha, lead);
+            String chave = lead.getIdNegocio() + ":";
+            PipelineCampanhaExecucao existente = lead.getEtapa() == null ? null : execucoesPorLead.get(chave + lead.getEtapa().getCodigo());
+            PipelineCampanhaExecucao legado = execucoesPorLead.get(chave);
+            if (legado != null && (legado.getStatus() == PipelineExecucaoStatus.ATIVA || legado.getStatus() == PipelineExecucaoStatus.PAUSADA)) existente = legado;
+            if (existente == null && codigo != null) existente = execucoesPorLead.get(chave + codigo);
+            if (codigo == null && existente == null) continue;
+            ativarOuCriar(campanha, lead, escolherParticipante(lead, participantes, indice++), existente, alteradas);
         }
         salvarEmLote(alteradas);
     }
@@ -74,6 +78,8 @@ public class PipelineCampanhaExecucaoManager {
         }
         PipelineCampanhaExecucao execucao = new PipelineCampanhaExecucao();
         execucao.setCampanha(campanha);
+        execucao.setVersao(campanha.getVersao());
+        execucao.setEtapaFunilCodigo(escopo(campanha, lead));
         execucao.setNegocio(lead);
         execucao.setParticipante(participante);
         execucao.setStatus(PipelineExecucaoStatus.ATIVA);
@@ -107,5 +113,12 @@ public class PipelineCampanhaExecucaoManager {
 
     private void salvarEmLote(List<PipelineCampanhaExecucao> alteradas) {
         if (!alteradas.isEmpty()) repository.saveAll(alteradas);
+    }
+    private String escopo(PipelineCampanha campanha, PipelineVendasNegocio lead) {
+        var atuais = campanha.getEtapas().stream().filter(e -> e.getVersao().equals(campanha.getVersao())).toList();
+        if (atuais.stream().anyMatch(e -> e.getEtapaFunilCodigo().isEmpty())) return "";
+        if (lead.getFunil() == null || !lead.getFunil().isPreVendas() || lead.getCampanhaOrigem() == null
+                || !lead.getCampanhaOrigem().getIdCampanha().equals(campanha.getIdCampanha())) return null;
+        return atuais.stream().anyMatch(e -> e.getEtapaFunilCodigo().equals(lead.getEtapa().getCodigo())) ? lead.getEtapa().getCodigo() : null;
     }
 }

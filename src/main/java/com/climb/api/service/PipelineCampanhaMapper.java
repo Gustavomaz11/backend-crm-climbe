@@ -27,7 +27,7 @@ class PipelineCampanhaMapper {
                 campanha.getParticipantes().stream().map(usuario -> usuario.getId()).collect(Collectors.toSet()),
                 campanha.getScripts().stream().map(script -> script.getIdScript()).collect(Collectors.toSet()),
                 campanha.getDiasExecucao(),
-                campanha.getEtapas().stream().map(this::etapa).toList(),
+                campanha.getEtapas().stream().filter(e -> e.getVersao().equals(campanha.getVersao())).map(this::etapa).toList(),
                 execucaoRepository.countByCampanhaIdCampanhaAndStatus(id, PipelineExecucaoStatus.ATIVA),
                 execucaoRepository.countByCampanhaIdCampanhaAndStatus(id, PipelineExecucaoStatus.CONCLUIDA),
                 execucaoRepository.countByCampanhaIdCampanhaAndStatus(id, PipelineExecucaoStatus.SEM_RESPOSTA),
@@ -40,7 +40,7 @@ class PipelineCampanhaMapper {
                 etapa.getIdEtapaCadencia(), etapa.getOrdem(), etapa.getTipo(), etapa.getTitulo(), etapa.getDescricao(),
                 etapa.getTipoTarefa(), etapa.getPrioridade(), etapa.getDiasUteisEspera(), etapa.getPrazoDiasUteis(),
                 etapa.getScript() == null ? null : etapa.getScript().getIdScript(),
-                etapa.getScript() == null ? null : etapa.getScript().getNome()
+                etapa.getScript() == null ? null : etapa.getScript().getNome(), etapa.getEtapaFunilCodigo()
         );
     }
 }

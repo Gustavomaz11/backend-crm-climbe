@@ -99,4 +99,10 @@ public class PipelineCampanha {
     public List<PipelineCadenciaEtapa> getEtapas() { return etapas; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
+
+    @Column(nullable = false)
+    private Integer versao = 1;
+    public Integer getVersao() { return versao; }
+    public void setVersao(Integer value) { this.versao = value; }
+
 }

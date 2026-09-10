@@ -14,5 +14,10 @@ public record PipelineCadenciaEtapaRequestDTO(
         PipelineTarefaPrioridade prioridade,
         @Min(0) Integer diasUteisEspera,
         @Min(0) Integer prazoDiasUteis,
-        Long scriptId
-) {}
+        Long scriptId,
+        String etapaFunilCodigo
+) {
+    public PipelineCadenciaEtapaRequestDTO(PipelineCadenciaTipo tipo, String titulo, String descricao, String tipoTarefa, PipelineTarefaPrioridade prioridade, Integer diasUteisEspera, Integer prazoDiasUteis, Long scriptId) {
+        this(tipo, titulo, descricao, tipoTarefa, prioridade, diasUteisEspera, prazoDiasUteis, scriptId, null);
+    }
+}

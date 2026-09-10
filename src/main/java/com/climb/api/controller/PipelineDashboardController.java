@@ -37,9 +37,10 @@ public class PipelineDashboardController {
             @RequestParam(required = false) String servico,
             @RequestParam(required = false) String origem,
             @RequestParam(required = false) Long empresaId,
-            @RequestParam(required = false) PipelineVendasResultado situacao) {
+            @RequestParam(required = false) PipelineVendasResultado situacao,
+            @RequestParam(required = false) Long campanhaId) {
         PipelineDashboardFiltroDTO filtro = new PipelineDashboardFiltroDTO(
-                dataInicio, dataFim, responsavelId, funilId, estrategia, servico, origem, empresaId, situacao);
+                dataInicio, dataFim, responsavelId, funilId, estrategia, servico, origem, empresaId, situacao, campanhaId);
         return ResponseEntity.ok(ApiResponse.ok(service.buscar(authenticatedUser.getUserId(), filtro)));
     }
 }

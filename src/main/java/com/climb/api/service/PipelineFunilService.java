@@ -60,6 +60,7 @@ public class PipelineFunilService {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_FUNIL_EDITAR);
         validator.validar(dto);
         PipelineVendasFunil funil = buscar(funilId);
+        if (funil.isPreVendas()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "As etapas de pré-vendas são fixas");
         aplicarDados(funil, dto);
         sincronizarEtapas(funil, dto.etapas());
         return mapper.toResponse(repository.save(funil));
@@ -69,6 +70,7 @@ public class PipelineFunilService {
     public PipelineFunilResponseDTO duplicar(Long funilId, Long usuarioId) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_FUNIL_DUPLICAR);
         PipelineVendasFunil original = buscar(funilId);
+        if (original.isPreVendas()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O funil de pré-vendas é único");
         PipelineVendasFunil copia = new PipelineVendasFunil();
         copia.setCodigo(gerarCodigo(original.getNome()));
         copia.setNome("Cópia de " + original.getNome());

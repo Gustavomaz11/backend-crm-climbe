@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "pipeline_campanha_execucoes")
+@Table(name = "pipeline_campanha_execucoes", uniqueConstraints = @UniqueConstraint(columnNames = {"campanha_id", "negocio_id", "etapa_funil_codigo"}))
 public class PipelineCampanhaExecucao {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -78,4 +78,16 @@ public class PipelineCampanhaExecucao {
     public LocalDateTime getFinalizadoEm() { return finalizadoEm; }
     public void setFinalizadoEm(LocalDateTime finalizadoEm) { this.finalizadoEm = finalizadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
+
+    @Column(nullable = false)
+    private Integer versao = 1;
+    public Integer getVersao() { return versao; }
+    public void setVersao(Integer value) { this.versao = value; }
+
+
+    @Column(name = "etapa_funil_codigo", nullable = false, length = 80)
+    private String etapaFunilCodigo = "";
+    public String getEtapaFunilCodigo() { return etapaFunilCodigo; }
+    public void setEtapaFunilCodigo(String value) { this.etapaFunilCodigo = value; }
+
 }
