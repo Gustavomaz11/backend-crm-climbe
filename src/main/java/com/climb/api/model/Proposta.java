@@ -71,6 +71,16 @@ public class Proposta {
     private List<PropostaReajuste> reajustes = new ArrayList<>();
 
     @ElementCollection
+    @CollectionTable(name = "proposta_servicos", joinColumns = @JoinColumn(name = "proposta_id"))
+    @OrderColumn(name = "posicao")
+    private List<PropostaServico> servicos = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "proposta_recebimentos", joinColumns = @JoinColumn(name = "proposta_id"))
+    @OrderBy("numero ASC")
+    private List<PropostaRecebimento> recebimentos = new ArrayList<>();
+
+    @ElementCollection
     @CollectionTable(name = "proposta_equipe_tecnica", joinColumns = @JoinColumn(name = "proposta_id"))
     @Column(name = "usuario_id")
     private Set<Long> equipeTecnicaIds = new HashSet<>();
@@ -136,4 +146,14 @@ public class Proposta {
 
     public LocalDate getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDate dataCriacao) { this.dataCriacao = dataCriacao; }
+    public List<PropostaServico> getServicos() { return servicos; }
+    public void setServicos(List<PropostaServico> servicos) {
+        this.servicos.clear();
+        if (servicos != null) this.servicos.addAll(servicos);
+    }
+    public List<PropostaRecebimento> getRecebimentos() { return recebimentos; }
+    public void setRecebimentos(List<PropostaRecebimento> recebimentos) {
+        this.recebimentos.clear();
+        if (recebimentos != null) this.recebimentos.addAll(recebimentos);
+    }
 }

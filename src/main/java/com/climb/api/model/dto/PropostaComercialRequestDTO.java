@@ -23,5 +23,15 @@ public record PropostaComercialRequestDTO(
         List<Long> equipeTecnicaIds,
         List<Long> equipeComercialIds,
         List<@Valid PropostaReajusteDTO> reajustes,
-        String observacoes
-) {}
+        String observacoes,
+        List<@NotNull @Valid PropostaServicoDTO> servicos,
+        List<@NotNull @Valid PropostaRecebimentoDTO> recebimentos
+) {
+    public PropostaComercialRequestDTO(ServicoComercial servico, LocalDate mesInicio, Integer recorrenciaMeses,
+            Integer quantidadeParcelas, Boolean parcelasIguais, BigDecimal comissaoTecnicoPercentual,
+            BigDecimal comissaoComercialPercentual, List<Long> equipeTecnicaIds, List<Long> equipeComercialIds,
+            List<PropostaReajusteDTO> reajustes, String observacoes) {
+        this(servico, mesInicio, recorrenciaMeses, quantidadeParcelas, parcelasIguais, comissaoTecnicoPercentual,
+                comissaoComercialPercentual, equipeTecnicaIds, equipeComercialIds, reajustes, observacoes, null, null);
+    }
+}

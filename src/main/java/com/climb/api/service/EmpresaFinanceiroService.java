@@ -4,6 +4,7 @@ import com.climb.api.model.Contrato;
 import com.climb.api.model.ContratoParcela;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.EmpresaFinanceiroResponseDTO;
+import com.climb.api.model.dto.PropostaServicoDTO;
 import com.climb.api.repository.ContratoRepository;
 import com.climb.api.repository.EmpresaRepository;
 import org.springframework.http.HttpStatus;
@@ -68,7 +69,10 @@ public class EmpresaFinanceiroService {
                 contrato.getIdContrato(), contrato.getServico(), situacao(contrato), total,
                 proxima == null ? null : proxima.valor(), proxima == null ? null : proxima.vencimento(), parcelas,
                 funcionarios.values().stream().map(item -> new EmpresaFinanceiroResponseDTO.FuncionarioDTO(
-                        item.getId(), item.getNomeCompleto(), item.getEmail())).toList()
+                        item.getId(), item.getNomeCompleto(), item.getEmail())).toList(),
+                contrato.getProposta() == null ? List.of() : contrato.getProposta().getServicos().stream()
+                        .map(item -> new PropostaServicoDTO(item.getServico(), item.getValor(),
+                                item.getComissaoTecnicoPercentual(), item.getComissaoComercialPercentual())).toList()
         );
     }
 

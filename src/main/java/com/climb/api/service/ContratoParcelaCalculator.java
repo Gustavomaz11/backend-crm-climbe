@@ -2,6 +2,7 @@ package com.climb.api.service;
 
 import com.climb.api.model.Proposta;
 import com.climb.api.model.PropostaReajuste;
+import com.climb.api.model.dto.PropostaRecebimentoDTO;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -20,9 +21,19 @@ public class ContratoParcelaCalculator {
     public record ParcelaPlanejada(int numero, LocalDate competencia, LocalDate vencimento, BigDecimal valor) {}
 
     public List<ParcelaPlanejada> calcular(Proposta proposta, LocalDate dataAprovacao) {
-        if (proposta == null || proposta.getServico() == null || proposta.getValuation() == null) {
+        if (proposta == null || proposta.getValuation() == null) {
             return List.of();
         }
+
+        if (!proposta.getRecebimentos().isEmpty()) {
+            var recebimentos = proposta.getRecebimentos().stream()
+                    .map(item -> new PropostaRecebimentoDTO(item.getNumero(), item.getValor()))
+                    .sorted(Comparator.comparing(PropostaRecebimentoDTO::numero)).toList();
+            PropostaComercialValidator.validarRecebimentos(recebimentos, proposta.getQuantidadeParcelas(), proposta.getValuation());
+            return recebimentos.stream().map(item -> parcela(item.numero(),
+                    competenciaInicial(proposta, dataAprovacao).plusMonths(item.numero() - 1L), dataAprovacao, item.valor())).toList();
+        }
+        if (proposta.getServico() == null) return List.of();
 
         return proposta.getServico().recorrente()
                 ? calcularRecorrentes(proposta, dataAprovacao)

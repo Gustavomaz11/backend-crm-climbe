@@ -6,6 +6,8 @@ import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.PipelineVendasNegocio;
 import com.climb.api.model.Proposta;
 import com.climb.api.model.PropostaReajuste;
+import com.climb.api.model.PropostaServico;
+import com.climb.api.model.PropostaRecebimento;
 import com.climb.api.model.RevisaoDocumento;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.enums.PropostaStatus;
@@ -16,6 +18,8 @@ import com.climb.api.model.dto.PropostaRequestDTO;
 import com.climb.api.model.dto.PropostaResponseDTO;
 import com.climb.api.model.dto.PropostaComercialRequestDTO;
 import com.climb.api.model.dto.PropostaReajusteDTO;
+import com.climb.api.model.dto.PropostaServicoDTO;
+import com.climb.api.model.dto.PropostaRecebimentoDTO;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
@@ -141,7 +145,10 @@ public class PropostaService {
                 proposta.getReajustes().stream()
                         .map(item -> new PropostaReajusteDTO(item.getMesVigencia(), item.getValor()))
                         .toList(),
-                proposta.getObservacoes()
+                proposta.getObservacoes(),
+                proposta.getServicos().stream().map(item -> new PropostaServicoDTO(item.getServico(), item.getValor(),
+                        item.getComissaoTecnicoPercentual(), item.getComissaoComercialPercentual())).toList(),
+                proposta.getRecebimentos().stream().map(item -> new PropostaRecebimentoDTO(item.getNumero(), item.getValor())).toList()
         );
     }
 
@@ -243,7 +250,7 @@ public class PropostaService {
         }
         validarEmpresaObrigatoria(empresaId);
         validarValuation(valuation);
-        validarConfiguracaoComercial(configuracao);
+        PropostaComercialValidator.validar(configuracao, valuation);
 
         Empresa empresa = buscarEmpresa(empresaId);
         PipelineVendasNegocio negocio = resolverNegocio(negocioId, empresa);
@@ -268,27 +275,13 @@ public class PropostaService {
         return toResponseDTO(salva);
     }
 
-    private void validarConfiguracaoComercial(PropostaComercialRequestDTO configuracao) {
-        if (configuracao == null || configuracao.servico() == null) {
-            throw new RuntimeException("Selecione o serviço da proposta");
-        }
-        int recorrencia = configuracao.recorrenciaMeses() == null ? 0 : configuracao.recorrenciaMeses();
-        if (configuracao.servico().recorrente() && (recorrencia < 0 || recorrencia > 24)) {
-            throw new RuntimeException("A recorrência deve estar entre 0 e 24 meses");
-        }
-        int parcelas = configuracao.quantidadeParcelas() == null ? 1 : configuracao.quantidadeParcelas();
-        if (!configuracao.servico().recorrente() && (parcelas < 1 || parcelas > 24)) {
-            throw new RuntimeException("A quantidade de parcelas deve estar entre 1 e 24");
-        }
-    }
-
     private void aplicarConfiguracaoComercial(Proposta proposta, PropostaComercialRequestDTO configuracao) {
         proposta.setServico(configuracao.servico());
         proposta.setMesInicio(configuracao.mesInicio());
         proposta.setRecorrenciaMeses(configuracao.servico().recorrente()
                 ? Objects.requireNonNullElse(configuracao.recorrenciaMeses(), 0)
                 : null);
-        proposta.setQuantidadeParcelas(configuracao.servico().recorrente()
+        proposta.setQuantidadeParcelas(configuracao.recebimentos() != null ? configuracao.quantidadeParcelas() : configuracao.servico().recorrente()
                 ? 1
                 : Objects.requireNonNullElse(configuracao.quantidadeParcelas(), 1));
         proposta.setParcelasIguais(!Boolean.FALSE.equals(configuracao.parcelasIguais()));
@@ -298,6 +291,17 @@ public class PropostaService {
         proposta.setEquipeTecnicaIds(validarUsuarios(configuracao.equipeTecnicaIds()));
         proposta.setEquipeComercialIds(validarUsuarios(configuracao.equipeComercialIds()));
         proposta.setReajustes(toReajustes(configuracao.reajustes()));
+        if (configuracao.servicos() != null) {
+            proposta.setServicos(configuracao.servicos().stream().map(item -> new PropostaServico(item.servico(), item.valor(),
+                    Objects.requireNonNullElse(item.comissaoTecnicoPercentual(), new BigDecimal("30.00")),
+                    Objects.requireNonNullElse(item.comissaoComercialPercentual(), new BigDecimal("20.00")))).toList());
+            proposta.setServico(proposta.getServicos().getFirst().getServico());
+        }
+        if (configuracao.recebimentos() != null) {
+            proposta.setRecebimentos(configuracao.recebimentos().stream()
+                    .sorted(java.util.Comparator.comparing(PropostaRecebimentoDTO::numero))
+                    .map(item -> new PropostaRecebimento(item.numero(), item.valor())).toList());
+        }
     }
 
     private HashSet<Long> validarUsuarios(List<Long> ids) {

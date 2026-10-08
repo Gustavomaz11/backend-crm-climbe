@@ -28,6 +28,8 @@ public record PropostaResponseDTO(
         Set<Long> equipeTecnicaIds,
         Set<Long> equipeComercialIds,
         List<PropostaReajusteDTO> reajustes,
-        String observacoes
+        String observacoes,
+        List<PropostaServicoDTO> servicos,
+        List<PropostaRecebimentoDTO> recebimentos
 ) {
 }

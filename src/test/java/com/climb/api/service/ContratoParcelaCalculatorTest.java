@@ -2,6 +2,7 @@ package com.climb.api.service;
 
 import com.climb.api.model.Proposta;
 import com.climb.api.model.PropostaReajuste;
+import com.climb.api.model.PropostaRecebimento;
 import com.climb.api.model.enums.ServicoComercial;
 import org.junit.jupiter.api.Test;
 
@@ -88,6 +89,26 @@ class ContratoParcelaCalculatorTest {
         proposta.setParcelasIguais(true);
         proposta.setReajustes(List.of());
         return proposta;
+    }
+
+    @Test
+    void deveTransferirRecebimentosPersonalizadosAoContratoSemAlterarValores() {
+        Proposta proposta = proposta(ServicoComercial.BPO, "50000.00");
+        proposta.setQuantidadeParcelas(12);
+        proposta.setRecorrenciaMeses(12);
+        proposta.setMesInicio(LocalDate.of(2026, 1, 1));
+        proposta.setRecebimentos(PropostaComercialValidatorTest.recebimentos().stream()
+                .map(item -> new PropostaRecebimento(item.numero(), item.valor())).toList().reversed());
+
+        var parcelas = calculator.calcular(proposta, LocalDate.of(2026, 1, 31));
+
+        assertEquals(12, parcelas.size());
+        assertEquals(new BigDecimal("3000.00"), parcelas.getFirst().valor());
+        assertEquals(new BigDecimal("3000.00"), parcelas.get(1).valor());
+        assertEquals(new BigDecimal("4400.00"), parcelas.get(2).valor());
+        assertEquals(LocalDate.of(2026, 2, 28), parcelas.get(1).vencimento());
+        assertEquals(new BigDecimal("50000.00"), parcelas.stream().map(ContratoParcelaCalculator.ParcelaPlanejada::valor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     private PropostaReajuste reajuste(int mes, String valor) {
