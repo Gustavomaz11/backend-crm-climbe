@@ -309,7 +309,19 @@ public class GoogleOAuthService {
 
         if (vinculo != null) {
             atualizarDadosVinculoGoogle(vinculo, email, nome, avatarUrl);
-            return resolverUsuarioVinculado(vinculo.getUsuario(), email);
+            return resolverUsuarioVinculado(vinculo.getUsuario(), email, providerUserId);
+        }
+
+        Usuario usuarioExistente = usuarioService.buscarPorEmail(email);
+        if (usuarioExistente != null && !"COMPLETAR_CADASTRO".equals(usuarioExistente.getSituacao())) {
+            AuthResult<Void> situacao = authenticationService.validarUsuarioAtivo(
+                    usuarioExistente, "Usuario nao encontrado");
+            if (!situacao.isSuccess()) {
+                return resolveResponseComEmail(STATUS_PENDING_APPROVAL, email, situacao.message());
+            }
+
+            vincularConta(usuarioExistente.getId(), providerUserId, email, nome, avatarUrl);
+            return resolverUsuarioVinculado(usuarioExistente, email, providerUserId);
         }
 
         OAuth2PendingRegistration pending = pendingService
@@ -317,38 +329,12 @@ public class GoogleOAuthService {
                 .orElse(null);
 
         if (pending != null) {
-            if (pending.getExpiraEm().isBefore(LocalDateTime.now())) {
-                pending = pendingService.criarPendingGoogle(providerUserId, email, nome, avatarUrl);
-            }
-
             if (Boolean.TRUE.equals(pending.getAprovado())) {
-                String pendingToken = jwtUtil.generatePendingRegistrationToken(pending.getId(), pending.getEmail());
-                GoogleOAuthResolveResponseDTO response = new GoogleOAuthResolveResponseDTO();
-                response.setStatus(STATUS_COMPLETAR_CADASTRO);
-                response.setPendingToken(pendingToken);
-                response.setEmail(pending.getEmail());
-                response.setNome(pending.getNome());
-                response.setAvatarUrl(pending.getAvatarUrl());
-                response.setMessage(MSG_COMPLETAR_CADASTRO);
-                return response;
+                return resolverCadastroAprovado(pending);
             }
 
             return montarResolveResponse(STATUS_PENDING_APPROVAL, pending.getEmail(),
                     pending.getNome(), pending.getAvatarUrl(), MSG_PENDING_APPROVAL);
-        }
-
-        Usuario usuarioExistente = usuarioService.buscarPorEmail(email);
-        if (usuarioExistente != null) {
-            AuthResult<Void> situacao = authenticationService.validarUsuarioAtivo(
-                    usuarioExistente,
-                    "Usuario nao encontrado");
-
-            if (!situacao.isSuccess()) {
-                return resolveResponseComEmail(STATUS_PENDING_APPROVAL, email, situacao.message());
-            }
-
-            vincularConta(usuarioExistente.getId(), providerUserId, email, nome, avatarUrl);
-            return resolverUsuarioVinculado(usuarioExistente, email);
         }
 
         OAuth2PendingRegistration novoPending = pendingService
@@ -357,7 +343,15 @@ public class GoogleOAuthService {
                 novoPending.getNome(), novoPending.getAvatarUrl(), MSG_PENDING_APPROVAL);
     }
 
-    private GoogleOAuthResolveResponseDTO resolverUsuarioVinculado(Usuario usuario, String email) {
+    private GoogleOAuthResolveResponseDTO resolverCadastroAprovado(OAuth2PendingRegistration pending) {
+        GoogleOAuthResolveResponseDTO response = montarResolveResponse(
+                STATUS_COMPLETAR_CADASTRO, pending.getEmail(), pending.getNome(),
+                pending.getAvatarUrl(), MSG_COMPLETAR_CADASTRO);
+        response.setPendingToken(jwtUtil.generatePendingRegistrationToken(pending.getId(), pending.getEmail()));
+        return response;
+    }
+
+    private GoogleOAuthResolveResponseDTO resolverUsuarioVinculado(Usuario usuario, String email, String providerUserId) {
         AuthResult<Void> situacao = authenticationService.validarUsuarioAtivo(usuario, "Usuario nao encontrado");
 
         return switch (situacao.status()) {
@@ -372,6 +366,11 @@ public class GoogleOAuthService {
                 response.setMessage("Login Google realizado com sucesso");
                 yield response;
             }
+            case COMPLETAR_CADASTRO -> pendingService
+                    .findAtivoPorProvider(OAuthProvider.GOOGLE, providerUserId)
+                    .filter(pending -> Boolean.TRUE.equals(pending.getAprovado()))
+                    .map(this::resolverCadastroAprovado)
+                    .orElseGet(() -> resolveResponseComEmail(STATUS_PENDING_APPROVAL, email, MSG_PENDING_APPROVAL));
             case INATIVO -> resolveResponseComEmail(STATUS_PENDING_APPROVAL, email, MSG_DEACTIVATED);
             default -> resolveResponseComEmail(STATUS_PENDING_APPROVAL, email, MSG_PENDING_APPROVAL);
         };
@@ -438,6 +437,14 @@ public class GoogleOAuthService {
             vinculo.setVinculadoEm(LocalDateTime.now());
         }
         usuarioOAuthRepository.save(vinculo);
+        pendingRegistrationRepository.findByProviderAndProviderUserIdAndConsumidoFalse(
+                        OAuthProvider.GOOGLE, providerUserId)
+                .filter(pending -> Boolean.TRUE.equals(pending.getAprovado()))
+                .ifPresent(pending -> {
+                    googleCredentialService.transferirPendingParaVinculo(pending, vinculo);
+                    pending.setConsumido(true);
+                    pendingRegistrationRepository.save(pending);
+                });
 
         return montarResolveResponse(STATUS_LINK_SUCCESS, email, nome, avatarUrl, "Conta Google vinculada com sucesso");
     }
@@ -598,7 +605,7 @@ public class GoogleOAuthService {
     }
 
     private void limparPendenciasExpiradas() {
-        pendingRegistrationRepository.deleteByExpiraEmBefore(LocalDateTime.now());
+        pendingRegistrationRepository.deleteByAprovadoFalseAndExpiraEmBefore(LocalDateTime.now());
     }
 
     private UsuarioResponseDTO autenticarUsuarioGoogle(String googleAccessToken) {

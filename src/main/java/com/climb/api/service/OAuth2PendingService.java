@@ -23,15 +23,18 @@ public class OAuth2PendingService {
     private final AprovacaoAcessoService aprovacaoAcessoService;
     private final SolicitacaoAcessoService solicitacaoAcessoService;
     private final EmailService emailService;
+    private final UsuarioService usuarioService;
 
     public OAuth2PendingService(OAuth2PendingRegistrationRepository repository,
                                 AprovacaoAcessoService aprovacaoAcessoService,
                                 SolicitacaoAcessoService solicitacaoAcessoService,
-                                EmailService emailService) {
+                                EmailService emailService,
+                                UsuarioService usuarioService) {
         this.repository = repository;
         this.aprovacaoAcessoService = aprovacaoAcessoService;
         this.solicitacaoAcessoService = solicitacaoAcessoService;
         this.emailService = emailService;
+        this.usuarioService = usuarioService;
     }
 
     @Transactional
@@ -75,6 +78,9 @@ public class OAuth2PendingService {
         if (Boolean.TRUE.equals(pending.getConsumido())) {
             throw new RuntimeException("Cadastro pendente ja foi concluido");
         }
+        if (Boolean.TRUE.equals(pending.getAprovado())) {
+            throw new RuntimeException("Cadastro pendente ja foi aprovado");
+        }
         if (pending.getExpiraEm().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Cadastro pendente expirado");
         }
@@ -89,6 +95,7 @@ public class OAuth2PendingService {
         pending.getPermissoes().clear();
         pending.getPermissoes().addAll(atribuicao.permissoes());
         repository.save(pending);
+        usuarioService.prepararCadastroGoogleAprovado(pending);
         solicitacaoAcessoService.decidir(
                 SolicitacaoAcessoOrigem.GOOGLE,
                 pendingId,

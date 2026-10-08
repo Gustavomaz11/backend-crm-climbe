@@ -42,7 +42,7 @@ public class UsuarioService {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private static final Set<String> SITUACOES_PERMITIDAS_NO_UPDATE =
             Set.of("ATIVO", "INATIVO", "ESPERANDO_APROVACAO");
-    private static final Set<String> SITUACOES_GERENCIAVEIS = Set.of("ATIVO", "REVOGADO");
+    private static final Set<String> SITUACOES_GERENCIAVEIS = Set.of("ATIVO", "REVOGADO", "COMPLETAR_CADASTRO");
 
     private final UsuarioRepository repository;
     private final EmailService emailService;
@@ -294,7 +294,7 @@ public class UsuarioService {
         if (!SITUACOES_GERENCIAVEIS.contains(usuario.getSituacao())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "O cargo pode ser alterado somente para usuarios ativos ou revogados");
+                    "O cargo pode ser alterado somente para usuarios aprovados ou revogados");
         }
 
         Cargo cargo = cargoRepository.findByIdAndAtivoTrue(cargoId)
@@ -314,9 +314,37 @@ public class UsuarioService {
     }
 
     @Transactional
+    public Usuario prepararCadastroGoogleAprovado(OAuth2PendingRegistration pending) {
+        if (!Boolean.TRUE.equals(pending.getAprovado()) || pending.getCargo() == null
+                || pending.getPermissoes().isEmpty()) {
+            throw new IllegalStateException("A aprovacao precisa definir cargo e permissoes");
+        }
+        String email = normalizarEmail(pending.getEmail());
+        Usuario existente = repository.findByEmail(email).orElse(null);
+        if (existente != null) {
+            return existente;
+        }
+        if (usuarioOAuthRepository.existsByProviderAndProviderUserId(
+                pending.getProvider(), pending.getProviderUserId())) {
+            throw new IllegalStateException("Esta conta Google ja esta vinculada a outro usuario");
+        }
+
+        Usuario usuario = novoUsuarioGoogle(pending);
+        usuario.setEmail(email);
+        usuario.setContato("");
+        usuario.setSituacao("COMPLETAR_CADASTRO");
+        Usuario salvo = repository.save(usuario);
+        vincularPendingGoogle(pending, salvo);
+        return salvo;
+    }
+
+    @Transactional
     public UsuarioResponseDTO completarCadastroViaPending(Long pendingId, CompletarCadastroRequestDTO dto) {
         exigirCampoObrigatorio(dto.getCpf(), "CPF");
         exigirCampoObrigatorio(dto.getContato(), "Contato");
+        if (dto.getSenha() != null && dto.getSenha().length() < 8) {
+            throw new IllegalArgumentException("Senha deve ter no minimo 8 caracteres");
+        }
 
         OAuth2PendingRegistration pending = pendingRepository.findById(pendingId)
                 .orElseThrow(() -> new RuntimeException("Cadastro pendente não encontrado"));
@@ -327,9 +355,6 @@ public class UsuarioService {
         if (!Boolean.TRUE.equals(pending.getAprovado())) {
             throw new RuntimeException("Cadastro pendente ainda não foi aprovado");
         }
-        if (pending.getExpiraEm().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Cadastro pendente expirado");
-        }
         if (pending.getCargo() == null || pending.getPermissoes().isEmpty()) {
             throw new RuntimeException("A aprovacao precisa definir cargo e permissoes");
         }
@@ -339,25 +364,46 @@ public class UsuarioService {
             throw new RuntimeException("Cadastro pendente já está em processamento");
         }
 
-        validarCpfEmailDisponiveis(dto.getCpf(), pending.getEmail(), null);
-
-        Usuario usuario = new Usuario();
-        usuario.setNomeCompleto(pending.getNome() != null && !pending.getNome().isBlank()
-                ? pending.getNome()
-                : pending.getEmail());
-        usuario.setEmail(pending.getEmail());
+        UsuarioOAuth vinculo = usuarioOAuthRepository
+                .findByProviderAndProviderUserId(pending.getProvider(), pending.getProviderUserId())
+                .orElse(null);
+        Usuario usuario = vinculo != null ? vinculo.getUsuario() : novoUsuarioGoogle(pending);
+        if (vinculo != null) {
+            exigirSituacao(usuario, "COMPLETAR_CADASTRO", "Este usuario nao esta aguardando completar cadastro");
+        }
+        validarCpfEmailDisponiveis(dto.getCpf(), usuario.getEmail(), usuario.getId());
         usuario.setCpf(dto.getCpf());
         usuario.setContato(dto.getContato());
-        usuario.setCargo(pending.getCargo());
         usuario.setSituacao("ATIVO");
-        usuario.setSenhaHash("GOOGLE_OAUTH_" + UUID.randomUUID());
-        usuario.getPermissoes().addAll(pending.getPermissoes());
+        if (dto.getSenha() != null) {
+            usuario.setSenhaHash(passwordEncoder.encode(dto.getSenha()));
+        }
 
         Usuario salvo = repository.save(usuario);
+        pending.setConsumido(true);
+        if (vinculo == null) {
+            vincularPendingGoogle(pending, salvo);
+        } else {
+            googleCredentialService.transferirPendingParaVinculo(pending, vinculo);
+        }
+        return toResponse(salvo);
+    }
 
+    private Usuario novoUsuarioGoogle(OAuth2PendingRegistration pending) {
+        Usuario usuario = new Usuario();
+        usuario.setNomeCompleto(pending.getNome() != null && !pending.getNome().isBlank()
+                ? pending.getNome() : pending.getEmail());
+        usuario.setEmail(normalizarEmail(pending.getEmail()));
+        usuario.setCargo(pending.getCargo());
+        usuario.setSenhaHash("GOOGLE_OAUTH_" + UUID.randomUUID());
+        usuario.getPermissoes().addAll(pending.getPermissoes());
+        return usuario;
+    }
+
+    private void vincularPendingGoogle(OAuth2PendingRegistration pending, Usuario usuario) {
         UsuarioOAuth vinculo = new UsuarioOAuth();
-        vinculo.setUsuario(salvo);
-        vinculo.setProvider(OAuthProvider.GOOGLE);
+        vinculo.setUsuario(usuario);
+        vinculo.setProvider(pending.getProvider());
         vinculo.setProviderUserId(pending.getProviderUserId());
         vinculo.setEmailProvider(pending.getEmail());
         vinculo.setNomeProvider(pending.getNome());
@@ -365,8 +411,6 @@ public class UsuarioService {
         vinculo.setVinculadoEm(LocalDateTime.now());
         usuarioOAuthRepository.save(vinculo);
         googleCredentialService.transferirPendingParaVinculo(pending, vinculo);
-
-        return toResponse(salvo);
     }
 
     public UsuarioResponseDTO toResponse(Usuario usuario) {

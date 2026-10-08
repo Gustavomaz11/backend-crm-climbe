@@ -126,6 +126,25 @@ Fluxo:
 5. A API troca o `code` por token e redireciona de volta para `GOOGLE_CALENDAR_FRONTEND_URL`.
 6. Os dados do OAuth retornam no fragmento da URL, por exemplo `#google_oauth=success&google_access_token=...`.
 
+## Aprovação de cadastros Google
+
+A aprovação cria o usuário com cargo e permissões e situação `COMPLETAR_CADASTRO`.
+Ele já aparece em Permissões e na gestão de acessos. No primeiro login Google,
+o token de cadastro permite abrir `/first-access` e preencher CPF, contato e senha.
+A conclusão ativa o mesmo usuário e preserva alterações de cargo e permissões
+feitas pelo administrador depois da aprovação.
+
+Usuários ativos existentes têm prioridade sobre solicitações Google antigas.
+Aprovações permanecem válidas após o prazo original da solicitação; o token
+temporário para concluir o cadastro continua sujeito à própria expiração.
+
+A publicação desta correção deve incluir backend, frontend e a migration
+`V55__provision_approved_google_users.sql`. Ela permite CPF nulo durante o primeiro
+acesso e recupera cadastros aprovados ainda sem usuário, preservando contas
+existentes. No perfil `prod`, o Flyway aplica migrations na inicialização por
+padrão; com `SPRING_FLYWAY_ENABLED=false`, aplique a migration antes de liberar
+a nova versão da API.
+
 ## Estrutura do projeto
 
 ```

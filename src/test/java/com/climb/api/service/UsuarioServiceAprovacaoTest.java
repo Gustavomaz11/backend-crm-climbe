@@ -8,6 +8,7 @@ import com.climb.api.model.Permissao;
 import com.climb.api.model.SolicitacaoAcessoOrigem;
 import com.climb.api.model.SolicitacaoAcessoStatus;
 import com.climb.api.model.Usuario;
+import com.climb.api.model.UsuarioOAuth;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
 import com.climb.api.model.dto.UsuarioRequestDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
@@ -34,6 +35,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
@@ -101,6 +103,77 @@ class UsuarioServiceAprovacaoTest {
         Usuario usuarioSalvo = usuarioCaptor.getValue();
         assertEquals(cargo, usuarioSalvo.getCargo());
         assertEquals(Set.of(permitirAcesso), usuarioSalvo.getPermissoes());
+    }
+
+    @Test
+    void deveCriarUsuarioGoogleAprovadoAntesDaConclusaoDoPerfil() {
+        Cargo cargo = cargo(2L, "Analista Comercial");
+        Permissao permissao = permissao(10L, "CONTRATO_CRUD");
+        OAuth2PendingRegistration pending = pendingAprovado(cargo, Set.of(permissao));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
+            Usuario novo = invocation.getArgument(0);
+            novo.setId(7L);
+            return novo;
+        });
+
+        Usuario resultado = service.prepararCadastroGoogleAprovado(pending);
+
+        assertEquals("COMPLETAR_CADASTRO", resultado.getSituacao());
+        assertNull(resultado.getCpf());
+        assertEquals(cargo, resultado.getCargo());
+        assertEquals(Set.of(permissao), resultado.getPermissoes());
+        ArgumentCaptor<UsuarioOAuth> vinculo = ArgumentCaptor.forClass(UsuarioOAuth.class);
+        verify(usuarioOAuthRepository).save(vinculo.capture());
+        assertSame(resultado, vinculo.getValue().getUsuario());
+        assertEquals(pending.getProviderUserId(), vinculo.getValue().getProviderUserId());
+    }
+
+    @Test
+    void deveConcluirMesmoUsuarioPreservandoPermissoesECargoEditadosAposAprovacao() {
+        Cargo cargoAprovado = cargo(2L, "Analista Comercial");
+        Permissao permissaoAprovada = permissao(10L, "CONTRATO_CRUD");
+        OAuth2PendingRegistration pending = pendingAprovado(cargoAprovado, Set.of(permissaoAprovada));
+        pending.setExpiraEm(LocalDateTime.now().minusDays(1));
+        Cargo cargoEditado = cargo(3L, "Diretor Comercial");
+        Permissao permissaoEditada = permissao(11L, "PROPOSTA_CRUD");
+        Usuario provisionado = usuario(7L, "COMPLETAR_CADASTRO", cargoEditado, Set.of(permissaoEditada));
+        provisionado.setEmail(pending.getEmail());
+        UsuarioOAuth vinculo = new UsuarioOAuth();
+        vinculo.setUsuario(provisionado);
+        CompletarCadastroRequestDTO request = new CompletarCadastroRequestDTO();
+        request.setCpf("07508154509");
+        request.setContato("79999999999");
+        request.setSenha("senha-segura");
+        when(pendingRepository.findById(42L)).thenReturn(Optional.of(pending));
+        when(pendingRepository.consumirSeNaoConsumido(42L)).thenReturn(1);
+        when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.of(vinculo));
+        when(usuarioRepository.findByEmail(pending.getEmail())).thenReturn(Optional.of(provisionado));
+        when(passwordEncoder.encode("senha-segura")).thenReturn("senha-hash");
+        when(usuarioRepository.save(provisionado)).thenReturn(provisionado);
+        when(usuarioMapper.toResponse(provisionado)).thenReturn(new UsuarioResponseDTO());
+
+        service.completarCadastroViaPending(42L, request);
+
+        assertEquals(7L, provisionado.getId());
+        assertEquals("ATIVO", provisionado.getSituacao());
+        assertEquals("senha-hash", provisionado.getSenhaHash());
+        assertSame(cargoEditado, provisionado.getCargo());
+        assertEquals(Set.of(permissaoEditada), provisionado.getPermissoes());
+        verify(usuarioRepository).save(provisionado);
+    }
+
+    @Test
+    void naoDeveSobrescreverUsuarioExistenteAoAprovarCadastroGoogle() {
+        Cargo cargo = cargo(2L, "Analista Comercial");
+        Permissao permissao = permissao(10L, "CONTRATO_CRUD");
+        OAuth2PendingRegistration pending = pendingAprovado(cargo, Set.of(permissao));
+        Usuario existente = usuario(7L, "REVOGADO", cargo, Set.of());
+        when(usuarioRepository.findByEmail(pending.getEmail())).thenReturn(Optional.of(existente));
+
+        assertSame(existente, service.prepararCadastroGoogleAprovado(pending));
+        assertEquals("REVOGADO", existente.getSituacao());
+        assertEquals(Set.of(), existente.getPermissoes());
     }
 
     @Test

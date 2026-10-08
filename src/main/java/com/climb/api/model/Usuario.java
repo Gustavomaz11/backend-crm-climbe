@@ -22,7 +22,7 @@ public class Usuario {
     @Column(nullable = false)
     private String nomeCompleto;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private String cpf;
 
     @Column(nullable = false, unique = true)

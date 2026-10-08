@@ -24,4 +24,6 @@ public interface OAuth2PendingRegistrationRepository extends JpaRepository<OAuth
     int consumirSeNaoConsumido(@Param("id") Long id);
 
     void deleteByExpiraEmBefore(LocalDateTime dataHora);
+
+    void deleteByAprovadoFalseAndExpiraEmBefore(LocalDateTime dataHora);
 }

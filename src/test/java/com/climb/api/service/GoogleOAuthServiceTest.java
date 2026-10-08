@@ -29,6 +29,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.any;
 
 @ExtendWith(MockitoExtension.class)
 class GoogleOAuthServiceTest {
@@ -189,6 +190,82 @@ class GoogleOAuthServiceTest {
         assertEquals(GoogleOAuthService.STATUS_COMPLETAR_CADASTRO, response.getStatus());
         assertEquals("pending-jwt", response.getPendingToken());
         assertEquals("novo@climbe.com.br", response.getEmail());
+    }
+
+    @Test
+    void devePriorizarUsuarioAtivoQuandoAindaExistePendingGoogleAprovada() {
+        OAuth2PendingRegistration pending = pendingFixture(42L, usuario.getEmail(), "Usuario", true);
+        lenient().when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.of(pending));
+        when(pendingRegistrationRepository.findByProviderAndProviderUserIdAndConsumidoFalse(
+                OAuthProvider.GOOGLE, "google-sub")).thenReturn(Optional.of(pending));
+        when(usuarioService.buscarPorId(usuario.getId())).thenReturn(usuario);
+        when(usuarioService.buscarPorEmail(usuario.getEmail())).thenReturn(usuario);
+        when(authenticationService.validarUsuarioAtivo(usuario, "Usuario nao encontrado"))
+                .thenReturn(AuthResult.success(null));
+        when(authenticationService.gerarRespostaLogin(usuario)).thenReturn(AuthResult.success(loginResponse));
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService
+                .resolverLoginGoogle("google-sub", usuario.getEmail(), "Usuario", "https://img");
+
+        assertEquals(GoogleOAuthService.STATUS_LOGIN_SUCCESS, response.getStatus());
+        assertTrue(pending.getConsumido());
+        verify(pendingService, never()).findAtivoPorProvider(any(), anyString());
+        verify(jwtUtil, never()).generatePendingRegistrationToken(any(), anyString());
+    }
+
+    @Test
+    void naoDeveUsarPendingAprovadaParaContornarAcessoRevogado() {
+        usuario.setSituacao("REVOGADO");
+        when(usuarioService.buscarPorEmail(usuario.getEmail())).thenReturn(usuario);
+        when(authenticationService.validarUsuarioAtivo(usuario, "Usuario nao encontrado"))
+                .thenReturn(AuthResult.failure(com.climb.api.model.AuthStatus.INATIVO, "Acesso revogado"));
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService
+                .resolverLoginGoogle("google-sub", usuario.getEmail(), "Usuario", null);
+
+        assertEquals(GoogleOAuthService.STATUS_PENDING_APPROVAL, response.getStatus());
+        assertEquals("Acesso revogado", response.getMessage());
+        verify(jwtUtil, never()).generatePendingRegistrationToken(any(), anyString());
+        verify(usuarioOAuthRepository, never()).save(any());
+    }
+
+    @Test
+    void devePreservarAprovacaoMesmoDepoisDoPrazoOriginalDaSolicitacao() {
+        OAuth2PendingRegistration pending = pendingFixture(42L, "novo@climbe.com.br", "Novo Usuario", true);
+        pending.setExpiraEm(LocalDateTime.now().minusDays(1));
+        when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.of(pending));
+        when(jwtUtil.generatePendingRegistrationToken(42L, pending.getEmail())).thenReturn("pending-jwt");
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService
+                .resolverLoginGoogle("google-sub", pending.getEmail(), pending.getNome(), pending.getAvatarUrl());
+
+        assertEquals(GoogleOAuthService.STATUS_COMPLETAR_CADASTRO, response.getStatus());
+        verify(pendingService, never()).criarPendingGoogle(anyString(), anyString(), anyString(), anyString());
+        verify(pendingRegistrationRepository, never()).deleteByExpiraEmBefore(any());
+    }
+
+    @Test
+    void deveEncaminharUsuarioJaProvisionadoParaConcluirPerfil() {
+        usuario.setSituacao("COMPLETAR_CADASTRO");
+        UsuarioOAuth vinculo = new UsuarioOAuth();
+        vinculo.setUsuario(usuario);
+        OAuth2PendingRegistration pending = pendingFixture(42L, usuario.getEmail(), "Usuario", true);
+        when(usuarioOAuthRepository.findByProviderAndProviderUserId(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.of(vinculo));
+        when(authenticationService.validarUsuarioAtivo(usuario, "Usuario nao encontrado"))
+                .thenReturn(AuthResult.failure(com.climb.api.model.AuthStatus.COMPLETAR_CADASTRO, "Complete seu perfil"));
+        when(pendingService.findAtivoPorProvider(OAuthProvider.GOOGLE, "google-sub"))
+                .thenReturn(Optional.of(pending));
+        when(jwtUtil.generatePendingRegistrationToken(42L, usuario.getEmail())).thenReturn("pending-jwt");
+
+        GoogleOAuthResolveResponseDTO response = googleOAuthService
+                .resolverLoginGoogle("google-sub", usuario.getEmail(), "Usuario", null);
+
+        assertEquals(GoogleOAuthService.STATUS_COMPLETAR_CADASTRO, response.getStatus());
+        assertEquals("pending-jwt", response.getPendingToken());
+        verify(authenticationService, never()).gerarRespostaLogin(any());
     }
 
     @Test

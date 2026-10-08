@@ -34,6 +34,9 @@ class OAuth2PendingServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private UsuarioService usuarioService;
+
     @InjectMocks
     private OAuth2PendingService service;
 
@@ -70,6 +73,7 @@ class OAuth2PendingServiceTest {
         assertEquals(cargo, pending.getCargo());
         assertEquals(Set.of(permissao), pending.getPermissoes());
         verify(repository).save(pending);
+        verify(usuarioService).prepararCadastroGoogleAprovado(pending);
         verify(emailService).enviarAcessoAprovado(pending.getEmail(), pending.getNome());
     }
 
