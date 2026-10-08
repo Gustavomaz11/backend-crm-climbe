@@ -252,7 +252,7 @@ public class ContratoKanbanService {
         boolean podeVisualizarTodas = rbacService.temPermissao(
                 usuarioId,
                 PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS
-        );
+        ) || isGestor(contrato, usuarioId);
         List<ContratoKanbanTask> tasks = podeVisualizarTodas
                 ? taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contrato.getIdContrato())
                 : taskRepository.findByContrato_IdContratoAndResponsavel_IdInOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(

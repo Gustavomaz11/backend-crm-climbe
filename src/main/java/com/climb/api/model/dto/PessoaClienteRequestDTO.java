@@ -10,7 +10,7 @@ import java.util.Set;
 
 public record PessoaClienteRequestDTO(
         @NotBlank @Size(max = 180) String nome,
-        @CPF String cpf,
+        @NotBlank(message = "Por favor, informe o CPF da pessoa.") @CPF String cpf,
         @Email @Size(max = 180) String email,
         @Size(max = 50) String telefone,
         @Size(max = 120) String cargo,

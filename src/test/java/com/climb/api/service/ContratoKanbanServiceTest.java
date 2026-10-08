@@ -19,12 +19,16 @@ import com.climb.api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -134,6 +138,43 @@ class ContratoKanbanServiceTest {
 
         assertTrue(exception.getReason().contains("usuário ativo"));
         verify(taskRepository, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(longs = {2L})
+    void deveManterTarefaCriadaVisivelParaGestorSemPermissaoGlobal(Long responsavelId) {
+        Usuario analista = usuario(2L, "Analista", "ATIVO");
+        List<ContratoKanbanTask> tarefasSalvas = new ArrayList<>();
+        when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(raiaRepository.findByIdRaiaAndContrato_IdContrato(20L, CONTRATO_ID)).thenReturn(Optional.of(raia));
+        prepararConsultasDoBoard(tarefasSalvas, List.of(), List.of(gestor, analista));
+        if (responsavelId != null) {
+            when(usuarioRepository.findById(responsavelId)).thenReturn(Optional.of(analista));
+        }
+        when(taskRepository.save(any())).thenAnswer(invocation -> {
+            ContratoKanbanTask task = invocation.getArgument(0);
+            task.setIdTask(30L);
+            tarefasSalvas.add(task);
+            return task;
+        });
+
+        ContratoKanbanTaskRequestDTO request = new ContratoKanbanTaskRequestDTO(
+                20L, "Analisar documentos", null, ContratoKanbanPrioridade.MEDIA,
+                responsavelId, null, null, 0);
+
+        ContratoKanbanBoardResponseDTO criado = service.criarTask(CONTRATO_ID, GESTOR_ID, request);
+
+        assertTrue(criado.gestor());
+        assertEquals(1, criado.raias().getFirst().tasks().size());
+        assertEquals("Analisar documentos", criado.raias().getFirst().tasks().getFirst().titulo());
+
+        ContratoKanbanBoardResponseDTO recarregado = service.buscarBoard(CONTRATO_ID, GESTOR_ID);
+
+        assertEquals(1, recarregado.raias().getFirst().tasks().size());
+        assertEquals(30L, recarregado.raias().getFirst().tasks().getFirst().id());
+        verify(cargoHierarquiaAcessoService, never()).buscarUsuariosVisiveis(GESTOR_ID);
     }
 
     @Test
