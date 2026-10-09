@@ -3,6 +3,7 @@ package com.climb.api.service;
 import com.climb.api.model.*;
 import com.climb.api.model.dto.*;
 import com.climb.api.model.enums.PropostaStatus;
+import com.climb.api.model.enums.ContratoPreparacaoEtapa;
 import com.climb.api.model.enums.RevisaoDocumentoStatus;
 import com.climb.api.model.enums.RevisaoDocumentoTipo;
 import com.climb.api.repository.*;
@@ -328,11 +329,11 @@ public class RevisaoDocumentoService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
             contrato.setStatus(status == RevisaoDocumentoStatus.APROVADO ? ContratoService.STATUS_APROVADO
                     : status == RevisaoDocumentoStatus.REPROVADO ? ContratoService.STATUS_REJEITADO : ContratoService.STATUS_PENDENTE);
-            if (contrato.getEtapaPreparacao() != null) {
-                contrato.setEtapaPreparacao(status == RevisaoDocumentoStatus.APROVADO
-                        ? com.climb.api.model.enums.ContratoPreparacaoEtapa.CONCLUIDO
-                        : com.climb.api.model.enums.ContratoPreparacaoEtapa.REVISAO);
-            }
+            contrato.setEtapaPreparacao(switch (status) {
+                case APROVADO -> ContratoPreparacaoEtapa.CONCLUIDO;
+                case AJUSTES_SOLICITADOS -> ContratoPreparacaoEtapa.REVISAO;
+                default -> ContratoPreparacaoEtapa.EM_ANDAMENTO;
+            });
             if (status == RevisaoDocumentoStatus.APROVADO) {
                 contrato.setDataAprovacao(java.time.LocalDate.now());
                 parcelaCalculator.aplicarAoContrato(contrato);

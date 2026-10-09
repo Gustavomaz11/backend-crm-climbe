@@ -124,7 +124,7 @@ class ContratoServiceTest {
     }
 
     @Test
-    void deveEnviarArquivoNoMesmoContratoEAvancarParaRevisao() {
+    void deveEnviarArquivoNoMesmoContratoEAvancarParaEmAndamento() {
         Contrato contrato = rascunho();
         when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
         when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
@@ -134,10 +134,41 @@ class ContratoServiceTest {
         var upload = new com.climb.api.model.dto.ArquivoUploadResponseDTO("contrato.pdf", "application/pdf", 1L, "key", "https://storage.test/contrato.pdf");
         when(arquivoStorageService.salvar(arquivo, "contratos/empresa-30")).thenReturn(upload);
         service.enviarAoCliente(10L, 1L, arquivo);
-        assertThat(contrato.getEtapaPreparacao()).isEqualTo(ContratoPreparacaoEtapa.REVISAO);
+        assertThat(contrato.getEtapaPreparacao()).isEqualTo(ContratoPreparacaoEtapa.EM_ANDAMENTO);
         assertThat(contrato.getUrlPdf()).isEqualTo(upload.url());
         verify(repository).save(contrato);
         verify(revisaoDocumentoService).iniciarContrato(contrato, upload, usuario);
+    }
+
+    @Test
+    void deveCriarContratoComArquivoEmAndamento() {
+        Empresa empresa = rascunho().getEmpresa();
+        Usuario usuario = new Usuario(); usuario.setId(1L);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(empresaRepository.findById(30L)).thenReturn(Optional.of(empresa));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+        var arquivo = new MockMultipartFile("arquivo", "contrato.pdf", "application/pdf", new byte[]{1});
+        var upload = new com.climb.api.model.dto.ArquivoUploadResponseDTO(
+                "contrato.pdf", "application/pdf", 1L, "key", "https://storage.test/contrato.pdf");
+        when(arquivoStorageService.salvar(arquivo, "contratos/empresa-30")).thenReturn(upload);
+        Contrato salvo = service.criarComArquivo(30L, null, 1L, 1L, java.util.List.of(1L), arquivo);
+        assertThat(salvo.getEtapaPreparacao()).isEqualTo(ContratoPreparacaoEtapa.EM_ANDAMENTO);
+        verify(revisaoDocumentoService).iniciarContrato(salvo, upload, usuario);
+    }
+
+    @Test
+    void deveRecusarMovimentacaoManualParaRevisaoMesmoComArquivoEnviado() {
+        Contrato contrato = rascunho();
+        contrato.setUrlPdf("https://storage.test/contrato.pdf");
+        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.EM_ANDAMENTO);
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        var erro = assertThrows(ResponseStatusException.class,
+                () -> service.moverPreparacao(10L, 1L, ContratoPreparacaoEtapa.REVISAO));
+        assertThat(erro.getReason()).contains("cliente");
+        assertThat(contrato.getEtapaPreparacao()).isEqualTo(ContratoPreparacaoEtapa.EM_ANDAMENTO);
+        verify(repository, never()).save(any());
     }
 
     @Test
@@ -152,7 +183,7 @@ class ContratoServiceTest {
     }
 
     @Test
-    void deveExigirArquivoParaRevisaoEAprovacaoParaConcluir() {
+    void deveRecusarRevisaoManualEExigirArquivoEAprovacaoParaConcluir() {
         Contrato contrato = rascunho();
         when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
         when(repository.findById(10L)).thenReturn(Optional.of(contrato));

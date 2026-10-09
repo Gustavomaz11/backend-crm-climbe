@@ -162,8 +162,8 @@ public class ContratoService {
         if (STATUS_APROVADO.equals(contrato.getStatus()) && etapa != ContratoPreparacaoEtapa.CONCLUIDO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A criação deste contrato já foi concluída");
         }
-        if (etapa == ContratoPreparacaoEtapa.REVISAO && !StringUtils.hasText(contrato.getUrlPdf())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Anexe e envie o contrato ao cliente antes de mover para Revisão");
+        if (etapa == ContratoPreparacaoEtapa.REVISAO) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O contrato só vai para Revisão quando o cliente solicita ajustes");
         }
         contrato.setEtapaPreparacao(etapa);
         return repository.save(contrato);
@@ -185,7 +185,7 @@ public class ContratoService {
         ArquivoUploadResponseDTO upload = arquivoStorageService.salvar(arquivo, "contratos/empresa-" + contrato.getEmpresa().getIdEmpresa());
         contrato.setUrlPdf(upload.url());
         contrato.setStatus(STATUS_PENDENTE);
-        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.REVISAO);
+        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.EM_ANDAMENTO);
         repository.save(contrato);
         return revisaoDocumentoService.iniciarContrato(contrato, upload,
                 buscarUsuarioOuFalhar(usuarioId, "Usuário não encontrado"));
@@ -235,7 +235,7 @@ public class ContratoService {
         contrato.setDataInicio(LocalDate.now());
         contrato.setStatus(STATUS_PENDENTE);
         contrato.setUrlPdf(upload.url());
-        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.REVISAO);
+        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.EM_ANDAMENTO);
         contrato.setResponsavelComercial(proposta != null ? proposta.getUsuario() : usuario);
         contrato.setResponsavel(responsavel);
         contrato.setParticipantes(participantes);
