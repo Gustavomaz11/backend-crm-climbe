@@ -21,12 +21,14 @@ public class TarefaColaboracaoService {
     private final UsuarioRepository usuarios;
     private final CloudflareR2ArquivoStorageService storage;
     private final ArquivoValidationService validation;
+    private final TarefaPastaService pastas;
 
     public TarefaColaboracaoService(ContratoKanbanService contratos, PipelineTarefaService comercial,
             TarefaComentarioRepository comentarios, TarefaAnexoRepository anexos, UsuarioRepository usuarios,
-            CloudflareR2ArquivoStorageService storage, ArquivoValidationService validation) {
+            CloudflareR2ArquivoStorageService storage, ArquivoValidationService validation, TarefaPastaService pastas) {
         this.contratos = contratos; this.comercial = comercial; this.comentarios = comentarios;
         this.anexos = anexos; this.usuarios = usuarios; this.storage = storage; this.validation = validation;
+        this.pastas = pastas;
     }
 
     private record Tarefa(ContratoKanbanTask contrato, PipelineVendasTarefa comercial) {}
@@ -35,23 +37,45 @@ public class TarefaColaboracaoService {
     @Transactional(readOnly = true)
     public TarefaColaboracaoResponseDTO listar(TarefaTipo tipo, Long id, Long usuarioId) {
         exigirAcesso(tipo, id, usuarioId);
-        var arquivos = tipo == TarefaTipo.CONTRATO ? anexos.findByContratoTask_IdTaskOrderByCriadoEmAscIdAsc(id)
-                : anexos.findByPipelineTarefa_IdTarefaOrderByCriadoEmAscIdAsc(id);
+        var arquivos = arquivosDaTarefa(tipo, id);
         var conversa = tipo == TarefaTipo.CONTRATO ? comentarios.findByContratoTask_IdTaskOrderByCriadoEmAscIdAsc(id)
                 : comentarios.findByPipelineTarefa_IdTarefaOrderByCriadoEmAscIdAsc(id);
         var porComentario = arquivos.stream().filter(anexo -> anexo.getComentario() != null)
                 .collect(java.util.stream.Collectors.groupingBy(anexo -> anexo.getComentario().getId()));
         return new TarefaColaboracaoResponseDTO(arquivos.stream().filter(anexo -> anexo.getComentario() == null)
                 .map(this::toAnexo).toList(), conversa.stream().map(comentario -> toComentario(comentario,
-                        porComentario.getOrDefault(comentario.getId(), List.of()))).toList());
+                        porComentario.getOrDefault(comentario.getId(), List.of()))).toList(),
+                pastas.listar(tipo, id).stream().map(pastas::toResponse).toList());
     }
 
     @Transactional
     public List<TarefaAnexoResponseDTO> anexar(TarefaTipo tipo, Long id, Long usuarioId, List<MultipartFile> arquivos) {
+        return anexar(tipo, id, usuarioId, arquivos, null);
+    }
+
+    @Transactional
+    public List<TarefaAnexoResponseDTO> anexar(TarefaTipo tipo, Long id, Long usuarioId, List<MultipartFile> arquivos, Long pastaId) {
         Tarefa tarefa = exigirAcesso(tipo, id, usuarioId);
         if (arquivos == null || arquivos.isEmpty()) throw erro("Selecione pelo menos um arquivo para anexar à tarefa.");
+        TarefaPasta pasta = pastas.exigir(tipo, id, pastaId);
         validarArquivos(arquivos);
-        return salvarAnexos(tarefa, buscarAutor(usuarioId), null, tipo, id, arquivos).stream().map(this::toAnexo).toList();
+        Usuario autor = buscarAutor(usuarioId);
+        if (pastaId == null) {
+            var raiz = arquivosDaTarefa(tipo, id).stream().filter(anexo -> anexo.getComentario() == null && anexo.getPasta() == null).toList();
+            if (raiz.size() + arquivos.size() > 1) {
+                pasta = pastas.anexosAutomaticos(tarefa.contrato(), tarefa.comercial(), autor);
+                for (var anexo : raiz) anexo.setPasta(pasta);
+                anexos.saveAll(raiz);
+            }
+        }
+        return salvarAnexos(tarefa, autor, null, pasta, tipo, id, arquivos).stream().map(this::toAnexo).toList();
+    }
+
+    @Transactional
+    public TarefaPastaResponseDTO criarPasta(TarefaTipo tipo, Long id, Long usuarioId, TarefaPastaRequestDTO dto) {
+        Tarefa tarefa = exigirAcesso(tipo, id, usuarioId);
+        if (dto == null) throw erro("Informe o nome da pasta para continuar.");
+        return pastas.toResponse(pastas.criar(tarefa.contrato(), tarefa.comercial(), buscarAutor(usuarioId), dto.nome(), dto.pastaPaiId()));
     }
 
     @Transactional
@@ -70,7 +94,7 @@ public class TarefaColaboracaoService {
         comentario.setContratoTask(tarefa.contrato()); comentario.setPipelineTarefa(tarefa.comercial());
         comentario.setAutor(buscarAutor(usuarioId)); comentario.setConteudo(conteudo.trim()); comentario.setComentarioPai(pai);
         TarefaComentario salvo = comentarios.save(comentario);
-        return toComentario(salvo, salvarAnexos(tarefa, comentario.getAutor(), salvo, tipo, id, arquivos));
+        return toComentario(salvo, salvarAnexos(tarefa, comentario.getAutor(), salvo, null, tipo, id, arquivos));
     }
 
     @Transactional(readOnly = true)
@@ -98,14 +122,19 @@ public class TarefaColaboracaoService {
     private void validarArquivos(List<MultipartFile> arquivos) {
         if (arquivos != null) arquivos.forEach(validation::validar);
     }
+    private List<TarefaAnexo> arquivosDaTarefa(TarefaTipo tipo, Long id) {
+        return tipo == TarefaTipo.CONTRATO ? anexos.findByContratoTask_IdTaskOrderByCriadoEmAscIdAsc(id)
+                : anexos.findByPipelineTarefa_IdTarefaOrderByCriadoEmAscIdAsc(id);
+    }
     private List<TarefaAnexo> salvarAnexos(Tarefa tarefa, Usuario autor, TarefaComentario comentario,
-            TarefaTipo tipo, Long id, List<MultipartFile> arquivos) {
+            TarefaPasta pasta, TarefaTipo tipo, Long id, List<MultipartFile> arquivos) {
         if (arquivos == null) return List.of();
         return arquivos.stream().map(arquivo -> {
-            var upload = storage.salvar(arquivo, "tarefas/" + tipo + "/" + id);
+            var upload = storage.salvar(arquivo, "tarefas/" + tipo + "/" + id + (pasta == null ? "" : "/pastas/" + pasta.getId()));
             TarefaAnexo anexo = new TarefaAnexo();
             anexo.setContratoTask(tarefa.contrato()); anexo.setPipelineTarefa(tarefa.comercial());
             anexo.setComentario(comentario); anexo.setAutor(autor); anexo.setNome(upload.nomeOriginal());
+            anexo.setPasta(pasta);
             anexo.setContentType(upload.contentType()); anexo.setTamanho(upload.tamanho()); anexo.setChave(upload.chave());
             return anexos.save(anexo);
         }).toList();
@@ -114,7 +143,8 @@ public class TarefaColaboracaoService {
         return new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail());
     }
     private TarefaAnexoResponseDTO toAnexo(TarefaAnexo anexo) {
-        return new TarefaAnexoResponseDTO(anexo.getId(), anexo.getNome(), anexo.getContentType(), anexo.getTamanho(), toAutor(anexo.getAutor()), anexo.getCriadoEm());
+        return new TarefaAnexoResponseDTO(anexo.getId(), anexo.getNome(), anexo.getContentType(), anexo.getTamanho(), toAutor(anexo.getAutor()), anexo.getCriadoEm(),
+                anexo.getPasta() == null ? null : anexo.getPasta().getId());
     }
     private TarefaComentarioResponseDTO toComentario(TarefaComentario comentario, List<TarefaAnexo> arquivos) {
         return new TarefaComentarioResponseDTO(comentario.getId(), comentario.getComentarioPai() == null ? null : comentario.getComentarioPai().getId(),

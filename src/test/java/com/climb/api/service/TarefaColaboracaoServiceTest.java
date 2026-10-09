@@ -28,6 +28,7 @@ class TarefaColaboracaoServiceTest {
     @Mock UsuarioRepository usuarios;
     @Mock CloudflareR2ArquivoStorageService storage;
     @Mock ArquivoValidationService validation;
+    @Mock TarefaPastaService pastas;
     @InjectMocks TarefaColaboracaoService service;
     Usuario autor;
     ContratoKanbanTask contrato;
@@ -84,7 +85,8 @@ class TarefaColaboracaoServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.anexar(tipo, 10L, 2L, List.of(file)));
         assertThrows(ResponseStatusException.class, () -> service.comentar(tipo, 10L, 2L, "Mensagem", null, List.of(file)));
         assertThrows(ResponseStatusException.class, () -> service.baixar(tipo, 10L, 40L, 2L));
-        verifyNoInteractions(comentarios, anexos, storage, validation, usuarios);
+        assertThrows(ResponseStatusException.class, () -> service.criarPasta(tipo, 10L, 2L, new com.climb.api.model.dto.TarefaPastaRequestDTO("Pasta", null)));
+        verifyNoInteractions(comentarios, anexos, storage, validation, usuarios, pastas);
     }
 
     @ParameterizedTest @EnumSource(TarefaTipo.class)
@@ -115,5 +117,44 @@ class TarefaColaboracaoServiceTest {
         assertEquals(1, resultado.anexos().size()); assertEquals(41L, resultado.comentarios().getFirst().anexos().getFirst().id());
         when(anexos.findById(40L)).thenReturn(Optional.of(geral)); when(storage.baixar("privado/balanco")).thenReturn(new byte[]{1, 2});
         assertArrayEquals(new byte[]{1, 2}, service.baixar(tipo, 10L, 40L, 2L).conteudo());
+    }
+
+    @ParameterizedTest @EnumSource(TarefaTipo.class)
+    void deveSalvarVariosArquivosNaPastaEscolhida(TarefaTipo tipo) {
+        acesso(tipo);
+        var pasta = new TarefaPasta(); pasta.setId(50L);
+        when(pastas.exigir(tipo, 10L, 50L)).thenReturn(pasta);
+        when(usuarios.findById(2L)).thenReturn(Optional.of(autor));
+        when(storage.salvar(eq(file), anyString())).thenReturn(new ArquivoUploadResponseDTO("balanco.pdf", "application/pdf", 1, "chave", "chave"));
+        when(anexos.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var resultado = service.anexar(tipo, 10L, 2L, List.of(file, file), 50L);
+        assertEquals(2, resultado.size()); assertTrue(resultado.stream().allMatch(item -> item.pastaId().equals(50L)));
+        verify(storage, times(2)).salvar(file, "tarefas/" + tipo + "/10/pastas/50");
+        verify(pastas, never()).anexosAutomaticos(any(), any(), any());
+    }
+
+    @ParameterizedTest @EnumSource(TarefaTipo.class)
+    void deveAgruparArquivosDaRaizEmAnexosSemMoverAnexosDeComentarios(TarefaTipo tipo) {
+        acesso(tipo);
+        var pasta = new TarefaPasta(); pasta.setId(50L);
+        var antigo = new TarefaAnexo(); antigo.setId(40L);
+        var comentario = new TarefaAnexo(); comentario.setComentario(comentario(tipo, 30L, 10L));
+        if (tipo == TarefaTipo.CONTRATO) when(anexos.findByContratoTask_IdTaskOrderByCriadoEmAscIdAsc(10L)).thenReturn(List.of(antigo, comentario));
+        else when(anexos.findByPipelineTarefa_IdTarefaOrderByCriadoEmAscIdAsc(10L)).thenReturn(List.of(antigo, comentario));
+        when(usuarios.findById(2L)).thenReturn(Optional.of(autor));
+        when(pastas.anexosAutomaticos(tipo == TarefaTipo.CONTRATO ? contrato : null, tipo == TarefaTipo.COMERCIAL ? pipeline : null, autor)).thenReturn(pasta);
+        when(storage.salvar(eq(file), anyString())).thenReturn(new ArquivoUploadResponseDTO("balanco.pdf", "application/pdf", 1, "chave", "chave"));
+        when(anexos.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        assertEquals(50L, service.anexar(tipo, 10L, 2L, List.of(file)).getFirst().pastaId());
+        assertSame(pasta, antigo.getPasta()); assertNull(comentario.getPasta());
+        verify(anexos).saveAll(List.of(antigo));
+    }
+
+    @ParameterizedTest @EnumSource(TarefaTipo.class)
+    void deveRecusarPastaDeOutraTarefaAntesDeEnviarArquivos(TarefaTipo tipo) {
+        acesso(tipo);
+        when(pastas.exigir(tipo, 10L, 50L)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
+        assertThrows(ResponseStatusException.class, () -> service.anexar(tipo, 10L, 2L, List.of(file), 50L));
+        verifyNoInteractions(storage, validation, anexos, usuarios);
     }
 }

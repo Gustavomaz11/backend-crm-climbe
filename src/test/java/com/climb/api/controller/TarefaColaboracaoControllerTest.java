@@ -46,11 +46,11 @@ class TarefaColaboracaoControllerTest {
     @ParameterizedTest
     @EnumSource(TarefaTipo.class)
     void recebeVariosArquivosComUsuarioAutenticado(TarefaTipo tipo) throws Exception {
-        when(service.anexar(eq(tipo), eq(10L), eq(7L), anyList())).thenReturn(List.of(anexo()));
-        mvc.perform(multipart(path(tipo) + "/anexos").file(arquivo("balanco.pdf")).file(arquivo("outro.pdf")))
+        when(service.anexar(eq(tipo), eq(10L), eq(7L), anyList(), eq(50L))).thenReturn(List.of(anexo()));
+        mvc.perform(multipart(path(tipo) + "/anexos").file(arquivo("balanco.pdf")).file(arquivo("outro.pdf")).param("pastaId", "50"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data[0].nome").value("balanco.pdf"));
         verify(service).anexar(eq(tipo), eq(10L), eq(7L), argThat(files -> files.size() == 2
-                && "balanco.pdf".equals(files.get(0).getOriginalFilename()) && "outro.pdf".equals(files.get(1).getOriginalFilename())));
+                && "balanco.pdf".equals(files.get(0).getOriginalFilename()) && "outro.pdf".equals(files.get(1).getOriginalFilename())), eq(50L));
     }
 
     @ParameterizedTest
@@ -90,6 +90,14 @@ class TarefaColaboracaoControllerTest {
     }
 
     private String path(TarefaTipo tipo) { return "/tarefas/" + tipo + "/10/colaboracao"; }
+    @ParameterizedTest @EnumSource(TarefaTipo.class)
+    void recebeNomeEPastaPaiParaCriarSubpasta(TarefaTipo tipo) throws Exception {
+        var dto = new TarefaPastaRequestDTO("Documentos", 50L);
+        when(service.criarPasta(tipo, 10L, 7L, dto)).thenReturn(new TarefaPastaResponseDTO(51L, "Documentos", 50L, anexo().autor(), LocalDateTime.now()));
+        mvc.perform(post(path(tipo) + "/pastas").contentType("application/json").content("{\"nome\":\"Documentos\",\"pastaPaiId\":50}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.pastaPaiId").value(50));
+        verify(service).criarPasta(tipo, 10L, 7L, dto);
+    }
     private MockMultipartFile arquivo(String nome) { return new MockMultipartFile("arquivos", nome, "application/pdf", new byte[]{1}); }
     private TarefaAnexoResponseDTO anexo() {
         return new TarefaAnexoResponseDTO(40L, "balanco.pdf", "application/pdf", 4L,

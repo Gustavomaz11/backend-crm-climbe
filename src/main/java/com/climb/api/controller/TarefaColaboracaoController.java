@@ -25,8 +25,14 @@ public class TarefaColaboracaoController {
     @PostMapping(value = "/anexos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<List<TarefaAnexoResponseDTO>> anexar(@PathVariable TarefaTipo tipo, @PathVariable Long tarefaId,
-            @RequestPart("arquivos") List<MultipartFile> arquivos) {
-        return ApiResponse.ok(service.anexar(tipo, tarefaId, auth.getUserId(), arquivos));
+            @RequestPart("arquivos") List<MultipartFile> arquivos, @RequestParam(required = false) Long pastaId) {
+        return ApiResponse.ok(service.anexar(tipo, tarefaId, auth.getUserId(), arquivos, pastaId));
+    }
+    @PostMapping("/pastas")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<TarefaPastaResponseDTO> criarPasta(@PathVariable TarefaTipo tipo, @PathVariable Long tarefaId,
+            @RequestBody TarefaPastaRequestDTO dto) {
+        return ApiResponse.ok(service.criarPasta(tipo, tarefaId, auth.getUserId(), dto));
     }
     @PostMapping(value = "/comentarios", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)

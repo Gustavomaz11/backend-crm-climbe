@@ -26,6 +26,7 @@ class TarefaColaboracaoPersistenceTest {
     @Autowired PipelineVendasTarefaRepository comercial;
     @Autowired TarefaComentarioRepository comentarios;
     @Autowired TarefaAnexoRepository anexos;
+    @Autowired TarefaPastaRepository pastas;
 
     @Test void devePersistirResponsaveisSubtarefasEConversaEFiltrarPeloSegundoResponsavel() {
         Usuario ana = usuario("Ana"); Usuario bia = usuario("Bia");
@@ -45,6 +46,11 @@ class TarefaColaboracaoPersistenceTest {
         TarefaComentario comentario = new TarefaComentario(); comentario.setContratoTask(task); comentario.setAutor(ana); comentario.setConteudo("Documentos enviados"); em.persist(comentario);
         TarefaComentario resposta = new TarefaComentario(); resposta.setContratoTask(task); resposta.setAutor(bia); resposta.setConteudo("Conferidos"); resposta.setComentarioPai(comentario); em.persist(resposta);
         TarefaAnexo arquivo = new TarefaAnexo(); arquivo.setContratoTask(task); arquivo.setComentario(resposta); arquivo.setAutor(bia); arquivo.setNome("balanco.pdf"); arquivo.setContentType("application/pdf"); arquivo.setTamanho(10); arquivo.setChave("tarefas/chave"); em.persist(arquivo);
+        var raiz = pasta(task, null, ana, "Documentos", null);
+        var filha = pasta(task, null, bia, "2026", raiz);
+        var comercialRaiz = pasta(null, atividade, ana, "Comercial", null);
+        pasta(null, atividade, bia, "Propostas", comercialRaiz);
+        TarefaAnexo organizado = new TarefaAnexo(); organizado.setContratoTask(task); organizado.setPasta(filha); organizado.setAutor(bia); organizado.setNome("outro.pdf"); organizado.setContentType("application/pdf"); organizado.setTamanho(10); organizado.setChave("tarefas/pastas/chave"); em.persist(organizado);
         em.flush(); em.clear();
         var tarefasContrato = contratos.findByContrato_IdContratoAndResponsavel_IdInOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contrato.getIdContrato(), Set.of(bia.getId()));
         assertEquals(1, tarefasContrato.size()); assertEquals(2, tarefasContrato.getFirst().getResponsaveisEfetivos().size());
@@ -57,6 +63,14 @@ class TarefaColaboracaoPersistenceTest {
         assertEquals(2, conversa.size()); assertEquals(comentario.getId(), conversa.get(1).getComentarioPai().getId());
         var arquivos = anexos.findByContratoTask_IdTaskOrderByCriadoEmAscIdAsc(task.getIdTask());
         assertEquals(resposta.getId(), arquivos.getFirst().getComentario().getId());
+        assertEquals(filha.getId(), arquivos.stream().filter(item -> item.getId().equals(organizado.getId())).findFirst().orElseThrow().getPasta().getId());
+        var diretorios = pastas.findByContratoTask_IdTaskOrderByNomeAscIdAsc(task.getIdTask());
+        assertEquals(2, diretorios.size());
+        assertEquals(raiz.getId(), diretorios.stream().filter(item -> item.getId().equals(filha.getId())).findFirst().orElseThrow().getPastaPai().getId());
+        assertEquals(2, pastas.findByPipelineTarefa_IdTarefaOrderByNomeAscIdAsc(atividade.getIdTarefa()).size());
+    }
+    private TarefaPasta pasta(ContratoKanbanTask contrato, PipelineVendasTarefa pipeline, Usuario autor, String nome, TarefaPasta pai) {
+        var pasta = new TarefaPasta(); pasta.setContratoTask(contrato); pasta.setPipelineTarefa(pipeline); pasta.setAutor(autor); pasta.setNome(nome); pasta.setPastaPai(pai); em.persist(pasta); return pasta;
     }
     private Usuario usuario(String nome) {
         Usuario usuario = new Usuario(); usuario.setNomeCompleto(nome); usuario.setEmail(nome + "@example.test"); usuario.setContato("11999999999"); usuario.setSenhaHash("test"); usuario.setSituacao("ATIVO"); em.persist(usuario); return usuario;
