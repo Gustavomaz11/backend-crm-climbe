@@ -187,35 +187,94 @@ class PipelineVendasServiceTest {
         when(etapaRepository.findById(20L)).thenReturn(Optional.of(fechado));
         when(negocioRepository.save(negocio)).thenReturn(negocio);
 
-        service.mover(100L, 1L, 20L, null, null);
-
+        Proposta proposta = propostaAprovada(negocio);
+        Usuario tecnico = usuario(2L, "Tecnico");
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(tecnico));
+        Contrato contrato = new Contrato(); contrato.setIdContrato(50L);
+        when(contratoService.criarPreparacaoDoPipeline(proposta, usuario, usuario, tecnico)).thenReturn(contrato);
+        service.mover(100L, 1L, 20L, null, null, 2L, 40L);
+        assertEquals(contrato, negocio.getContrato());
         assertEquals(fechado, negocio.getEtapa());
         assertEquals(PipelineVendasResultado.GANHO, negocio.getResultado());
         assertTrue(negocio.getUltimaMovimentacaoEm().isAfter(movimentacaoAnterior));
     }
 
     @Test
-    void deveConverterNegocioGanhoEmContrato() {
+    void deveBloquearConversaoLegadaSemSelecaoTecnica() {
         Usuario usuario = usuario(1L, "Gestor");
-        Empresa empresa = new Empresa();
-        empresa.setIdEmpresa(30L);
-        empresa.setNomeFantasia("Apex Ventures");
         PipelineVendasNegocio negocio = negocio(100L, usuario, etapa(20L, "FECHADO", PipelineVendasResultado.GANHO));
         negocio.setResultado(PipelineVendasResultado.GANHO);
-        Contrato contrato = new Contrato();
-        contrato.setIdContrato(50L);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_CONVERTER_CONTRATO)).thenReturn(true);
         when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
-        when(empresaRepository.findById(30L)).thenReturn(Optional.of(empresa));
-        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
-        when(contratoService.criarAPartirDoPipeline(empresa, usuario, usuario)).thenReturn(contrato);
+        assertThrows(ResponseStatusException.class, () -> service.converterEmContrato(100L, 1L, 30L));
+        verifyNoInteractions(contratoService);
+    }
+
+    @Test
+    void deveExigirTecnicoAntesDeGanhar() {
+        var negocio = prepararGanho();
+        assertThrows(ResponseStatusException.class, () -> service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null));
+        assertEquals(PipelineVendasResultado.ABERTO, negocio.getResultado());
+        verify(negocioRepository, never()).save(any());
+        verifyNoInteractions(contratoService);
+    }
+
+    @Test
+    void deveCriarContratoAoGanharPeloBotaoESemDuplicarAoRepetir() {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        Usuario tecnico = usuario(2L, "Tecnico");
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(tecnico));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(negocio.getResponsavel()));
+        Contrato contrato = new Contrato(); contrato.setIdContrato(50L);
+        when(contratoService.criarPreparacaoDoPipeline(proposta, negocio.getResponsavel(), negocio.getResponsavel(), tecnico)).thenReturn(contrato);
         when(negocioRepository.save(negocio)).thenReturn(negocio);
-
-        var response = service.converterEmContrato(100L, 1L, 30L);
-
+        var response = service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L);
         assertEquals(50L, response.contratoId());
-        assertEquals(empresa, negocio.getEmpresa());
-        verify(contratoService).criarAPartirDoPipeline(empresa, usuario, usuario);
+        assertEquals(PipelineVendasResultado.GANHO, negocio.getResultado());
+        service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L);
+        verify(contratoService, times(1)).criarPreparacaoDoPipeline(any(), any(), any(), any());
+    }
+
+    @Test
+    void deveRecusarPropostaNaoAprovadaOuDeOutroNegocio() {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        proposta.setStatus(com.climb.api.model.enums.PropostaStatus.PENDENTE);
+        assertThrows(ResponseStatusException.class, () -> service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L));
+        proposta.setStatus(com.climb.api.model.enums.PropostaStatus.APROVADA);
+        proposta.setNegocio(negocio(999L, negocio.getResponsavel(), negocio.getEtapa()));
+        assertThrows(ResponseStatusException.class, () -> service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L));
+        verifyNoInteractions(contratoService);
+        assertEquals(PipelineVendasResultado.ABERTO, negocio.getResultado());
+    }
+
+    @Test
+    void deveRecusarPropostaComRevisaoAindaPendente() {
+        var negocio = prepararGanho(); propostaAprovada(negocio);
+        RevisaoDocumento revisao = new RevisaoDocumento(); revisao.setStatus(com.climb.api.model.enums.RevisaoDocumentoStatus.AGUARDANDO_CLIENTE);
+        when(revisaoDocumentoRepository.findByTipoAndReferenciaId(com.climb.api.model.enums.RevisaoDocumentoTipo.PROPOSTA, 40L)).thenReturn(Optional.of(revisao));
+        assertThrows(ResponseStatusException.class, () -> service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L));
+        verifyNoInteractions(contratoService);
+    }
+
+    private PipelineVendasNegocio prepararGanho() {
+        var negocio = negocio(100L, usuario(1L, "Comercial"), etapa(10L, "NEGOCIACAO", PipelineVendasResultado.ABERTO));
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_CONCLUIR)).thenReturn(true);
+        when(negocioRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(negocio));
+        when(etapaRepository.findFirstByFunilIdFunilAndResultadoAndAtivoTrueOrderByPosicaoAsc(1L, PipelineVendasResultado.GANHO))
+                .thenReturn(Optional.of(etapa(20L, "FECHADO", PipelineVendasResultado.GANHO)));
+        return negocio;
+    }
+
+    private Proposta propostaAprovada(PipelineVendasNegocio negocio) {
+        Empresa empresa = new Empresa(); empresa.setIdEmpresa(30L); empresa.setNomeFantasia("Apex Ventures");
+        negocio.setEmpresa(empresa);
+        Proposta proposta = new Proposta(); proposta.setIdProposta(40L); proposta.setEmpresa(empresa); proposta.setNegocio(negocio);
+        proposta.setStatus(com.climb.api.model.enums.PropostaStatus.APROVADA);
+        when(propostaRepository.findById(40L)).thenReturn(Optional.of(proposta));
+        return proposta;
     }
 
     @Test

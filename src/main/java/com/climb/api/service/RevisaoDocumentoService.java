@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,6 +47,8 @@ public class RevisaoDocumentoService {
     private final CloudflareR2ArquivoStorageService storageService;
     private final DocumentoPreviewService previewService;
     private final EmailService emailService;
+    private final ContratoNotificacaoService contratoNotificacaoService;
+    private final ContratoParcelaCalculator parcelaCalculator;
     private final RbacService rbacService;
     private final ZapSignClient zapSignClient;
     private final ZapSignProperties zapSignProperties;
@@ -61,6 +64,8 @@ public class RevisaoDocumentoService {
                                    CloudflareR2ArquivoStorageService storageService,
                                    DocumentoPreviewService previewService,
                                    EmailService emailService,
+                                   ContratoNotificacaoService contratoNotificacaoService,
+                                   ContratoParcelaCalculator parcelaCalculator,
                                    RbacService rbacService,
                                    ZapSignClient zapSignClient,
                                    ZapSignProperties zapSignProperties,
@@ -75,6 +80,8 @@ public class RevisaoDocumentoService {
         this.storageService = storageService;
         this.previewService = previewService;
         this.emailService = emailService;
+        this.contratoNotificacaoService = contratoNotificacaoService;
+        this.parcelaCalculator = parcelaCalculator;
         this.rbacService = rbacService;
         this.zapSignClient = zapSignClient;
         this.zapSignProperties = zapSignProperties;
@@ -321,6 +328,15 @@ public class RevisaoDocumentoService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
             contrato.setStatus(status == RevisaoDocumentoStatus.APROVADO ? ContratoService.STATUS_APROVADO
                     : status == RevisaoDocumentoStatus.REPROVADO ? ContratoService.STATUS_REJEITADO : ContratoService.STATUS_PENDENTE);
+            if (contrato.getEtapaPreparacao() != null) {
+                contrato.setEtapaPreparacao(status == RevisaoDocumentoStatus.APROVADO
+                        ? com.climb.api.model.enums.ContratoPreparacaoEtapa.CONCLUIDO
+                        : com.climb.api.model.enums.ContratoPreparacaoEtapa.REVISAO);
+            }
+            if (status == RevisaoDocumentoStatus.APROVADO) {
+                contrato.setDataAprovacao(java.time.LocalDate.now());
+                parcelaCalculator.aplicarAoContrato(contrato);
+            }
             contratoRepository.save(contrato);
         }
     }
@@ -466,6 +482,9 @@ public class RevisaoDocumentoService {
         revisao.setEmailEnviadoEm(enviado ? LocalDateTime.now() : null);
         revisao.setAtualizadoEm(LocalDateTime.now());
         revisaoRepository.save(revisao);
+        if (enviado && revisao.getTipo() == RevisaoDocumentoTipo.CONTRATO) {
+            contratoRepository.findById(revisao.getReferenciaId()).ifPresent(contratoNotificacaoService::notificarContratoEnviado);
+        }
     }
 
     private void notificarEquipe(RevisaoDocumento revisao, String titulo, String mensagem) {
@@ -474,7 +493,15 @@ public class RevisaoDocumentoService {
             destinatario = propostaRepository.findById(revisao.getReferenciaId()).map(Proposta::getUsuario).orElse(null);
         } else {
             Contrato contrato = contratoRepository.findById(revisao.getReferenciaId()).orElse(null);
-            destinatario = contrato == null ? null : (contrato.getResponsavel() != null ? contrato.getResponsavel() : contrato.getUsuario());
+            destinatario = contrato == null ? null : (contrato.getResponsavelComercial() != null
+                    ? contrato.getResponsavelComercial() : contrato.getResponsavel() != null ? contrato.getResponsavel() : contrato.getUsuario());
+            if (contrato != null && revisao.getStatus() == RevisaoDocumentoStatus.APROVADO
+                    && contrato.getResponsavel() != null && (destinatario == null
+                    || !Objects.equals(contrato.getResponsavel().getId(), destinatario.getId()))) {
+                emailService.enviarEmailComBotao(contrato.getResponsavel().getEmail(), titulo, titulo, mensagem,
+                        "Abrir contrato", frontendUrl.replaceAll("/+$", "") + "/kanban?contrato=" + contrato.getIdContrato(),
+                        "Você é o responsável técnico por este contrato.");
+            }
         }
         if (destinatario != null && StringUtils.hasText(destinatario.getEmail())) {
             String destino = revisao.getTipo() == RevisaoDocumentoTipo.PROPOSTA ? "/propostas" : "/contratos";

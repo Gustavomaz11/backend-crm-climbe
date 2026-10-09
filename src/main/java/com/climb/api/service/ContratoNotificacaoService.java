@@ -37,6 +37,15 @@ public class ContratoNotificacaoService {
         notificarEquipeInterna(contrato, assunto, mensagem, TIPO_CONTRATO);
     }
 
+    public void notificarContratoEnviado(Contrato contrato) {
+        Usuario comercial = contrato.getResponsavelComercial() != null ? contrato.getResponsavelComercial() : contrato.getUsuario();
+        if (comercial == null) return;
+        String mensagem = "O contrato CT-" + contrato.getIdContrato() + " da empresa "
+                + contrato.getEmpresaNomeFantasia() + " já foi enviado por e-mail para o cliente.";
+        salvarNotificacao(comercial, mensagem, "CONTRATO_ENVIADO");
+        emailService.enviarEmail(comercial.getEmail(), "Contrato enviado ao cliente", montarCorpo(comercial.getNomeCompleto(), mensagem));
+    }
+
     public void notificarContratoAtualizado(Contrato anterior, Contrato atualizado) {
         StringBuilder detalhes = new StringBuilder();
 

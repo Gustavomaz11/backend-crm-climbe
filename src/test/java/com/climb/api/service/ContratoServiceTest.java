@@ -23,6 +23,12 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.climb.api.model.enums.ContratoPreparacaoEtapa;
+import com.climb.api.model.PermissaoCodigo;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class ContratoServiceTest {
@@ -96,5 +102,71 @@ class ContratoServiceTest {
 
         assertThat(salvo.getParticipantes())
                 .containsExactly(usuarioPersistido);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(com.climb.api.model.enums.ServicoComercial.class)
+    void deveCriarPreparacaoComPropostaETecnicoSemNotificarTecnico(com.climb.api.model.enums.ServicoComercial servico) {
+        Proposta proposta = new Proposta(); proposta.setIdProposta(10L); proposta.setServico(servico);
+        Empresa empresa = new Empresa(); empresa.setNomeFantasia("Empresa"); proposta.setEmpresa(empresa);
+        when(propostaRepository.findById(10L)).thenReturn(Optional.of(proposta));
+        Usuario comercial = new Usuario(); comercial.setId(1L);
+        Usuario tecnico = new Usuario(); tecnico.setId(2L);
+        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+        Contrato contrato = service.criarPreparacaoDoPipeline(proposta, comercial, comercial, tecnico);
+        assertThat(contrato.getProposta()).isSameAs(proposta);
+        assertThat(contrato.getServico()).isEqualTo(servico);
+        assertThat(contrato.getEtapaPreparacao()).isEqualTo(ContratoPreparacaoEtapa.A_FAZER);
+        assertThat(contrato.getResponsavelComercial()).isSameAs(comercial);
+        assertThat(contrato.getResponsavel()).isSameAs(tecnico);
+        assertThat(contrato.getUrlPdf()).isNull();
+        verifyNoInteractions(contratoNotificacaoService, revisaoDocumentoService);
+    }
+
+    @Test
+    void deveEnviarArquivoNoMesmoContratoEAvancarParaRevisao() {
+        Contrato contrato = rascunho();
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        Usuario usuario = new Usuario(); usuario.setId(1L);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
+        var arquivo = new MockMultipartFile("arquivo", "contrato.pdf", "application/pdf", new byte[]{1});
+        var upload = new com.climb.api.model.dto.ArquivoUploadResponseDTO("contrato.pdf", "application/pdf", 1L, "key", "https://storage.test/contrato.pdf");
+        when(arquivoStorageService.salvar(arquivo, "contratos/empresa-30")).thenReturn(upload);
+        service.enviarAoCliente(10L, 1L, arquivo);
+        assertThat(contrato.getEtapaPreparacao()).isEqualTo(ContratoPreparacaoEtapa.REVISAO);
+        assertThat(contrato.getUrlPdf()).isEqualTo(upload.url());
+        verify(repository).save(contrato);
+        verify(revisaoDocumentoService).iniciarContrato(contrato, upload, usuario);
+    }
+
+    @Test
+    void deveRecusarUploadDuplicadoEUploadSemPermissao() {
+        Contrato contrato = rascunho(); contrato.setUrlPdf("https://storage.test/existente.pdf");
+        var arquivo = new MockMultipartFile("arquivo", "contrato.pdf", "application/pdf", new byte[]{1});
+        assertThrows(ResponseStatusException.class, () -> service.enviarAoCliente(10L, 1L, arquivo));
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
+        assertThrows(ResponseStatusException.class, () -> service.enviarAoCliente(10L, 1L, arquivo));
+        verifyNoInteractions(arquivoStorageService, revisaoDocumentoService);
+    }
+
+    @Test
+    void deveExigirArquivoParaRevisaoEAprovacaoParaConcluir() {
+        Contrato contrato = rascunho();
+        when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
+        when(repository.findById(10L)).thenReturn(Optional.of(contrato));
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        assertThrows(ResponseStatusException.class, () -> service.moverPreparacao(10L, 1L, ContratoPreparacaoEtapa.REVISAO));
+        assertThrows(ResponseStatusException.class, () -> service.moverPreparacao(10L, 1L, ContratoPreparacaoEtapa.CONCLUIDO));
+        assertThrows(ResponseStatusException.class, () -> service.aprovar(10L, 1L, "APROVADO"));
+        verify(repository, never()).save(any());
+    }
+
+    private Contrato rascunho() {
+        Contrato contrato = new Contrato(); contrato.setIdContrato(10L);
+        Empresa empresa = new Empresa(); empresa.setIdEmpresa(30L); empresa.setEmail("cliente@example.test");
+        contrato.setEmpresa(empresa); contrato.setStatus("PENDENTE"); contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.A_FAZER);
+        return contrato;
     }
 }

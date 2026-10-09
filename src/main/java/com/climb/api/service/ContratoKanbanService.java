@@ -408,8 +408,12 @@ public class ContratoKanbanService {
     }
 
     private Contrato buscarContrato(Long contratoId) {
-        return contratoRepository.findById(contratoId)
+        Contrato contrato = contratoRepository.findById(contratoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
+        if (contrato.getEtapaPreparacao() != null && !ContratoService.STATUS_APROVADO.equals(contrato.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este contrato ainda está em preparação na aba Contratos");
+        }
+        return contrato;
     }
 
     private ContratoKanbanRaia buscarRaia(Long contratoId, Long raiaId) {

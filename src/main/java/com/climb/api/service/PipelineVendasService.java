@@ -165,6 +165,12 @@ public class PipelineVendasService {
                                             Long etapaId,
                                             Long motivoPerdaId,
                                             String observacaoPerda) {
+        return mover(negocioId, usuarioId, etapaId, motivoPerdaId, observacaoPerda, null, null);
+    }
+
+    @Transactional
+    public PipelineNegocioResponseDTO mover(Long negocioId, Long usuarioId, Long etapaId, Long motivoPerdaId,
+            String observacaoPerda, Long responsavelTecnicoId, Long propostaId) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_MOVIMENTAR);
         PipelineVendasNegocio negocio = buscarNegocio(negocioId);
         if (negocio.getFunil().isPreVendas() && negocio.getResultado() != PipelineVendasResultado.ABERTO) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reative o lead antes de movimentar");
@@ -176,6 +182,9 @@ public class PipelineVendasService {
         PipelineVendasEtapa etapaAnterior = negocio.getEtapa();
         PipelineVendasResultado resultadoAnterior = negocio.getResultado();
         LocalDateTime momento = LocalDateTime.now();
+        if (novaEtapa.getResultado() == PipelineVendasResultado.GANHO && !negocio.getFunil().isPreVendas()) {
+            prepararContratoGanho(negocio, usuarioId, responsavelTecnicoId, propostaId);
+        }
         prepararResultado(negocio, novaEtapa.getResultado(), motivoPerdaId, observacaoPerda, momento);
         aplicarEtapa(negocio, novaEtapa, momento);
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
@@ -192,6 +201,12 @@ public class PipelineVendasService {
                                                        PipelineVendasResultado resultado,
                                                        Long motivoPerdaId,
                                                        String observacaoPerda) {
+        return marcarResultado(negocioId, usuarioId, resultado, motivoPerdaId, observacaoPerda, null, null);
+    }
+
+    @Transactional
+    public PipelineNegocioResponseDTO marcarResultado(Long negocioId, Long usuarioId, PipelineVendasResultado resultado,
+            Long motivoPerdaId, String observacaoPerda, Long responsavelTecnicoId, Long propostaId) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_CONCLUIR);
         if (resultado == PipelineVendasResultado.ABERTO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe se o negócio foi ganho ou perdido");
@@ -207,6 +222,7 @@ public class PipelineVendasService {
         PipelineVendasEtapa etapaAnterior = negocio.getEtapa();
         PipelineVendasResultado resultadoAnterior = negocio.getResultado();
         LocalDateTime momento = LocalDateTime.now();
+        if (resultado == PipelineVendasResultado.GANHO) prepararContratoGanho(negocio, usuarioId, responsavelTecnicoId, propostaId);
         prepararResultado(negocio, resultado, motivoPerdaId, observacaoPerda, momento);
         aplicarEtapa(negocio, etapaFinal, momento);
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
@@ -253,17 +269,34 @@ public class PipelineVendasService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Este negócio já foi convertido em contrato");
         }
 
-        Empresa empresa = resolverEmpresaConversao(negocio, empresaId);
-        Usuario usuario = buscarUsuario(usuarioId, "Usuário não encontrado");
-        Contrato contrato = contratoService.criarAPartirDoPipeline(empresa, usuario, negocio.getResponsavel());
-        negocio.setEmpresa(empresa);
-        negocio.setNomeEmpresa(empresa.getNomeFantasia());
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Selecione a proposta aprovada e o responsável técnico na ação Marcar ganho para criar o contrato");
+    }
+
+    private void prepararContratoGanho(PipelineVendasNegocio negocio, Long usuarioId, Long tecnicoId, Long propostaId) {
+        if (negocio.getContrato() != null) return;
+        if (tecnicoId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione quem será responsável técnico pelo contrato");
+        if (propostaId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione a proposta aprovada pelo cliente");
+        Proposta proposta = propostaRepository.findById(propostaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposta não encontrada"));
+        if (proposta.getNegocio() == null || !Objects.equals(proposta.getNegocio().getIdNegocio(), negocio.getIdNegocio())
+                || proposta.getEmpresa() == null || negocio.getEmpresa() == null
+                || !Objects.equals(proposta.getEmpresa().getIdEmpresa(), negocio.getEmpresa().getIdEmpresa())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione uma proposta deste negócio e desta empresa");
+        }
+        boolean aprovada = proposta.getStatus() == com.climb.api.model.enums.PropostaStatus.APROVADA
+                && revisaoDocumentoRepository.findByTipoAndReferenciaId(com.climb.api.model.enums.RevisaoDocumentoTipo.PROPOSTA, propostaId)
+                .map(revisao -> revisao.getStatus() == com.climb.api.model.enums.RevisaoDocumentoStatus.APROVADO).orElse(true);
+        if (!aprovada) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A proposta precisa estar aprovada pelo cliente antes de concluir a venda");
+        Usuario tecnico = buscarUsuario(tecnicoId, "Responsável técnico não encontrado");
+        if (tecnico.getSituacao() != null && !"ATIVO".equalsIgnoreCase(tecnico.getSituacao())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um responsável técnico ativo");
+        }
+        Contrato contrato = contratoService.criarPreparacaoDoPipeline(proposta, buscarUsuario(usuarioId, "Usuário não encontrado"),
+                negocio.getResponsavel(), tecnico);
         negocio.setContrato(contrato);
-        negocio.setUltimaMovimentacaoEm(LocalDateTime.now());
-        PipelineVendasNegocio salvo = negocioRepository.save(negocio);
-        historicoService.registrar(salvo, usuarioId, PipelineHistoricoTipo.CONVERSAO_CONTRATO,
-                "Negócio convertido no contrato CT-" + contrato.getIdContrato());
-        return toResponse(salvo);
+        historicoService.registrar(negocio, usuarioId, PipelineHistoricoTipo.CONVERSAO_CONTRATO,
+                "Criação de contrato adicionada em À fazer: CT-" + contrato.getIdContrato());
     }
 
     @Transactional

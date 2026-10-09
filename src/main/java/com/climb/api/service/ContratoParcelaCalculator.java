@@ -106,4 +106,28 @@ public class ContratoParcelaCalculator {
         int dia = Math.min(aprovacao.getDayOfMonth(), mes.lengthOfMonth());
         return new ParcelaPlanejada(numero, competencia.withDayOfMonth(1), mes.atDay(dia), valor.setScale(2, RoundingMode.HALF_UP));
     }
+    public void aplicarAoContrato(com.climb.api.model.Contrato contrato) {
+        if (contrato.getProposta() == null || !contrato.getParcelas().isEmpty()) {
+            return;
+        }
+        List<com.climb.api.model.ContratoParcela> parcelas = calcular(contrato.getProposta(), contrato.getDataAprovacao())
+                .stream()
+                .map(planejada -> {
+                    com.climb.api.model.ContratoParcela parcela = new com.climb.api.model.ContratoParcela();
+                    parcela.setNumero(planejada.numero());
+                    parcela.setCompetencia(planejada.competencia());
+                    parcela.setVencimento(planejada.vencimento());
+                    parcela.setValor(planejada.valor());
+                    parcela.setStatus("PENDENTE");
+                    return parcela;
+                })
+                .toList();
+        contrato.setParcelas(parcelas);
+        if (!parcelas.isEmpty()) {
+            contrato.setDataInicio(parcelas.getFirst().getCompetencia());
+            contrato.setDataFim(parcelas.getLast().getCompetencia().withDayOfMonth(
+                    parcelas.getLast().getCompetencia().lengthOfMonth()));
+        }
+    }
+
 }

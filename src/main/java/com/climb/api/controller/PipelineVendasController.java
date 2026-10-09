@@ -45,14 +45,17 @@ public class PipelineVendasController {
             @PathVariable Long negocioId,
             @Valid @RequestBody PipelineMoverNegocioRequestDTO dto) {
         return ResponseEntity.ok(ApiResponse.ok(service.mover(
-                negocioId, authenticatedUser.getUserId(), dto.etapaId(), dto.motivoPerdaId(), dto.observacaoPerda())));
+                negocioId, authenticatedUser.getUserId(), dto.etapaId(), dto.motivoPerdaId(), dto.observacaoPerda(),
+                dto.responsavelTecnicoId(), dto.propostaId())));
     }
 
     @PatchMapping("/negocios/{negocioId}/ganhar")
-    public ResponseEntity<ApiResponse<PipelineNegocioResponseDTO>> ganhar(@PathVariable Long negocioId) {
+    public ResponseEntity<ApiResponse<PipelineNegocioResponseDTO>> ganhar(@PathVariable Long negocioId,
+            @RequestBody(required = false) PipelineGanhoRequestDTO dto) {
         return ResponseEntity.ok(ApiResponse.ok(
                 service.marcarResultado(
-                        negocioId, authenticatedUser.getUserId(), PipelineVendasResultado.GANHO, null, null)
+                        negocioId, authenticatedUser.getUserId(), PipelineVendasResultado.GANHO, null, null,
+                        dto == null ? null : dto.responsavelTecnicoId(), dto == null ? null : dto.propostaId())
         ));
     }
 

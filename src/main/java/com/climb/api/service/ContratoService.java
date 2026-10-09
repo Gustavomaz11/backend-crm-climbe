@@ -10,6 +10,8 @@ import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.HistoricoAprovacaoContratoResponseDTO;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.model.enums.PropostaStatus;
+import com.climb.api.model.enums.ContratoPreparacaoEtapa;
+import com.climb.api.model.dto.RevisaoDocumentoResponseDTO;
 import com.climb.api.repository.ContratoRepository;
 import com.climb.api.repository.ContratoKanbanTaskRepository;
 import com.climb.api.repository.EmpresaRepository;
@@ -134,6 +136,68 @@ public class ContratoService {
     }
 
     @Transactional
+    public Contrato criarPreparacaoDoPipeline(Proposta proposta, Usuario criadoPor, Usuario comercial, Usuario tecnico) {
+        validarPropostaDisponivelParaNovoContrato(proposta.getIdProposta());
+        Contrato contrato = new Contrato();
+        contrato.setProposta(proposta);
+        sincronizarCamposDaProposta(contrato);
+        contrato.setUsuario(criadoPor);
+        contrato.setResponsavelComercial(comercial);
+        contrato.setResponsavel(tecnico);
+        contrato.getParticipantes().add(tecnico);
+        contrato.setStatus(STATUS_PENDENTE);
+        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.A_FAZER);
+        return repository.save(contrato);
+    }
+
+    @Transactional
+    public Contrato moverPreparacao(Long id, Long usuarioId, ContratoPreparacaoEtapa etapa) {
+        exigirEdicaoPreparacao(usuarioId);
+        Contrato contrato = repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
+        if (etapa == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione uma coluna do kanban");
+        if (etapa == ContratoPreparacaoEtapa.CONCLUIDO && !STATUS_APROVADO.equals(contrato.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O contrato precisa ser aprovado antes de concluir sua criação");
+        }
+        if (STATUS_APROVADO.equals(contrato.getStatus()) && etapa != ContratoPreparacaoEtapa.CONCLUIDO) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A criação deste contrato já foi concluída");
+        }
+        if (etapa == ContratoPreparacaoEtapa.REVISAO && !StringUtils.hasText(contrato.getUrlPdf())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Anexe e envie o contrato ao cliente antes de mover para Revisão");
+        }
+        contrato.setEtapaPreparacao(etapa);
+        return repository.save(contrato);
+    }
+
+    @Transactional
+    public RevisaoDocumentoResponseDTO enviarAoCliente(Long id, Long usuarioId, MultipartFile arquivo) {
+        exigirEdicaoPreparacao(usuarioId);
+        Contrato contrato = repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
+        if (StringUtils.hasText(contrato.getUrlPdf())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este contrato já foi enviado. Use Revisão do cliente para reenviar ou anexar uma nova versão");
+        }
+        if (arquivo == null || arquivo.isEmpty() || arquivo.getOriginalFilename() == null
+                || !arquivo.getOriginalFilename().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Anexe o contrato em PDF para enviar ao cliente");
+        }
+        revisaoDocumentoService.validarEnvio(contrato.getEmpresa(), arquivo);
+        ArquivoUploadResponseDTO upload = arquivoStorageService.salvar(arquivo, "contratos/empresa-" + contrato.getEmpresa().getIdEmpresa());
+        contrato.setUrlPdf(upload.url());
+        contrato.setStatus(STATUS_PENDENTE);
+        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.REVISAO);
+        repository.save(contrato);
+        return revisaoDocumentoService.iniciarContrato(contrato, upload,
+                buscarUsuarioOuFalhar(usuarioId, "Usuário não encontrado"));
+    }
+
+    private void exigirEdicaoPreparacao(Long usuarioId) {
+        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Você não tem permissão para editar ou enviar contratos");
+        }
+    }
+
+    @Transactional
     public Contrato criarComArquivo(Long empresaId,
                                     Long propostaId,
                                     Long usuarioId,
@@ -171,6 +235,8 @@ public class ContratoService {
         contrato.setDataInicio(LocalDate.now());
         contrato.setStatus(STATUS_PENDENTE);
         contrato.setUrlPdf(upload.url());
+        contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.REVISAO);
+        contrato.setResponsavelComercial(proposta != null ? proposta.getUsuario() : usuario);
         contrato.setResponsavel(responsavel);
         contrato.setParticipantes(participantes);
         contrato.setServico(proposta != null ? proposta.getServico() : null);
@@ -268,6 +334,10 @@ public class ContratoService {
         Contrato contrato = buscarPorId(id);
         String statusAnterior = contrato.getStatus();
 
+        if (contrato.getEtapaPreparacao() != null && !StringUtils.hasText(contrato.getUrlPdf())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Anexe o contrato antes de aprovar sua criação");
+        }
+
         if (statusNormalizado.equals(statusAnterior)) {
             return contrato;
         }
@@ -278,6 +348,7 @@ public class ContratoService {
 
         contrato.setStatus(statusNormalizado);
         if (STATUS_APROVADO.equals(statusNormalizado)) {
+            if (contrato.getEtapaPreparacao() != null) contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.CONCLUIDO);
             contrato.setDataAprovacao(LocalDate.now());
             gerarParcelas(contrato);
         }
@@ -455,27 +526,7 @@ public class ContratoService {
     }
 
     private void gerarParcelas(Contrato contrato) {
-        if (contrato.getProposta() == null || !contrato.getParcelas().isEmpty()) {
-            return;
-        }
-        List<ContratoParcela> parcelas = parcelaCalculator.calcular(contrato.getProposta(), contrato.getDataAprovacao())
-                .stream()
-                .map(planejada -> {
-                    ContratoParcela parcela = new ContratoParcela();
-                    parcela.setNumero(planejada.numero());
-                    parcela.setCompetencia(planejada.competencia());
-                    parcela.setVencimento(planejada.vencimento());
-                    parcela.setValor(planejada.valor());
-                    parcela.setStatus("PENDENTE");
-                    return parcela;
-                })
-                .toList();
-        contrato.setParcelas(parcelas);
-        if (!parcelas.isEmpty()) {
-            contrato.setDataInicio(parcelas.getFirst().getCompetencia());
-            contrato.setDataFim(parcelas.getLast().getCompetencia().withDayOfMonth(
-                    parcelas.getLast().getCompetencia().lengthOfMonth()));
-        }
+        parcelaCalculator.aplicarAoContrato(contrato);
     }
 
     private Long obterPropostaId(Contrato contrato) {

@@ -1,6 +1,7 @@
 package com.climb.api.model;
 
 import com.climb.api.model.enums.ServicoComercial;
+import com.climb.api.model.enums.ContratoPreparacaoEtapa;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.util.HashSet;
@@ -26,6 +27,14 @@ public class Contrato {
     @ManyToOne
     @JoinColumn(name = "id_responsavel")
     private Usuario responsavel;
+
+    @ManyToOne
+    @JoinColumn(name = "responsavel_comercial_id")
+    private Usuario responsavelComercial;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "etapa_preparacao", length = 30)
+    private ContratoPreparacaoEtapa etapaPreparacao;
 
     @ManyToMany
     @JoinTable(
@@ -76,6 +85,11 @@ public class Contrato {
 
     public Usuario getResponsavel() { return responsavel; }
     public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
+
+    public Usuario getResponsavelComercial() { return responsavelComercial; }
+    public void setResponsavelComercial(Usuario responsavelComercial) { this.responsavelComercial = responsavelComercial; }
+    public ContratoPreparacaoEtapa getEtapaPreparacao() { return etapaPreparacao; }
+    public void setEtapaPreparacao(ContratoPreparacaoEtapa etapaPreparacao) { this.etapaPreparacao = etapaPreparacao; }
 
     public Set<Usuario> getParticipantes() { return participantes; }
     public void setParticipantes(Set<Usuario> participantes) { this.participantes = participantes; }

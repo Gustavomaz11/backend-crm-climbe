@@ -3,6 +3,8 @@ package com.climb.api.controller;
 import com.climb.api.model.Contrato;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.ContratoResponsaveisRequestDTO;
+import com.climb.api.model.dto.ContratoPreparacaoRequestDTO;
+import com.climb.api.model.dto.RevisaoDocumentoResponseDTO;
 import com.climb.api.model.dto.ContratoParcelaVencimentoRequestDTO;
 import com.climb.api.model.dto.HistoricoAprovacaoContratoResponseDTO;
 import com.climb.api.service.ContratoService;
@@ -78,6 +80,18 @@ public class ContratoController {
     @GetMapping("/{id}/pdf")
     public ResponseEntity<Resource> baixarPdf(@PathVariable Long id) {
         return service.baixarPdf(id);
+    }
+
+    @PatchMapping("/{id}/etapa-preparacao")
+    public Contrato moverPreparacao(@PathVariable Long id,
+            @jakarta.validation.Valid @RequestBody ContratoPreparacaoRequestDTO dto) {
+        return service.moverPreparacao(id, getAuthenticatedUserId(), dto.etapa());
+    }
+
+    @PostMapping(value = "/{id}/enviar-cliente", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<RevisaoDocumentoResponseDTO> enviarAoCliente(@PathVariable Long id,
+            @RequestParam("arquivo") MultipartFile arquivo) {
+        return ApiResponse.ok(service.enviarAoCliente(id, getAuthenticatedUserId(), arquivo));
     }
 
     @GetMapping("/{id}/download-url")
