@@ -21,6 +21,8 @@ public class ContratoKanbanRaia {
 
     @Column(nullable = false)
     private Integer posicao = 0;
+    @Column(name = "conclui_tarefas", nullable = false)
+    private boolean concluiTarefas;
 
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
@@ -51,6 +53,9 @@ public class ContratoKanbanRaia {
 
     public Integer getPosicao() { return posicao; }
     public void setPosicao(Integer posicao) { this.posicao = posicao; }
+
+    public boolean isConcluiTarefas() { return concluiTarefas; }
+    public void setConcluiTarefas(boolean concluiTarefas) { this.concluiTarefas = concluiTarefas; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }

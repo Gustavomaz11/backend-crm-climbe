@@ -21,7 +21,8 @@ public record EmpresaFinanceiroResponseDTO(
             LocalDate proximoRecebimentoData,
             List<ParcelaDTO> parcelas,
             List<FuncionarioDTO> funcionarios,
-            List<PropostaServicoDTO> servicosProposta
+            List<PropostaServicoDTO> servicosProposta,
+            List<ContratoRateioTecnicoResponseDTO> rateiosTecnicos
     ) {}
 
     public record ParcelaDTO(Long id, Integer numero, LocalDate vencimento, BigDecimal valor, String status) {}

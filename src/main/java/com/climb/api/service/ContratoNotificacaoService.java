@@ -37,6 +37,14 @@ public class ContratoNotificacaoService {
         notificarEquipeInterna(contrato, assunto, mensagem, TIPO_CONTRATO);
     }
 
+    public void notificarParticipacaoEquipe(Contrato contrato, Usuario usuario, boolean temporaria) {
+        String empresa = contrato.getEmpresa() == null ? "Contrato #" + contrato.getIdContrato() : contrato.getEmpresa().getNomeFantasia();
+        String periodo = temporaria ? "equipe de apoio, até concluir as tarefas atribuídas" : "equipe fixa";
+        String mensagem = "Você foi selecionado para a " + periodo + " do contrato de " + empresa
+                + ". Acesse /contratos/kanban?contrato=" + contrato.getIdContrato() + " para trabalhar nas tarefas.";
+        registrarNotificacao(usuario, mensagem, TIPO_CONTRATO);
+    }
+
     public void notificarContratoEnviado(Contrato contrato) {
         Usuario comercial = contrato.getResponsavelComercial() != null ? contrato.getResponsavelComercial() : contrato.getUsuario();
         if (comercial == null) return;
@@ -136,11 +144,15 @@ public class ContratoNotificacaoService {
             return;
         }
 
+        registrarNotificacao(usuario, mensagem, tipo);
+    }
+
+    private void registrarNotificacao(Usuario usuario, String mensagem, String tipo) {
         Notificacao notificacao = new Notificacao();
         notificacao.setUsuario(usuario);
         notificacao.setMensagem(mensagem);
         notificacao.setTipo(tipo);
-        notificacao.setDataEnvio(hoje);
+        notificacao.setDataEnvio(LocalDate.now());
         notificacaoRepository.save(notificacao);
     }
 

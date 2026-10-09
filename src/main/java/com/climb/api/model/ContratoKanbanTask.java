@@ -44,6 +44,14 @@ public class ContratoKanbanTask {
             inverseJoinColumns = @JoinColumn(name = "usuario_id"))
     private Set<Usuario> responsaveis = new LinkedHashSet<>();
 
+    @ManyToMany
+    @JoinTable(name = "contrato_tarefa_apoios", joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "usuario_id"))
+    private Set<Usuario> apoios = new LinkedHashSet<>();
+
+    @Column(name = "concluida_em")
+    private LocalDateTime concluidaEm;
+
     @Column(name = "data_inicio")
     private LocalDate dataInicio;
 
@@ -112,6 +120,10 @@ public class ContratoKanbanTask {
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }
+
+    public Set<Usuario> getApoios() { return apoios; }
+    public LocalDateTime getConcluidaEm() { return concluidaEm; }
+    public void setConcluidaEm(LocalDateTime concluidaEm) { this.concluidaEm = concluidaEm; }
 
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
     public void setAtualizadoEm(LocalDateTime atualizadoEm) { this.atualizadoEm = atualizadoEm; }

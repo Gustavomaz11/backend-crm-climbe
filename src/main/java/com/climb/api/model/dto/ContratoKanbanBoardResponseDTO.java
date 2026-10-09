@@ -6,6 +6,7 @@ public record ContratoKanbanBoardResponseDTO(
         Long contratoId,
         String contratoTitulo,
         boolean gestor,
+        boolean podeEditar,
         UsuarioResumoDTO responsavel,
         List<UsuarioResumoDTO> participantes,
         List<UsuarioResumoDTO> usuariosDisponiveis,

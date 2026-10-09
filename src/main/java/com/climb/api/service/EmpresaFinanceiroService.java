@@ -23,10 +23,12 @@ import java.util.Map;
 public class EmpresaFinanceiroService {
     private final EmpresaRepository empresaRepository;
     private final ContratoRepository contratoRepository;
+    private final ContratoRateioTecnicoService rateioTecnico;
 
-    public EmpresaFinanceiroService(EmpresaRepository empresaRepository, ContratoRepository contratoRepository) {
+    public EmpresaFinanceiroService(EmpresaRepository empresaRepository, ContratoRepository contratoRepository, ContratoRateioTecnicoService rateioTecnico) {
         this.empresaRepository = empresaRepository;
         this.contratoRepository = contratoRepository;
+        this.rateioTecnico = rateioTecnico;
     }
 
     @Transactional(readOnly = true)
@@ -72,7 +74,8 @@ public class EmpresaFinanceiroService {
                         item.getId(), item.getNomeCompleto(), item.getEmail())).toList(),
                 contrato.getProposta() == null ? List.of() : contrato.getProposta().getServicos().stream()
                         .map(item -> new PropostaServicoDTO(item.getServico(), item.getValor(),
-                                item.getComissaoTecnicoPercentual(), item.getComissaoComercialPercentual())).toList()
+                                item.getComissaoTecnicoPercentual(), item.getComissaoComercialPercentual())).toList(),
+                rateioTecnico.listar(contrato)
         );
     }
 

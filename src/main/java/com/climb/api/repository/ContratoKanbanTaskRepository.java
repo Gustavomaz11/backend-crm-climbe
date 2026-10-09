@@ -10,6 +10,19 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanbanTask, Long> {
+    @Query("""
+            select count(task) > 0 from ContratoKanbanTask task join task.apoios apoio
+            where task.contrato.idContrato = :contratoId and task.raia.concluiTarefas = false
+              and apoio.id = :usuarioId
+              and (task.responsavel.id = :usuarioId or apoio member of task.responsaveis)
+            """)
+    boolean existeApoioPendente(@Param("contratoId") Long contratoId, @Param("usuarioId") Long usuarioId);
+
+    @Query("""
+            select distinct task from ContratoKanbanTask task join fetch task.apoios
+            where task.contrato.idContrato = :contratoId and task.raia.concluiTarefas = false
+            """)
+    List<ContratoKanbanTask> buscarApoiosPendentes(@Param("contratoId") Long contratoId);
 
     List<ContratoKanbanTask> findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(Long contratoId);
 

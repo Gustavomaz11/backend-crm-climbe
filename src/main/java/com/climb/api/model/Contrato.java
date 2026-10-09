@@ -36,6 +36,9 @@ public class Contrato {
     @Column(name = "etapa_preparacao", length = 30)
     private ContratoPreparacaoEtapa etapaPreparacao;
 
+    @Column(name = "equipe_configurada", nullable = false)
+    private boolean equipeConfigurada;
+
     @ManyToMany
     @JoinTable(
             name = "contrato_participantes",
@@ -90,6 +93,8 @@ public class Contrato {
     public void setResponsavelComercial(Usuario responsavelComercial) { this.responsavelComercial = responsavelComercial; }
     public ContratoPreparacaoEtapa getEtapaPreparacao() { return etapaPreparacao; }
     public void setEtapaPreparacao(ContratoPreparacaoEtapa etapaPreparacao) { this.etapaPreparacao = etapaPreparacao; }
+    public boolean isEquipeConfigurada() { return equipeConfigurada; }
+    public void setEquipeConfigurada(boolean equipeConfigurada) { this.equipeConfigurada = equipeConfigurada; }
 
     public Set<Usuario> getParticipantes() { return participantes; }
     public void setParticipantes(Set<Usuario> participantes) { this.participantes = participantes; }

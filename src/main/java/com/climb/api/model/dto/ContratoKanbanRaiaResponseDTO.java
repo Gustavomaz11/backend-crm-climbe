@@ -9,5 +9,6 @@ public record ContratoKanbanRaiaResponseDTO(
         Integer posicao,
         LocalDateTime criadoEm,
         LocalDateTime atualizadoEm,
-        List<ContratoKanbanTaskResponseDTO> tasks
+        List<ContratoKanbanTaskResponseDTO> tasks,
+        boolean concluiTarefas
 ) {}
