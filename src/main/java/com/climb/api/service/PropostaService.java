@@ -8,6 +8,7 @@ import com.climb.api.model.Proposta;
 import com.climb.api.model.PropostaReajuste;
 import com.climb.api.model.PropostaServico;
 import com.climb.api.model.PropostaRecebimento;
+import com.climb.api.model.PropostaRecebimentoServico;
 import com.climb.api.model.RevisaoDocumento;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.enums.PropostaStatus;
@@ -20,6 +21,7 @@ import com.climb.api.model.dto.PropostaComercialRequestDTO;
 import com.climb.api.model.dto.PropostaReajusteDTO;
 import com.climb.api.model.dto.PropostaServicoDTO;
 import com.climb.api.model.dto.PropostaRecebimentoDTO;
+import com.climb.api.model.dto.PropostaRecebimentoServicoDTO;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.HistoricoAprovacaoPropostaRepository;
@@ -148,7 +150,10 @@ public class PropostaService {
                 proposta.getObservacoes(),
                 proposta.getServicos().stream().map(item -> new PropostaServicoDTO(item.getServico(), item.getValor(),
                         item.getComissaoTecnicoPercentual(), item.getComissaoComercialPercentual())).toList(),
-                proposta.getRecebimentos().stream().map(item -> new PropostaRecebimentoDTO(item.getNumero(), item.getValor())).toList()
+                proposta.getRecebimentos().stream().map(item -> new PropostaRecebimentoDTO(item.getNumero(), item.getValor(),
+                        proposta.getRecebimentosPorServico().isEmpty() ? null : proposta.getRecebimentosPorServico().stream()
+                                .filter(service -> service.getNumero().equals(item.getNumero()))
+                                .map(service -> new PropostaRecebimentoServicoDTO(service.getServico(), service.getValor())).toList())).toList()
         );
     }
 
@@ -301,6 +306,10 @@ public class PropostaService {
             proposta.setRecebimentos(configuracao.recebimentos().stream()
                     .sorted(java.util.Comparator.comparing(PropostaRecebimentoDTO::numero))
                     .map(item -> new PropostaRecebimento(item.numero(), item.valor())).toList());
+            proposta.setRecebimentosPorServico(configuracao.recebimentos().stream()
+                    .filter(item -> item.servicos() != null)
+                    .flatMap(item -> item.servicos().stream().map(service -> new PropostaRecebimentoServico(item.numero(), service.servico(), service.valor())))
+                    .toList());
         }
     }
 

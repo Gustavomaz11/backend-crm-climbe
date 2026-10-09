@@ -15,8 +15,13 @@ class PropostaCondicoesMigrationTest {
             statement.execute("CREATE TABLE propostas (id_proposta BIGINT PRIMARY KEY)");
             statement.execute("INSERT INTO propostas VALUES (1)");
             ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V56__proposta_servicos_recebimentos.sql"));
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/migration/V59__proposta_recebimentos_por_servico.sql"));
             statement.execute("INSERT INTO proposta_servicos VALUES (1, 0, 'BPO', 30000, 25, 20), (1, 1, 'CFO', 20000, 30, 10)");
             statement.execute("INSERT INTO proposta_recebimentos VALUES (1, 1, 3000), (1, 2, 3000)");
+            statement.execute("INSERT INTO proposta_recebimento_servicos VALUES (1, 1, 'BPO', 1800), (1, 1, 'CFO', 1200), (1, 2, 'BPO', 3000), (1, 2, 'CFO', 0)");
+            assertThrows(java.sql.SQLException.class, () -> statement.execute("INSERT INTO proposta_recebimento_servicos VALUES (1, 1, 'BPO', 1)"));
+            assertThrows(java.sql.SQLException.class, () -> statement.execute("INSERT INTO proposta_recebimento_servicos VALUES (1, 3, 'BPO', -1)"));
+            assertThrows(java.sql.SQLException.class, () -> statement.execute("INSERT INTO proposta_recebimento_servicos VALUES (999, 1, 'BPO', 1)"));
             assertThrows(java.sql.SQLException.class, () -> statement.execute("INSERT INTO proposta_recebimentos VALUES (1, 1, 4400)"));
             assertThrows(java.sql.SQLException.class, () -> statement.execute("INSERT INTO proposta_servicos VALUES (1, 2, 'BPO', 1, 0, 0)"));
             try (var result = statement.executeQuery("SELECT SUM(valor) FROM proposta_servicos")) {
@@ -25,6 +30,10 @@ class PropostaCondicoesMigrationTest {
             }
             statement.execute("DELETE FROM propostas WHERE id_proposta = 1");
             try (var result = statement.executeQuery("SELECT COUNT(*) FROM proposta_recebimentos")) {
+                result.next();
+                assertEquals(0, result.getInt(1));
+            }
+            try (var result = statement.executeQuery("SELECT COUNT(*) FROM proposta_recebimento_servicos")) {
                 result.next();
                 assertEquals(0, result.getInt(1));
             }

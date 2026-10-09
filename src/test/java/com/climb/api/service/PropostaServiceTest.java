@@ -129,7 +129,7 @@ class PropostaServiceTest {
                 new PropostaServicoDTO(ServicoComercial.BPO, new BigDecimal("30000.00"), new BigDecimal("25.00"), null),
                 new PropostaServicoDTO(ServicoComercial.CFO, new BigDecimal("20000.00"), null, new BigDecimal("10.00")));
         var config = new PropostaComercialRequestDTO(ServicoComercial.BPO, LocalDate.of(2026, 10, 1), 12, 12,
-                false, null, null, List.of(), List.of(), List.of(), null, servicos, PropostaComercialValidatorTest.recebimentos());
+                false, null, null, List.of(), List.of(), List.of(), null, servicos, PropostaComercialValidatorTest.recebimentosPorServico());
         var arquivo = new MockMultipartFile("arquivo", "proposta.pdf", "application/pdf", new byte[]{1, 2});
 
         var response = service.criarComArquivo(1L, null, 2L, arquivo, new BigDecimal("50000.00"), config);
@@ -141,6 +141,11 @@ class PropostaServiceTest {
         assertEquals(new BigDecimal("30.00"), response.servicos().get(1).comissaoTecnicoPercentual());
         assertEquals(new BigDecimal("10.00"), response.servicos().get(1).comissaoComercialPercentual());
         assertEquals(12, response.quantidadeParcelas());
-        assertEquals(PropostaComercialValidatorTest.recebimentos(), response.recebimentos());
+        assertEquals(PropostaComercialValidatorTest.recebimentosPorServico(), response.recebimentos());
+        org.mockito.ArgumentCaptor<Proposta> persisted = org.mockito.ArgumentCaptor.forClass(Proposta.class);
+        org.mockito.Mockito.verify(repository).save(persisted.capture());
+        assertEquals(24, persisted.getValue().getRecebimentosPorServico().size());
+        when(repository.findById(4L)).thenReturn(Optional.of(persisted.getValue()));
+        assertEquals(response.recebimentos(), service.buscarPorId(4L).recebimentos());
     }
 }

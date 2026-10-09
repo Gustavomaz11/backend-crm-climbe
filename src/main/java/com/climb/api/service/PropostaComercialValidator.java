@@ -43,6 +43,7 @@ final class PropostaComercialValidator {
                 throw new IllegalArgumentException("Use os valores dos recebimentos para personalizar esta proposta.");
             }
             validarRecebimentos(config.recebimentos(), quantidade, total);
+            PropostaRecebimentoServicoValidator.validar(config.recebimentos(), config.servicos());
         }
     }
 
@@ -64,8 +65,13 @@ final class PropostaComercialValidator {
     }
 
     private static void validarValor(BigDecimal valor) {
-        if (valor == null || valor.signum() <= 0 || valor.compareTo(new BigDecimal("9999999999999.99")) > 0) {
-            throw new IllegalArgumentException("Informe um valor maior que zero para cada serviço e recebimento.");
+        validarValor(valor, false);
+    }
+
+    static void validarValor(BigDecimal valor, boolean permiteZero) {
+        if (valor == null || valor.signum() < 0 || (!permiteZero && valor.signum() == 0) || valor.compareTo(new BigDecimal("9999999999999.99")) > 0) {
+            throw new IllegalArgumentException(permiteZero ? "Informe valores a partir de zero para os serviços de cada recebimento."
+                    : "Informe um valor maior que zero para cada serviço e recebimento.");
         }
         try { valor.setScale(2, RoundingMode.UNNECESSARY); }
         catch (ArithmeticException exception) { throw new IllegalArgumentException("Informe os valores com no máximo duas casas decimais."); }
