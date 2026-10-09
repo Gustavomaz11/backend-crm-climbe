@@ -117,7 +117,7 @@ public class PipelineCadenciaEngine {
         tarefa.setScript(etapa.getScript());
         tarefa.setTitulo(renderer.renderizar(etapa.getTitulo(), execucao.getNegocio(), execucao.getParticipante()));
         tarefa.setDescricao(descricaoRenderizada(etapa, execucao));
-        tarefa.setResponsavel(execucao.getParticipante());
+        tarefa.setResponsaveis(java.util.List.of(execucao.getParticipante()));
         tarefa.setDataInicio(hoje);
         tarefa.setPrazo(diasUteis.adicionar(hoje, etapa.getPrazoDiasUteis() == null ? 0 : etapa.getPrazoDiasUteis()));
         tarefa.setPrioridade(etapa.getPrioridade());

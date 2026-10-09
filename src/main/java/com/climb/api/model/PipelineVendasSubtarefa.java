@@ -17,6 +17,10 @@ public class PipelineVendasSubtarefa {
     @JoinColumn(name = "tarefa_id", nullable = false)
     private PipelineVendasTarefa tarefa;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "responsavel_id")
+    private Usuario responsavel;
+
     @Column(nullable = false, length = 180)
     private String titulo;
 
@@ -46,6 +50,8 @@ public class PipelineVendasSubtarefa {
     public void setIdSubtarefa(Long idSubtarefa) { this.idSubtarefa = idSubtarefa; }
     public PipelineVendasTarefa getTarefa() { return tarefa; }
     public void setTarefa(PipelineVendasTarefa tarefa) { this.tarefa = tarefa; }
+    public Usuario getResponsavel() { return responsavel; }
+    public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
     public String getTitulo() { return titulo; }
     public void setTitulo(String titulo) { this.titulo = titulo; }
     public boolean isConcluida() { return concluida; }

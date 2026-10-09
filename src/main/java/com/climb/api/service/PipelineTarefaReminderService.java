@@ -108,7 +108,9 @@ public class PipelineTarefaReminderService {
     private void processarEscalacoes(List<PipelineVendasTarefa> tarefas, LocalDate hoje) {
         List<PipelineTarefaReminderDelivery> entregas = tarefas.stream()
                 .filter(tarefa -> diasAtraso(tarefa, hoje) > 7)
-                .flatMap(tarefa -> superioresDiretos(tarefa.getResponsavel()).stream()
+                .flatMap(tarefa -> tarefa.getResponsaveisEfetivos().stream()
+                        .flatMap(responsavel -> superioresDiretos(responsavel).stream())
+                        .collect(Collectors.toMap(Usuario::getId, usuario -> usuario, (primeiro, outro) -> primeiro)).values().stream()
                         .map(superior -> entrega(tarefa, superior,
                                 PipelineTarefaNotificacaoTipo.ESCALACAO_SUPERIOR,
                                 tarefa.getPrazo().toString())))
@@ -128,7 +130,8 @@ public class PipelineTarefaReminderService {
         long dias = diasAtraso(tarefa, hoje);
         return OVERDUE_MILESTONES.stream()
                 .filter(marco -> dias >= marco)
-                .map(marco -> entrega(tarefa, tarefa.getResponsavel(), tipoDoMarco(marco), tarefa.getPrazo().toString()))
+                .flatMap(marco -> tarefa.getResponsaveisEfetivos().stream()
+                        .map(responsavel -> entrega(tarefa, responsavel, tipoDoMarco(marco), tarefa.getPrazo().toString())))
                 .toList();
     }
 
@@ -175,11 +178,10 @@ public class PipelineTarefaReminderService {
     }
 
     private Map<Usuario, List<PipelineVendasTarefa>> agruparPorResponsavel(List<PipelineVendasTarefa> tarefas) {
-        return tarefas.stream().collect(Collectors.groupingBy(
-                PipelineVendasTarefa::getResponsavel,
-                LinkedHashMap::new,
-                Collectors.toList()
-        ));
+        Map<Usuario, List<PipelineVendasTarefa>> resultado = new LinkedHashMap<>();
+        tarefas.forEach(tarefa -> tarefa.getResponsaveisEfetivos().forEach(responsavel ->
+                resultado.computeIfAbsent(responsavel, ignorado -> new ArrayList<>()).add(tarefa)));
+        return resultado;
     }
 
     private PipelineTarefaReminderDelivery entrega(PipelineVendasTarefa tarefa,

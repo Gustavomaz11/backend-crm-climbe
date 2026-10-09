@@ -4,6 +4,9 @@ import com.climb.api.model.enums.ContratoKanbanPrioridade;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "contrato_kanban_tasks")
@@ -35,6 +38,11 @@ public class ContratoKanbanTask {
     @ManyToOne
     @JoinColumn(name = "id_responsavel")
     private Usuario responsavel;
+
+    @ManyToMany
+    @JoinTable(name = "contrato_kanban_task_responsaveis", joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "usuario_id"))
+    private Set<Usuario> responsaveis = new LinkedHashSet<>();
 
     @Column(name = "data_inicio")
     private LocalDate dataInicio;
@@ -83,6 +91,15 @@ public class ContratoKanbanTask {
 
     public Usuario getResponsavel() { return responsavel; }
     public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
+    public Set<Usuario> getResponsaveis() { return responsaveis; }
+    public Set<Usuario> getResponsaveisEfetivos() {
+        return responsaveis.isEmpty() && responsavel != null ? Set.of(responsavel) : responsaveis;
+    }
+    public void setResponsaveis(Collection<Usuario> usuarios) {
+        responsaveis.clear();
+        responsaveis.addAll(usuarios);
+        responsavel = responsaveis.stream().findFirst().orElse(null);
+    }
 
     public LocalDate getDataInicio() { return dataInicio; }
     public void setDataInicio(LocalDate dataInicio) { this.dataInicio = dataInicio; }

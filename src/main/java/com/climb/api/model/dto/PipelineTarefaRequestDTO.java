@@ -13,12 +13,19 @@ import java.util.List;
 public record PipelineTarefaRequestDTO(
         @NotBlank @Size(max = 180) String titulo,
         String descricao,
-        @NotNull Long responsavelId,
+        Long responsavelId,
         LocalDate dataInicio,
         @NotNull LocalDate prazo,
         @NotNull PipelineTarefaPrioridade prioridade,
         @NotNull PipelineTarefaStatus status,
         @NotBlank @Size(max = 100) String tipo,
         String observacoes,
-        List<@Valid PipelineSubtarefaRequestDTO> subtarefas
-) {}
+        List<@Valid PipelineSubtarefaRequestDTO> subtarefas,
+        List<Long> responsavelIds
+) {
+    public PipelineTarefaRequestDTO(String titulo, String descricao, Long responsavelId, LocalDate dataInicio,
+            LocalDate prazo, PipelineTarefaPrioridade prioridade, PipelineTarefaStatus status, String tipo,
+            String observacoes, List<PipelineSubtarefaRequestDTO> subtarefas) {
+        this(titulo, descricao, responsavelId, dataInicio, prazo, prioridade, status, tipo, observacoes, subtarefas, null);
+    }
+}

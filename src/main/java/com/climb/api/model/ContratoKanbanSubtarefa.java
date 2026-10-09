@@ -26,6 +26,10 @@ public class ContratoKanbanSubtarefa {
     @JoinColumn(name = "task_id", nullable = false)
     private ContratoKanbanTask task;
 
+    @ManyToOne
+    @JoinColumn(name = "responsavel_id")
+    private Usuario responsavel;
+
     @Column(nullable = false, length = 180)
     private String titulo;
 
@@ -58,6 +62,8 @@ public class ContratoKanbanSubtarefa {
 
     public ContratoKanbanTask getTask() { return task; }
     public void setTask(ContratoKanbanTask task) { this.task = task; }
+    public Usuario getResponsavel() { return responsavel; }
+    public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
 
     public String getTitulo() { return titulo; }
     public void setTitulo(String titulo) { this.titulo = titulo; }

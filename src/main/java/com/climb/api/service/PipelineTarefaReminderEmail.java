@@ -99,7 +99,7 @@ public class PipelineTarefaReminderEmail {
                 ? "Atrasada há " + diasAtraso + (diasAtraso == 1 ? " dia" : " dias")
                 : diasAtraso == 0 ? "Vence hoje" : "Vence em " + Math.abs(diasAtraso) + " dias";
         String responsavel = mostrarResponsavel
-                ? linha("Responsável", tarefa.getResponsavel().getNomeCompleto())
+                ? linha("Responsáveis", tarefa.getResponsaveisEfetivos().stream().map(Usuario::getNomeCompleto).collect(java.util.stream.Collectors.joining(", ")))
                 : "";
         return """
                 <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="margin:0 0 14px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc">

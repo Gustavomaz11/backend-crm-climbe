@@ -4,5 +4,6 @@ public record PipelineSubtarefaResponseDTO(
         Long id,
         String titulo,
         boolean concluida,
-        Integer posicao
+        Integer posicao,
+        UsuarioResumoDTO responsavel
 ) {}

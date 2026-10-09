@@ -25,6 +25,7 @@ public class PipelineTarefaService {
     private final PipelineCadenciaEngine cadenciaEngine;
     private final RbacService rbacService;
     private final CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
+    private final TarefaResponsaveisService responsaveisService;
 
     public PipelineTarefaService(PipelineVendasTarefaRepository repository,
                                  PipelineVendasNegocioRepository negocioRepository,
@@ -40,6 +41,7 @@ public class PipelineTarefaService {
         this.cadenciaEngine = cadenciaEngine;
         this.rbacService = rbacService;
         this.cargoHierarquiaAcessoService = cargoHierarquiaAcessoService;
+        this.responsaveisService = new TarefaResponsaveisService(usuarioRepository);
     }
 
     @Transactional(readOnly = true)
@@ -166,7 +168,7 @@ public class PipelineTarefaService {
         validarReaberturaAutomatica(tarefa, dto.status());
         tarefa.setTitulo(dto.titulo().trim());
         tarefa.setDescricao(normalizar(dto.descricao()));
-        tarefa.setResponsavel(buscarUsuario(dto.responsavelId()));
+        tarefa.setResponsaveis(responsaveisService.resolver(dto.responsavelIds(), dto.responsavelId(), true));
         tarefa.setDataInicio(dto.dataInicio());
         tarefa.setPrazo(dto.prazo());
         tarefa.setPrioridade(dto.prioridade());
@@ -177,11 +179,15 @@ public class PipelineTarefaService {
         tarefa.setObservacoes(normalizar(dto.observacoes()));
         atualizarDataConclusao(tarefa);
         if (dto.subtarefas() != null) {
-            tarefa.substituirSubtarefas(criarSubtarefas(dto.subtarefas()));
+            tarefa.substituirSubtarefas(criarSubtarefas(dto.subtarefas(), tarefa));
         }
+        tarefa.getSubtarefas().forEach(subtarefa -> {
+            if (subtarefa.getResponsavel() != null && tarefa.getResponsaveisEfetivos().stream()
+                    .noneMatch(usuario -> usuario.getId().equals(subtarefa.getResponsavel().getId()))) subtarefa.setResponsavel(null);
+        });
     }
 
-    private List<PipelineVendasSubtarefa> criarSubtarefas(List<PipelineSubtarefaRequestDTO> subtarefas) {
+    private List<PipelineVendasSubtarefa> criarSubtarefas(List<PipelineSubtarefaRequestDTO> subtarefas, PipelineVendasTarefa tarefa) {
         return java.util.stream.IntStream.range(0, subtarefas.size())
                 .mapToObj(indice -> {
                     PipelineSubtarefaRequestDTO dto = subtarefas.get(indice);
@@ -189,6 +195,7 @@ public class PipelineTarefaService {
                     subtarefa.setTitulo(dto.titulo().trim());
                     subtarefa.setConcluida(dto.concluida());
                     subtarefa.setPosicao(dto.posicao() == null ? indice : dto.posicao());
+                    subtarefa.setResponsavel(TarefaResponsaveisService.daSubtarefa(dto.responsavelId(), tarefa.getResponsaveisEfetivos()));
                     return subtarefa;
                 })
                 .toList();
@@ -271,6 +278,18 @@ public class PipelineTarefaService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public PipelineVendasTarefa exigirTarefaVisivel(Long tarefaId, Long usuarioId) {
+        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
+        PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
+        if (podeVisualizarTodasAsTarefas(usuarioId)) return tarefa;
+        Set<Long> visiveis = cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId);
+        if (tarefa.getResponsaveisEfetivos().stream().noneMatch(usuario -> visiveis.contains(usuario.getId()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Você não tem acesso a esta tarefa.");
+        }
+        return tarefa;
+    }
+
     private String normalizar(String valor) {
         return valor == null || valor.isBlank() ? null : valor.trim();
     }
@@ -295,7 +314,9 @@ public class PipelineTarefaService {
                                 subtarefa.getIdSubtarefa(),
                                 subtarefa.getTitulo(),
                                 subtarefa.isConcluida(),
-                                subtarefa.getPosicao()
+                                subtarefa.getPosicao(),
+                                subtarefa.getResponsavel() == null ? null : new UsuarioResumoDTO(subtarefa.getResponsavel().getId(),
+                                        subtarefa.getResponsavel().getNomeCompleto(), subtarefa.getResponsavel().getEmail())
                         ))
                         .toList(),
                 tarefa.getCriadoEm(),
@@ -304,7 +325,8 @@ public class PipelineTarefaService {
                 tarefa.getCampanha() == null ? null : tarefa.getCampanha().getIdCampanha(),
                 tarefa.getCampanha() == null ? null : tarefa.getCampanha().getNome(),
                 tarefa.getNegocio().getNomeContato(), tarefa.getNegocio().getTelefone(), tarefa.getNegocio().getEmail(),
-                tarefa.getMotivoCancelamento(), tarefa.getComentarioCancelamento(), tarefa.getCanceladoEm()
+                tarefa.getMotivoCancelamento(), tarefa.getComentarioCancelamento(), tarefa.getCanceladoEm(),
+                tarefa.getResponsaveisEfetivos().stream().map(usuario -> new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())).toList()
         );
     }
 }

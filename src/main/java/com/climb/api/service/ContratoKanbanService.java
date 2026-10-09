@@ -45,6 +45,7 @@ public class ContratoKanbanService {
     private final UsuarioRepository usuarioRepository;
     private final RbacService rbacService;
     private final CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
+    private final TarefaResponsaveisService responsaveisService;
 
     public ContratoKanbanService(ContratoRepository contratoRepository,
                                  ContratoKanbanRaiaRepository raiaRepository,
@@ -60,8 +61,10 @@ public class ContratoKanbanService {
         this.usuarioRepository = usuarioRepository;
         this.rbacService = rbacService;
         this.cargoHierarquiaAcessoService = cargoHierarquiaAcessoService;
+        this.responsaveisService = new TarefaResponsaveisService(usuarioRepository);
     }
 
+    @Transactional(readOnly = true)
     public ContratoKanbanBoardResponseDTO buscarBoard(Long contratoId, Long usuarioId) {
         exigirPermissaoKanban(usuarioId);
         Contrato contrato = buscarContrato(contratoId);
@@ -112,7 +115,7 @@ public class ContratoKanbanService {
         task.setTitulo(normalizarTitulo(dto.titulo(), "Título da tarefa é obrigatório"));
         task.setDescricao(normalizarTextoOpcional(dto.descricao()));
         task.setPrioridade(dto.prioridade() != null ? dto.prioridade() : ContratoKanbanPrioridade.MEDIA);
-        task.setResponsavel(buscarResponsavelDaTask(dto.responsavelId()));
+        task.setResponsaveis(responsaveisService.resolver(dto.responsavelIds(), dto.responsavelId(), false));
         task.setDataInicio(dto.dataInicio());
         task.setDataFim(dto.dataFim());
         task.setPosicao(dto.posicao() != null ? dto.posicao() : proximaPosicaoTask(contratoId, raia.getIdRaia()));
@@ -136,7 +139,14 @@ public class ContratoKanbanService {
         if (dto.prioridade() != null) {
             task.setPrioridade(dto.prioridade());
         }
-        task.setResponsavel(buscarResponsavelDaTask(dto.responsavelId()));
+        task.setResponsaveis(responsaveisService.resolver(dto.responsavelIds(), dto.responsavelId(), false));
+        subtarefaRepository.findByTask_IdTaskOrderByPosicaoAscIdSubtarefaAsc(taskId).forEach(subtarefa -> {
+            if (subtarefa.getResponsavel() != null && task.getResponsaveisEfetivos().stream()
+                    .noneMatch(usuario -> usuario.getId().equals(subtarefa.getResponsavel().getId()))) {
+                subtarefa.setResponsavel(null);
+                subtarefaRepository.save(subtarefa);
+            }
+        });
         task.setDataInicio(dto.dataInicio());
         task.setDataFim(dto.dataFim());
         if (dto.posicao() != null) {
@@ -182,6 +192,7 @@ public class ContratoKanbanService {
 
         ContratoKanbanSubtarefa subtarefa = new ContratoKanbanSubtarefa();
         subtarefa.setTask(task);
+        subtarefa.setResponsavel(TarefaResponsaveisService.daSubtarefa(dto.responsavelId(), task.getResponsaveisEfetivos()));
         subtarefa.setTitulo(normalizarTitulo(dto.titulo(), "Título da subtarefa é obrigatório"));
         subtarefa.setConcluida(Boolean.TRUE.equals(dto.concluida()));
         subtarefa.setPosicao(dto.posicao() != null ? dto.posicao() : proximaPosicaoSubtarefa(taskId));
@@ -196,9 +207,10 @@ public class ContratoKanbanService {
                                                              Long usuarioId,
                                                              ContratoKanbanSubtarefaRequestDTO dto) {
         Contrato contrato = exigirGestorContrato(contratoId, usuarioId);
-        buscarTask(contratoId, taskId);
+        ContratoKanbanTask task = buscarTask(contratoId, taskId);
         exigirSubtarefaRequest(dto);
         ContratoKanbanSubtarefa subtarefa = buscarSubtarefa(contratoId, taskId, subtarefaId);
+        subtarefa.setResponsavel(TarefaResponsaveisService.daSubtarefa(dto.responsavelId(), task.getResponsaveisEfetivos()));
 
         if (StringUtils.hasText(dto.titulo())) {
             subtarefa.setTitulo(dto.titulo().trim());
@@ -329,7 +341,8 @@ public class ContratoKanbanService {
                 task.getPosicao(),
                 task.getCriadoEm(),
                 task.getAtualizadoEm(),
-                subtarefas.stream().map(this::toSubtarefaResponse).toList()
+                subtarefas.stream().map(this::toSubtarefaResponse).toList(),
+                task.getResponsaveisEfetivos().stream().map(this::toUsuarioResumo).toList()
         );
     }
 
@@ -340,7 +353,8 @@ public class ContratoKanbanService {
                 subtarefa.isConcluida(),
                 subtarefa.getPosicao(),
                 subtarefa.getCriadoEm(),
-                subtarefa.getAtualizadoEm()
+                subtarefa.getAtualizadoEm(),
+                toUsuarioResumo(subtarefa.getResponsavel())
         );
     }
 
@@ -376,9 +390,21 @@ public class ContratoKanbanService {
     }
 
     private boolean isResponsavelTask(ContratoKanbanTask task, Long usuarioId) {
-        return task.getResponsavel() != null
-                && task.getResponsavel().getId() != null
-                && Objects.equals(task.getResponsavel().getId(), usuarioId);
+        return task.getResponsaveisEfetivos().stream().anyMatch(usuario -> Objects.equals(usuario.getId(), usuarioId));
+    }
+
+    @Transactional(readOnly = true)
+    public ContratoKanbanTask exigirTaskVisivel(Long taskId, Long usuarioId) {
+        exigirPermissaoKanban(usuarioId);
+        ContratoKanbanTask task = taskRepository.findById(taskId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Tarefa não encontrada."));
+        if (isGestor(task.getContrato(), usuarioId)
+                || rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS)) return task;
+        Set<Long> visiveis = cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId);
+        if (task.getResponsaveisEfetivos().stream().noneMatch(usuario -> visiveis.contains(usuario.getId()))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Você não tem acesso a esta tarefa.");
+        }
+        return task;
     }
 
     private Contrato buscarContrato(Long contratoId) {
@@ -397,18 +423,6 @@ public class ContratoKanbanService {
     private ContratoKanbanTask buscarTask(Long contratoId, Long taskId) {
         return taskRepository.findByIdTaskAndContrato_IdContrato(taskId, contratoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tarefa não encontrada"));
-    }
-
-    private Usuario buscarResponsavelDaTask(Long responsavelId) {
-        if (responsavelId == null) {
-            return null;
-        }
-        Usuario usuario = usuarioRepository.findById(responsavelId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Responsável da tarefa não encontrado"));
-        if (!"ATIVO".equals(usuario.getSituacao())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Responsável da tarefa precisa ser um usuário ativo");
-        }
-        return usuario;
     }
 
     private ContratoKanbanSubtarefa buscarSubtarefa(Long contratoId, Long taskId, Long subtarefaId) {

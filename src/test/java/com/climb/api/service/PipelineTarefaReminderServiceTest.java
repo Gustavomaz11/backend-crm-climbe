@@ -124,6 +124,22 @@ class PipelineTarefaReminderServiceTest {
         assertEquals(superior, captor.getValue().getFirst().getDestinatario());
     }
 
+    @Test
+    void deveNotificarTodosOsResponsaveisDaTarefa() {
+        LocalDate hoje = LocalDate.of(2026, 10, 9);
+        Usuario ana = usuario(2L, "Ana", "ana@example.test", null);
+        Usuario bia = usuario(3L, "Bia", "bia@example.test", null);
+        PipelineVendasTarefa tarefa = tarefa(1L, ana, hoje.minusDays(1));
+        tarefa.setResponsaveis(List.of(ana, bia));
+        when(tarefaRepository.findAbertasComPrazoAte(hoje.minusDays(1))).thenReturn(List.of(tarefa));
+        when(notificacaoRepository.findChavesExistentes(anyCollection())).thenReturn(List.of());
+        when(reminderEmail.enviarLembreteAtrasos(any(), eq(List.of(tarefa)), eq(hoje))).thenReturn(true);
+        service.processarAlertasDeAtraso(hoje);
+        verify(reminderEmail).enviarLembreteAtrasos(ana, List.of(tarefa), hoje);
+        verify(reminderEmail).enviarLembreteAtrasos(bia, List.of(tarefa), hoje);
+        verify(notificacaoRepository, times(2)).saveAll(anyList());
+    }
+
     private Usuario usuario(Long id, String nome, String email, Cargo cargo) {
         Usuario usuario = new Usuario();
         usuario.setId(id);

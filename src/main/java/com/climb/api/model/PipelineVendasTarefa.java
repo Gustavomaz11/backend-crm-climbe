@@ -8,6 +8,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "pipeline_vendas_tarefas")
@@ -43,6 +46,11 @@ public class PipelineVendasTarefa {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "responsavel_id", nullable = false)
     private Usuario responsavel;
+
+    @ManyToMany
+    @JoinTable(name = "pipeline_tarefa_responsaveis", joinColumns = @JoinColumn(name = "tarefa_id"),
+            inverseJoinColumns = @JoinColumn(name = "usuario_id"))
+    private Set<Usuario> responsaveis = new LinkedHashSet<>();
 
     @Column(name = "data_inicio")
     private LocalDate dataInicio;
@@ -116,6 +124,15 @@ public class PipelineVendasTarefa {
     public void setDescricao(String descricao) { this.descricao = descricao; }
     public Usuario getResponsavel() { return responsavel; }
     public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
+    public Set<Usuario> getResponsaveis() { return responsaveis; }
+    public Set<Usuario> getResponsaveisEfetivos() {
+        return responsaveis.isEmpty() && responsavel != null ? Set.of(responsavel) : responsaveis;
+    }
+    public void setResponsaveis(Collection<Usuario> usuarios) {
+        responsaveis.clear();
+        responsaveis.addAll(usuarios);
+        responsavel = responsaveis.stream().findFirst().orElse(null);
+    }
     public LocalDate getDataInicio() { return dataInicio; }
     public void setDataInicio(LocalDate dataInicio) { this.dataInicio = dataInicio; }
     public LocalDate getPrazo() { return prazo; }

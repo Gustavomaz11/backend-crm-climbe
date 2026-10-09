@@ -264,6 +264,68 @@ class ContratoKanbanServiceTest {
                 .findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(CONTRATO_ID);
     }
 
+    @Test
+    void deveCriarTarefaComDoisResponsaveis() {
+        Usuario ana = usuario(2L, "Ana", "ATIVO");
+        Usuario bia = usuario(3L, "Bia", "ATIVO");
+        prepararGestorEBoardVazio(List.of(ana, bia));
+        when(raiaRepository.findByIdRaiaAndContrato_IdContrato(20L, CONTRATO_ID)).thenReturn(Optional.of(raia));
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(ana));
+        when(usuarioRepository.findById(3L)).thenReturn(Optional.of(bia));
+        service.criarTask(CONTRATO_ID, GESTOR_ID, new ContratoKanbanTaskRequestDTO(20L, "Análise", null,
+                ContratoKanbanPrioridade.MEDIA, null, null, null, null, List.of(2L, 3L)));
+        ArgumentCaptor<ContratoKanbanTask> captor = ArgumentCaptor.forClass(ContratoKanbanTask.class);
+        verify(taskRepository).save(captor.capture());
+        assertEquals(Set.of(ana, bia), captor.getValue().getResponsaveisEfetivos());
+    }
+
+    @Test
+    void segundoResponsavelPodeMoverEVerTarefa() {
+        Usuario ana = usuario(2L, "Ana", "ATIVO");
+        Usuario bia = usuario(3L, "Bia", "ATIVO");
+        ContratoKanbanTask task = tarefa(30L, ana);
+        task.setResponsaveis(List.of(ana, bia));
+        when(rbacService.temPermissao(3L, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(taskRepository.findByIdTaskAndContrato_IdContrato(30L, CONTRATO_ID)).thenReturn(Optional.of(task));
+        when(raiaRepository.findByIdRaiaAndContrato_IdContrato(20L, CONTRATO_ID)).thenReturn(Optional.of(raia));
+        when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(3L)).thenReturn(Set.of(3L));
+        service.moverTask(CONTRATO_ID, 30L, 3L, new com.climb.api.model.dto.ContratoKanbanMoverTaskRequestDTO(20L));
+        verify(taskRepository).save(task);
+        when(taskRepository.findById(30L)).thenReturn(Optional.of(task));
+        assertEquals(task, service.exigirTaskVisivel(30L, 3L));
+    }
+
+    @Test
+    void deveImpedirAtribuirSubtarefaAForaDaTarefa() {
+        ContratoKanbanTask task = tarefa(30L, usuario(2L, "Ana", "ATIVO"));
+        when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(taskRepository.findByIdTaskAndContrato_IdContrato(30L, CONTRATO_ID)).thenReturn(Optional.of(task));
+        var exception = assertThrows(ResponseStatusException.class, () -> service.criarSubtarefa(CONTRATO_ID, 30L, GESTOR_ID,
+                new ContratoKanbanSubtarefaRequestDTO("Conferir", false, 0, 99L)));
+        assertTrue(exception.getReason().contains("tarefa principal"));
+        verify(subtarefaRepository, never()).save(any());
+    }
+
+    @Test
+    void deveLimparSubtarefaAoRemoverResponsavel() {
+        Usuario ana = usuario(2L, "Ana", "ATIVO");
+        Usuario bia = usuario(3L, "Bia", "ATIVO");
+        ContratoKanbanTask task = tarefa(30L, ana);
+        task.setResponsaveis(List.of(ana, bia));
+        ContratoKanbanSubtarefa sub = subtarefa(40L, task, "Conferir", false, 0);
+        sub.setResponsavel(bia);
+        prepararGestorEBoardVazio(List.of(ana, bia));
+        when(taskRepository.findByIdTaskAndContrato_IdContrato(30L, CONTRATO_ID)).thenReturn(Optional.of(task));
+        when(subtarefaRepository.findByTask_IdTaskOrderByPosicaoAscIdSubtarefaAsc(30L)).thenReturn(List.of(sub));
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(ana));
+        service.atualizarTask(CONTRATO_ID, 30L, GESTOR_ID, new ContratoKanbanTaskRequestDTO(20L, "Conferir", null,
+                ContratoKanbanPrioridade.MEDIA, null, null, null, 0, List.of(2L)));
+        assertEquals(null, sub.getResponsavel());
+        verify(subtarefaRepository).save(sub);
+    }
+
     private void prepararGestorEBoardVazio(List<Usuario> usuariosAtivos) {
         when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN)).thenReturn(true);
         when(rbacService.temPermissao(GESTOR_ID, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(true);

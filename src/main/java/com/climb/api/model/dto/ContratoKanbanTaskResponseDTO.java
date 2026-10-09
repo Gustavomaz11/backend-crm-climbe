@@ -18,5 +18,6 @@ public record ContratoKanbanTaskResponseDTO(
         Integer posicao,
         LocalDateTime criadoEm,
         LocalDateTime atualizadoEm,
-        List<ContratoKanbanSubtarefaResponseDTO> subtarefas
+        List<ContratoKanbanSubtarefaResponseDTO> subtarefas,
+        List<UsuarioResumoDTO> responsaveis
 ) {}

@@ -17,6 +17,12 @@ public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanb
             Long contratoId,
             Long responsavelId);
 
+    @Query("""
+            select distinct task from ContratoKanbanTask task left join task.responsaveis usuario
+            where task.contrato.idContrato = :contratoId
+              and (task.responsavel.id in :responsavelIds or usuario.id in :responsavelIds)
+            order by task.raia.posicao, task.posicao, task.idTask
+            """)
     List<ContratoKanbanTask> findByContrato_IdContratoAndResponsavel_IdInOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(
             Long contratoId,
             Set<Long> responsavelIds);
@@ -26,10 +32,11 @@ public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanb
     boolean existsByContrato_IdContratoAndResponsavel_Id(Long contratoId, Long responsavelId);
 
     @Query("""
-            select distinct task.responsavel.id
+            select distinct usuario.id
             from ContratoKanbanTask task
+            join task.responsaveis usuario
             where task.contrato.idContrato = :contratoId
-              and task.responsavel.id in :responsavelIds
+              and usuario.id in :responsavelIds
             """)
     Set<Long> findResponsavelIdsComTasks(
             @Param("contratoId") Long contratoId,

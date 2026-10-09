@@ -27,10 +27,10 @@ public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVe
     @EntityGraph(attributePaths = {"negocio", "responsavel", "subtarefas"})
     @Query("""
             select distinct tarefa
-            from PipelineVendasTarefa tarefa
+            from PipelineVendasTarefa tarefa left join tarefa.responsaveis responsavel
             where (:negocioId is null or tarefa.negocio.idNegocio = :negocioId)
               and (:funilId is null or tarefa.negocio.funil.idFunil = :funilId)
-              and (:todosResponsaveis = true or tarefa.responsavel.id in :responsavelIds)
+              and (:todosResponsaveis = true or tarefa.responsavel.id in :responsavelIds or responsavel.id in :responsavelIds)
               and (:tipo is null or lower(trim(tarefa.tipo)) = lower(:tipo))
               and (
                     :todas = true
@@ -77,7 +77,7 @@ public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVe
             List<PipelineTarefaStatus> status);
 
     @EntityGraph(attributePaths = {
-            "negocio", "negocio.funil", "negocio.servicosInteresse", "responsavel", "responsavel.cargo"
+            "negocio", "negocio.funil", "negocio.servicosInteresse", "responsavel", "responsavel.cargo", "responsaveis", "responsaveis.cargo"
     })
     @Query("""
             select distinct tarefa

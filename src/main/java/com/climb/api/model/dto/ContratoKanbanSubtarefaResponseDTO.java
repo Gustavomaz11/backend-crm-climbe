@@ -8,5 +8,6 @@ public record ContratoKanbanSubtarefaResponseDTO(
         boolean concluida,
         Integer posicao,
         LocalDateTime criadoEm,
-        LocalDateTime atualizadoEm
+        LocalDateTime atualizadoEm,
+        UsuarioResumoDTO responsavel
 ) {}

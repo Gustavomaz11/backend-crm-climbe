@@ -206,10 +206,44 @@ class PipelineTarefaServiceTest {
         );
     }
 
+    @Test
+    void deveSalvarMultiplosResponsaveisEAtribuicaoDaSubtarefa() {
+        Usuario ana = usuario(2L, "Ana");
+        Usuario bia = usuario(3L, "Bia");
+        PipelineVendasNegocio negocio = negocio(10L, ana);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_CRIAR)).thenReturn(true);
+        when(negocioRepository.findById(10L)).thenReturn(Optional.of(negocio));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario(1L, "Gestor")));
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(ana));
+        when(usuarioRepository.findById(3L)).thenReturn(Optional.of(bia));
+        when(repository.save(any())).thenAnswer(invocation -> {
+            PipelineVendasTarefa tarefa = invocation.getArgument(0); tarefa.setIdTarefa(20L); return tarefa;
+        });
+        var request = new PipelineTarefaRequestDTO("Conferir", null, null, null, LocalDate.now(), PipelineTarefaPrioridade.MEDIA,
+                PipelineTarefaStatus.PENDENTE, "Follow-up", null,
+                List.of(new com.climb.api.model.dto.PipelineSubtarefaRequestDTO("Conferir balanço", false, 0, 3L)), List.of(2L, 3L));
+        var resposta = service.criar(10L, 1L, request);
+        assertEquals(2, resposta.responsaveis().size());
+        assertEquals(3L, resposta.subtarefas().getFirst().responsavel().id());
+    }
+
+    @Test
+    void segundoResponsavelPodeAcessarColaboracao() {
+        Usuario ana = usuario(2L, "Ana");
+        Usuario bia = usuario(3L, "Bia");
+        PipelineVendasTarefa task = tarefa(20L, negocio(10L, ana), ana, LocalDate.now(), PipelineTarefaStatus.PENDENTE);
+        task.setResponsaveis(List.of(ana, bia));
+        when(repository.findById(20L)).thenReturn(Optional.of(task));
+        when(rbacService.temPermissao(3L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
+        when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(3L)).thenReturn(Set.of(3L));
+        assertEquals(task, service.exigirTarefaVisivel(20L, 3L));
+    }
+
     private Usuario usuario(Long id, String nome) {
         Usuario usuario = new Usuario();
         usuario.setId(id);
         usuario.setNomeCompleto(nome);
+        usuario.setSituacao("ATIVO");
         return usuario;
     }
 
