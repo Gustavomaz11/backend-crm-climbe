@@ -74,7 +74,7 @@ public class PipelineAtividadesController {
             @PathVariable Long tarefaId,
             @Valid @RequestBody PipelineTarefaStatusRequestDTO dto) {
         return ResponseEntity.ok(ApiResponse.ok(
-                tarefaService.alterarStatus(tarefaId, authenticatedUser.getUserId(), dto.status())
+                tarefaService.alterarStatus(tarefaId, authenticatedUser.getUserId(), dto.status(), dto.justificativaAtraso())
         ));
     }
 

@@ -10,6 +10,17 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanbanTask, Long> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+            "contrato", "contrato.responsavel", "contrato.proposta", "contrato.proposta.servicos", "responsavel", "responsaveis"
+    })
+    @Query("""
+            select distinct task from ContratoKanbanTask task
+            where task.dataFim is not null and task.dataFim <= :limite
+              and task.raia.concluiTarefas = false and task.contrato.status = 'APROVADO'
+            order by task.dataFim, task.idTask
+            """)
+    List<ContratoKanbanTask> buscarAbertasComPrazoAte(@Param("limite") java.time.LocalDate limite);
+
     @Query("""
             select count(task) > 0 from ContratoKanbanTask task join task.apoios apoio
             where task.contrato.idContrato = :contratoId and task.raia.concluiTarefas = false

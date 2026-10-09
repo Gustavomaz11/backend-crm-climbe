@@ -21,11 +21,17 @@ public record PipelineTarefaRequestDTO(
         @NotBlank @Size(max = 100) String tipo,
         String observacoes,
         List<@Valid PipelineSubtarefaRequestDTO> subtarefas,
-        List<Long> responsavelIds
+        List<Long> responsavelIds,
+        @Size(max = 4000) String justificativaAtraso
 ) {
     public PipelineTarefaRequestDTO(String titulo, String descricao, Long responsavelId, LocalDate dataInicio,
             LocalDate prazo, PipelineTarefaPrioridade prioridade, PipelineTarefaStatus status, String tipo,
+            String observacoes, List<PipelineSubtarefaRequestDTO> subtarefas, List<Long> responsavelIds) {
+        this(titulo, descricao, responsavelId, dataInicio, prazo, prioridade, status, tipo, observacoes, subtarefas, responsavelIds, null);
+    }
+    public PipelineTarefaRequestDTO(String titulo, String descricao, Long responsavelId, LocalDate dataInicio,
+            LocalDate prazo, PipelineTarefaPrioridade prioridade, PipelineTarefaStatus status, String tipo,
             String observacoes, List<PipelineSubtarefaRequestDTO> subtarefas) {
-        this(titulo, descricao, responsavelId, dataInicio, prazo, prioridade, status, tipo, observacoes, subtarefas, null);
+        this(titulo, descricao, responsavelId, dataInicio, prazo, prioridade, status, tipo, observacoes, subtarefas, null, null);
     }
 }

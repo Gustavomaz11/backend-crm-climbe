@@ -15,6 +15,18 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     Optional<Usuario> findByEmail(String email);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select usuario from Usuario usuario where usuario.id = :id")
+    Optional<Usuario> findByIdForUpdate(@Param("id") Long id);
+
+    @Query("""
+            select usuario from Usuario usuario join fetch usuario.cargo cargo
+            where usuario.situacao = 'ATIVO' and cargo.ativo = true
+              and lower(trim(cargo.nome)) = 'diretor comercial'
+            order by usuario.id
+            """)
+    List<Usuario> buscarDiretoresComerciaisAtivos();
+
     Optional<Usuario> findByCpf(String cpf);
 
     boolean existsByIdAndSituacao(Long id, String situacao);

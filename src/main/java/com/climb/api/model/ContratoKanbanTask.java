@@ -52,6 +52,20 @@ public class ContratoKanbanTask {
     @Column(name = "concluida_em")
     private LocalDateTime concluidaEm;
 
+    @Column(name = "justificativa_atraso", length = 4000)
+    private String justificativaAtraso;
+    @Column(name = "justificada_em")
+    private LocalDateTime justificadaEm;
+    @Column(name = "justificada_por")
+    private Long justificadaPor;
+
+    public String getJustificativaAtraso() { return justificativaAtraso; }
+    public void setJustificativaAtraso(String value) { justificativaAtraso = value; }
+    public void justificarAtraso(String texto, Long usuarioId) {
+        justificativaAtraso = texto; justificadaPor = usuarioId;
+        justificadaEm = LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
+    }
+
     @Column(name = "data_inicio")
     private LocalDate dataInicio;
 

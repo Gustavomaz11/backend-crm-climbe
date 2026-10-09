@@ -19,5 +19,6 @@ public record ContratoKanbanTaskResponseDTO(
         LocalDateTime criadoEm,
         LocalDateTime atualizadoEm,
         List<ContratoKanbanSubtarefaResponseDTO> subtarefas,
-        List<UsuarioResumoDTO> responsaveis
+        List<UsuarioResumoDTO> responsaveis,
+        String justificativaAtraso
 ) {}

@@ -14,10 +14,15 @@ public record ContratoKanbanTaskRequestDTO(
         LocalDate dataInicio,
         LocalDate dataFim,
         Integer posicao,
-        List<Long> responsavelIds
+        List<Long> responsavelIds,
+        String justificativaAtraso
 ) {
     public ContratoKanbanTaskRequestDTO(Long raiaId, String titulo, String descricao, ContratoKanbanPrioridade prioridade,
+            Long responsavelId, LocalDate dataInicio, LocalDate dataFim, Integer posicao, List<Long> responsavelIds) {
+        this(raiaId, titulo, descricao, prioridade, responsavelId, dataInicio, dataFim, posicao, responsavelIds, null);
+    }
+    public ContratoKanbanTaskRequestDTO(Long raiaId, String titulo, String descricao, ContratoKanbanPrioridade prioridade,
             Long responsavelId, LocalDate dataInicio, LocalDate dataFim, Integer posicao) {
-        this(raiaId, titulo, descricao, prioridade, responsavelId, dataInicio, dataFim, posicao, null);
+        this(raiaId, titulo, descricao, prioridade, responsavelId, dataInicio, dataFim, posicao, null, null);
     }
 }

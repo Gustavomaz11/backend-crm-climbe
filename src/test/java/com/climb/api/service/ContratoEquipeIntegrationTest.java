@@ -24,7 +24,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
         "spring.flyway.enabled=false", "spring.mail.host=localhost", "debug=false", "logging.level.root=WARN",
         "logging.level.org.hibernate.SQL=WARN", "logging.level.org.springframework=WARN",
         "app.pipeline.cadencia.atraso-inicial-ms=86400000",
-        "app.pipeline.task-reminders.weekly-cron=-", "app.pipeline.task-reminders.overdue-cron=-"
+        "app.pipeline.task-reminders.weekly-cron=-", "app.pipeline.task-reminders.overdue-cron=-", "app.kanban.prazos.cron=-"
 })
 @ActiveProfiles("test")
 @Transactional
@@ -41,6 +41,10 @@ class ContratoEquipeIntegrationTest {
     @Autowired ContratoRateioTecnicoRepository participantes;
     @Autowired ContratoApoioAtuacaoRepository atuacoes;
     @Autowired NotificacaoRepository notificacoes;
+    @Autowired KanbanPrazoAlertaService alertas;
+    @Autowired KanbanPrazoNotificacaoRepository avisosPrazo;
+    @Autowired PipelineVendasTarefaRepository tarefasComerciais;
+    @Autowired jakarta.persistence.EntityManager em;
     @MockitoBean RbacService rbac;
     @MockitoBean EmailService email;
     @MockitoBean CloudflareR2ArquivoStorageService storage;
@@ -143,6 +147,58 @@ class ContratoEquipeIntegrationTest {
         }
         assertThat(rateio.consultar(id, atual.plusMonths(1).toString(), lider.getId()).participantes()).hasSize(2);
         verifyNoInteractions(email, storage, assinatura);
+    }
+
+    @Test
+    void alertasAgrupadosNaoRepetemEConclusaoAtrasadaPreservaJustificativa() {
+        var lider = usuario("Líder", "lider"); var apoio = usuario("Apoio", "apoio"); var comercial = usuario("Comercial", "comercial");
+        var cargo = new Cargo(); cargo.setNome("  Diretor Comercial  "); em.persist(cargo);
+        var diretor = usuario("Diretor", "diretor"); diretor.setCargo(cargo); usuarios.saveAndFlush(diretor);
+        var outroDiretor = usuario("Outra diretora", "outra"); outroDiretor.setCargo(cargo); usuarios.saveAndFlush(outroDiretor);
+        var inativo = usuario("Inativo", "inativo"); inativo.setCargo(cargo); inativo.setSituacao("INATIVO"); usuarios.saveAndFlush(inativo);
+        assertThat(usuarios.buscarDiretoresComerciaisAtivos()).extracting(Usuario::getId).containsExactly(diretor.getId(), outroDiretor.getId());
+        var contrato = contrato(lider, comercial); Long id = contrato.getIdContrato();
+        equipe.salvarEquipe(id, lider.getId(), List.of(apoio.getId()));
+        var board = kanban.criarRaia(id, lider.getId(), new ContratoKanbanRaiaRequestDTO("A fazer", 0)); Long pendente = board.raias().getFirst().id();
+        board = kanban.criarRaia(id, lider.getId(), new ContratoKanbanRaiaRequestDTO("Concluído", 1));
+        Long concluido = board.raias().stream().filter(ContratoKanbanRaiaResponseDTO::concluiTarefas).findFirst().orElseThrow().id();
+        LocalDate hoje = TarefaPrazoPolicy.hoje(), vencido = hoje.minusDays(1);
+        kanban.criarTask(id, lider.getId(), new ContratoKanbanTaskRequestDTO(pendente, "Entrega técnica", null,
+                ContratoKanbanPrioridade.MEDIA, apoio.getId(), null, vencido, 0));
+        Long tarefaId = tarefas.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(id).getFirst().getIdTask();
+        var erro = assertThrows(ResponseStatusException.class, () -> kanban.atualizarTask(id, tarefaId, apoio.getId(),
+                new ContratoKanbanTaskRequestDTO(pendente, "Entrega técnica", null, ContratoKanbanPrioridade.MEDIA, apoio.getId(), null, hoje, 0)));
+        assertThat(erro.getStatusCode().value()).isEqualTo(403);
+        assertThat(assertThrows(ResponseStatusException.class, () -> kanban.moverTask(id, tarefaId, apoio.getId(),
+                new ContratoKanbanMoverTaskRequestDTO(concluido))).getStatusCode().value()).isEqualTo(400);
+        // Repositórios reais: ignora atividades comerciais concluídas/canceladas e tarefas técnicas encerradas.
+        var atividade = atividadeComercial(comercial, "Atividade comercial", hoje.plusDays(3), PipelineTarefaStatus.PENDENTE);
+        atividadeComercial(comercial, "Já concluída", hoje, PipelineTarefaStatus.CONCLUIDA);
+        atividadeComercial(comercial, "Cancelada", hoje, PipelineTarefaStatus.CANCELADA);
+        em.flush();
+        assertThat(tarefasComerciais.findAbertasComPrazoAte(hoje.plusDays(3))).extracting(PipelineVendasTarefa::getIdTarefa).containsExactly(atividade.getIdTarefa());
+        org.mockito.Mockito.when(email.enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        alertas.processar(hoje); alertas.processar(hoje);
+        assertThat(avisosPrazo.count()).isEqualTo(3);
+        org.mockito.Mockito.verify(email, org.mockito.Mockito.times(1)).enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.eq(lider.getEmail()),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.argThat(html -> org.springframework.web.util.HtmlUtils.htmlUnescape(html).contains("Entrega técnica")), org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(email, org.mockito.Mockito.times(1)).enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.eq(diretor.getEmail()),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.contains("Atividade comercial"), org.mockito.ArgumentMatchers.anyString());
+        kanban.moverTask(id, tarefaId, apoio.getId(), new ContratoKanbanMoverTaskRequestDTO(concluido, "Documentos do cliente chegaram após o prazo."));
+        assertThat(tarefas.buscarAbertasComPrazoAte(hoje.plusDays(3))).isEmpty();
+        em.flush(); em.clear();
+        assertThat(tarefas.findById(tarefaId).orElseThrow().getJustificativaAtraso()).isEqualTo("Documentos do cliente chegaram após o prazo.");
+    }
+
+    private PipelineVendasTarefa atividadeComercial(Usuario usuario, String titulo, LocalDate prazo, PipelineTarefaStatus status) {
+        var funil = new PipelineVendasFunil(); funil.setCodigo(UUID.randomUUID().toString()); funil.setNome("Teste"); funil.setEstrategia("Todas"); funil.setPosicao(0); em.persist(funil);
+        var etapa = new PipelineVendasEtapa(); etapa.setFunil(funil); etapa.setCodigo("DIAGNOSTICO"); etapa.setNome("Diagnóstico"); etapa.setPosicao(0); etapa.setResultado(PipelineVendasResultado.ABERTO); em.persist(etapa);
+        var negocio = new PipelineVendasNegocio(); negocio.setFunil(funil); negocio.setEtapa(etapa); negocio.setResponsavel(usuario); negocio.setCriadoPor(usuario);
+        negocio.setNomeEmpresa("Empresa comercial"); negocio.setNomeContato("Contato"); negocio.setOrigemNegocio("Manual"); negocio.setEstrategiaComercial("Todas"); negocio.setServicoInteresse("CONTABILIDADE");
+        negocio.setCriadoEm(LocalDateTime.now()); negocio.setUltimaMovimentacaoEm(LocalDateTime.now()); em.persist(negocio);
+        var tarefa = new PipelineVendasTarefa(); tarefa.setNegocio(negocio); tarefa.setCriadoPor(usuario); tarefa.setTitulo(titulo); tarefa.setResponsavel(usuario);
+        tarefa.setPrioridade(PipelineTarefaPrioridade.MEDIA); tarefa.setStatus(status); tarefa.setTipo("Documentação"); tarefa.setPrazo(prazo); em.persist(tarefa); return tarefa;
     }
 
     private Usuario usuario(String nome, String chave) {

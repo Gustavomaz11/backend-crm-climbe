@@ -199,6 +199,40 @@ class PipelineTarefaServiceTest {
         verify(historicoService).registrar(eq(tarefa.getNegocio()), eq(1L), eq(PipelineHistoricoTipo.CANCELAMENTO_TAREFA), anyString());
     }
 
+    @Test
+    void tarefaAtrasadaSomenteConcluiComJustificativaEPreservaHistorico() {
+        var usuario = usuario(1L, "Operador");
+        var task = tarefa(20L, negocio(10L, usuario), usuario, TarefaPrazoPolicy.hoje().minusDays(1), PipelineTarefaStatus.PENDENTE);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_CONCLUIR)).thenReturn(true);
+        when(repository.findById(20L)).thenReturn(Optional.of(task));
+        assertThrows(ResponseStatusException.class, () -> service.alterarStatus(20L, 1L, PipelineTarefaStatus.CONCLUIDA, "  "));
+        assertEquals(PipelineTarefaStatus.PENDENTE, task.getStatus());
+        when(repository.save(task)).thenReturn(task);
+        var resposta = service.alterarStatus(20L, 1L, PipelineTarefaStatus.CONCLUIDA, "  Aguardando retorno do cliente.  ");
+        assertEquals("Aguardando retorno do cliente.", resposta.justificativaAtraso());
+        verify(historicoService).registrar(eq(task.getNegocio()), eq(1L), eq(PipelineHistoricoTipo.CONCLUSAO_TAREFA), contains("Justificativa do atraso"));
+    }
+
+    @Test
+    void concluirNoDiaDoPrazoNaoExigeJustificativa() {
+        var usuario = usuario(1L, "Operador");
+        var task = tarefa(20L, negocio(10L, usuario), usuario, TarefaPrazoPolicy.hoje(), PipelineTarefaStatus.PENDENTE);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_CONCLUIR)).thenReturn(true);
+        when(repository.findById(20L)).thenReturn(Optional.of(task)); when(repository.save(task)).thenReturn(task);
+        assertEquals(PipelineTarefaStatus.CONCLUIDA, service.alterarStatus(20L, 1L, PipelineTarefaStatus.CONCLUIDA).status());
+    }
+
+    @Test
+    void atualizarCamposTambemExigeJustificativaSemContornarAlterandoPrazo() {
+        var usuario = usuario(1L, "Operador");
+        var task = tarefa(20L, negocio(10L, usuario), usuario, TarefaPrazoPolicy.hoje().minusDays(1), PipelineTarefaStatus.PENDENTE);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_EDITAR)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_CONCLUIR)).thenReturn(true);
+        when(repository.findById(20L)).thenReturn(Optional.of(task));
+        assertThrows(ResponseStatusException.class, () -> service.atualizar(20L, 1L, request(PipelineTarefaStatus.CONCLUIDA)));
+        assertEquals(PipelineTarefaStatus.PENDENTE, task.getStatus()); verify(repository, never()).save(any());
+    }
+
     private PipelineTarefaRequestDTO request(PipelineTarefaStatus status) {
         return new PipelineTarefaRequestDTO(
                 "Enviar proposta", "Revisar valores", 2L, LocalDate.now(), LocalDate.now().plusDays(1),

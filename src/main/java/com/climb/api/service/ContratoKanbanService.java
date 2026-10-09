@@ -95,6 +95,11 @@ public class ContratoKanbanService {
         if (dto.posicao() != null) {
             raia.setPosicao(dto.posicao());
         }
+        if (Boolean.TRUE.equals(dto.concluiTarefas()) && !raia.isConcluiTarefas()) {
+            taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId)
+                    .stream().filter(t -> Objects.equals(t.getRaia().getIdRaia(), raiaId))
+                    .forEach(t -> TarefaPrazoPolicy.justificarConclusao(t.getDataFim(), null, TarefaPrazoPolicy.hoje()));
+        }
         if (dto.concluiTarefas() != null) raia.setConcluiTarefas(dto.concluiTarefas());
         raiaRepository.save(raia);
         taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId)
@@ -129,7 +134,10 @@ public class ContratoKanbanService {
         task.setDataInicio(dto.dataInicio());
         task.setDataFim(dto.dataFim());
         task.setPosicao(dto.posicao() != null ? dto.posicao() : proximaPosicaoTask(contratoId, raia.getIdRaia()));
+        if (task.getDataFim() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Informe o prazo para concluir esta tarefa.");
         validarPeriodo(task);
+        justificarConclusao(task, raia, true, dto.justificativaAtraso(), usuarioId);
         equipeService.atribuirResponsaveis(task, usuarioId, Set.of());
         taskRepository.save(task);
         atuacaoService.sincronizar(task);
@@ -143,8 +151,19 @@ public class ContratoKanbanService {
         ContratoKanbanTask task = buscarTask(contratoId, taskId);
         Set<Long> responsaveisAnteriores = task.getResponsaveisEfetivos().stream().map(Usuario::getId).collect(Collectors.toSet());
 
+        if (!Objects.equals(task.getDataFim(), dto.dataFim())
+                && (contrato.getResponsavel() == null || !Objects.equals(contrato.getResponsavel().getId(), usuarioId))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Somente o responsável técnico do contrato pode alterar o prazo da tarefa.");
+        }
+        if (task.getDataFim() != null && dto.dataFim() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "O prazo da tarefa precisa continuar preenchido.");
+        ContratoKanbanRaia destino = dto.raiaId() == null || Objects.equals(dto.raiaId(), task.getRaia().getIdRaia())
+                ? task.getRaia() : buscarRaia(contratoId, dto.raiaId());
+        justificarConclusao(task, destino, !task.getRaia().isConcluiTarefas(), dto.justificativaAtraso(), usuarioId);
+
         if (dto.raiaId() != null && !Objects.equals(task.getRaia().getIdRaia(), dto.raiaId())) {
-            task.setRaia(buscarRaia(contratoId, dto.raiaId()));
+            task.setRaia(destino);
         }
         if (StringUtils.hasText(dto.titulo())) {
             task.setTitulo(dto.titulo().trim());
@@ -180,6 +199,7 @@ public class ContratoKanbanService {
         ContratoKanbanTask task = buscarTask(contratoId, taskId);
 
         ContratoKanbanRaia raia = buscarRaia(contratoId, dto != null ? dto.raiaId() : null);
+        justificarConclusao(task, raia, !task.getRaia().isConcluiTarefas(), dto.justificativaAtraso(), usuarioId);
         task.setRaia(raia);
         taskRepository.save(task);
         atuacaoService.sincronizar(task);
@@ -200,6 +220,13 @@ public class ContratoKanbanService {
         atuacaoService.encerrar(task);
         rateioService.registrarAtuacao(task);
         atuacaoService.desvincular(task);
+    }
+
+    private void justificarConclusao(ContratoKanbanTask task, ContratoKanbanRaia destino, boolean entrando,
+                                     String justificativa, Long usuarioId) {
+        if (!entrando || !destino.isConcluiTarefas()) return;
+        String texto = TarefaPrazoPolicy.justificarConclusao(task.getDataFim(), justificativa, TarefaPrazoPolicy.hoje());
+        if (texto != null) task.justificarAtraso(texto, usuarioId);
     }
 
     @Transactional
@@ -352,7 +379,8 @@ public class ContratoKanbanService {
                 task.getCriadoEm(),
                 task.getAtualizadoEm(),
                 subtarefas.stream().map(this::toSubtarefaResponse).toList(),
-                task.getResponsaveisEfetivos().stream().map(this::toUsuarioResumo).toList()
+                task.getResponsaveisEfetivos().stream().map(this::toUsuarioResumo).toList(),
+                task.getJustificativaAtraso()
         );
     }
 

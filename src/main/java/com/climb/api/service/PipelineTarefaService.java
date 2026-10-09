@@ -104,6 +104,7 @@ public class PipelineTarefaService {
         PipelineVendasTarefa tarefa = new PipelineVendasTarefa();
         tarefa.setNegocio(negocio);
         tarefa.setCriadoPor(buscarUsuario(usuarioId));
+        justificarConclusao(tarefa, dto.status(), dto.prazo(), dto.justificativaAtraso(), usuarioId);
         aplicarDados(tarefa, dto);
         PipelineVendasTarefa salva = repository.save(tarefa);
         historicoService.registrar(negocio, usuarioId, PipelineHistoricoTipo.CRIACAO_TAREFA,
@@ -122,6 +123,7 @@ public class PipelineTarefaService {
         PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
         PipelineTarefaStatus statusAnterior = tarefa.getStatus();
         exigirPermissaoDeConclusaoSeNecessario(usuarioId, statusAnterior, dto.status());
+        justificarConclusao(tarefa, dto.status(), tarefa.getPrazo(), dto.justificativaAtraso(), usuarioId);
         aplicarDados(tarefa, dto);
         PipelineVendasTarefa salva = repository.save(tarefa);
         historicoService.registrar(tarefa.getNegocio(), usuarioId, PipelineHistoricoTipo.ALTERACAO_TAREFA,
@@ -134,9 +136,16 @@ public class PipelineTarefaService {
     public PipelineTarefaResponseDTO alterarStatus(Long tarefaId,
                                                    Long usuarioId,
                                                    PipelineTarefaStatus status) {
+        return alterarStatus(tarefaId, usuarioId, status, null);
+    }
+
+    @Transactional
+    public PipelineTarefaResponseDTO alterarStatus(Long tarefaId, Long usuarioId,
+                                                   PipelineTarefaStatus status, String justificativa) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_CONCLUIR);
         PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
         PipelineTarefaStatus statusAnterior = tarefa.getStatus();
+        justificarConclusao(tarefa, status, tarefa.getPrazo(), justificativa, usuarioId);
         validarReaberturaAutomatica(tarefa, status);
         if (status == PipelineTarefaStatus.CANCELADA && tarefa.getMotivoCancelamento() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o motivo pela ação Cancelar tarefa");
         if (status != PipelineTarefaStatus.CANCELADA) { tarefa.setMotivoCancelamento(null); tarefa.setComentarioCancelamento(null); tarefa.setCanceladoEm(null); tarefa.setCanceladoPor(null); }
@@ -215,6 +224,13 @@ public class PipelineTarefaService {
         }
     }
 
+    private void justificarConclusao(PipelineVendasTarefa tarefa, PipelineTarefaStatus destino, LocalDate prazo,
+                                     String justificativa, Long usuarioId) {
+        if (destino != PipelineTarefaStatus.CONCLUIDA || tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA) return;
+        String texto = TarefaPrazoPolicy.justificarConclusao(prazo, justificativa, TarefaPrazoPolicy.hoje());
+        if (texto != null) tarefa.justificarAtraso(texto, usuarioId);
+    }
+
     private void registrarConclusaoSeNecessario(PipelineVendasTarefa tarefa,
                                                 Long usuarioId,
                                                 PipelineTarefaStatus statusAnterior) {
@@ -222,7 +238,9 @@ public class PipelineTarefaService {
                 && (tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA || tarefa.getStatus() == PipelineTarefaStatus.CANCELADA)) {
             historicoService.registrar(tarefa.getNegocio(), usuarioId, tarefa.getStatus() == PipelineTarefaStatus.CANCELADA ? PipelineHistoricoTipo.CANCELAMENTO_TAREFA : PipelineHistoricoTipo.CONCLUSAO_TAREFA,
                     (tarefa.getStatus() == PipelineTarefaStatus.CANCELADA ? "Tarefa cancelada (" + tarefa.getMotivoCancelamento() + "): " : "Tarefa concluída: ") + tarefa.getTitulo()
-                            + (tarefa.getComentarioCancelamento() == null ? "" : " — " + tarefa.getComentarioCancelamento()));
+                            + (tarefa.getComentarioCancelamento() == null ? "" : " — " + tarefa.getComentarioCancelamento())
+                            + (tarefa.getStatus() == PipelineTarefaStatus.CONCLUIDA && tarefa.getJustificativaAtraso() != null
+                            ? " — Justificativa do atraso: " + tarefa.getJustificativaAtraso() : ""));
             cadenciaEngine.tarefaConcluida(tarefa);
         }
     }
@@ -326,7 +344,8 @@ public class PipelineTarefaService {
                 tarefa.getCampanha() == null ? null : tarefa.getCampanha().getNome(),
                 tarefa.getNegocio().getNomeContato(), tarefa.getNegocio().getTelefone(), tarefa.getNegocio().getEmail(),
                 tarefa.getMotivoCancelamento(), tarefa.getComentarioCancelamento(), tarefa.getCanceladoEm(),
-                tarefa.getResponsaveisEfetivos().stream().map(usuario -> new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())).toList()
+                tarefa.getResponsaveisEfetivos().stream().map(usuario -> new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())).toList(),
+                tarefa.getJustificativaAtraso()
         );
     }
 }

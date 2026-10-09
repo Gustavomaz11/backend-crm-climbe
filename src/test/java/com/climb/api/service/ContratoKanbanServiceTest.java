@@ -106,7 +106,7 @@ class ContratoKanbanServiceTest {
                 ContratoKanbanPrioridade.ALTA,
                 2L,
                 null,
-                null,
+                java.time.LocalDate.now().plusDays(3),
                 null
         );
 
@@ -168,7 +168,7 @@ class ContratoKanbanServiceTest {
 
         ContratoKanbanTaskRequestDTO request = new ContratoKanbanTaskRequestDTO(
                 20L, "Analisar documentos", null, ContratoKanbanPrioridade.MEDIA,
-                responsavelId, null, null, 0);
+                responsavelId, null, java.time.LocalDate.now().plusDays(3), 0);
 
         ContratoKanbanBoardResponseDTO criado = service.criarTask(CONTRATO_ID, GESTOR_ID, request);
 
@@ -263,7 +263,7 @@ class ContratoKanbanServiceTest {
         when(usuarioRepository.findById(2L)).thenReturn(Optional.of(ana));
         when(usuarioRepository.findById(3L)).thenReturn(Optional.of(bia));
         service.criarTask(CONTRATO_ID, GESTOR_ID, new ContratoKanbanTaskRequestDTO(20L, "Análise", null,
-                ContratoKanbanPrioridade.MEDIA, null, null, null, null, List.of(2L, 3L)));
+                ContratoKanbanPrioridade.MEDIA, null, null, java.time.LocalDate.now().plusDays(3), null, List.of(2L, 3L)));
         ArgumentCaptor<ContratoKanbanTask> captor = ArgumentCaptor.forClass(ContratoKanbanTask.class);
         verify(taskRepository).save(captor.capture());
         assertEquals(Set.of(ana, bia), captor.getValue().getResponsaveisEfetivos());
@@ -311,6 +311,57 @@ class ContratoKanbanServiceTest {
                 ContratoKanbanPrioridade.MEDIA, null, null, null, 0, List.of(2L)));
         assertEquals(null, sub.getResponsavel());
         verify(subtarefaRepository).save(sub);
+    }
+
+    @Test
+    void somenteResponsavelDoContratoPodeAlterarPrazoMesmoQueOutrosPossamEditarTarefa() {
+        var task = tarefa(30L, gestor); var prazo = TarefaPrazoPolicy.hoje().plusDays(3); task.setDataFim(prazo);
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(taskRepository.findByIdTaskAndContrato_IdContrato(30L, CONTRATO_ID)).thenReturn(Optional.of(task));
+        var request = new ContratoKanbanTaskRequestDTO(20L, "Novo título", null, ContratoKanbanPrioridade.MEDIA,
+                1L, null, prazo.plusDays(1), 0);
+        var erro = assertThrows(ResponseStatusException.class, () -> service.atualizarTask(CONTRATO_ID, 30L, 2L, request));
+        assertEquals(403, erro.getStatusCode().value()); assertEquals(prazo, task.getDataFim());
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(gestor));
+        prepararConsultasDoBoard(List.of(task), List.of(), List.of(gestor));
+        service.atualizarTask(CONTRATO_ID, 30L, GESTOR_ID, request);
+        assertEquals(prazo.plusDays(1), task.getDataFim());
+    }
+
+    @Test
+    void moverParaConclusaoExigeJustificativaDeAtrasoESalvaMotivo() {
+        var task = tarefa(30L, gestor); task.setDataFim(TarefaPrazoPolicy.hoje().minusDays(1));
+        var destino = new ContratoKanbanRaia(); destino.setIdRaia(21L); destino.setContrato(contrato); destino.setConcluiTarefas(true);
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(taskRepository.findByIdTaskAndContrato_IdContrato(30L, CONTRATO_ID)).thenReturn(Optional.of(task));
+        when(raiaRepository.findByIdRaiaAndContrato_IdContrato(21L, CONTRATO_ID)).thenReturn(Optional.of(destino));
+        var erro = assertThrows(ResponseStatusException.class, () -> service.moverTask(CONTRATO_ID, 30L, GESTOR_ID,
+                new com.climb.api.model.dto.ContratoKanbanMoverTaskRequestDTO(21L)));
+        assertEquals(400, erro.getStatusCode().value()); assertEquals(raia, task.getRaia());
+        prepararConsultasDoBoard(List.of(task), List.of(), List.of(gestor));
+        service.moverTask(CONTRATO_ID, 30L, GESTOR_ID, new com.climb.api.model.dto.ContratoKanbanMoverTaskRequestDTO(21L, "Cliente enviou documentos após o prazo."));
+        assertEquals(destino, task.getRaia()); assertEquals("Cliente enviou documentos após o prazo.", task.getJustificativaAtraso());
+        verify(taskRepository).save(task);
+    }
+
+    @Test
+    void naoPermiteContornarJustificativaMarcandoTodaARaiaComoConcluida() {
+        var task = tarefa(30L, gestor); task.setDataFim(TarefaPrazoPolicy.hoje().minusDays(1));
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(raiaRepository.findByIdRaiaAndContrato_IdContrato(20L, CONTRATO_ID)).thenReturn(Optional.of(raia));
+        when(taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(CONTRATO_ID)).thenReturn(List.of(task));
+        assertThrows(ResponseStatusException.class, () -> service.atualizarRaia(CONTRATO_ID, 20L, GESTOR_ID,
+                new com.climb.api.model.dto.ContratoKanbanRaiaRequestDTO("Concluído", null, true)));
+        assertTrue(!raia.isConcluiTarefas());
+    }
+
+    @Test
+    void exigePrazoAoCriarTarefa() {
+        when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
+        when(raiaRepository.findByIdRaiaAndContrato_IdContrato(20L, CONTRATO_ID)).thenReturn(Optional.of(raia));
+        var erro = assertThrows(ResponseStatusException.class, () -> service.criarTask(CONTRATO_ID, GESTOR_ID,
+                new ContratoKanbanTaskRequestDTO(20L, "Tarefa", null, ContratoKanbanPrioridade.MEDIA, null, null, null, 0)));
+        assertEquals(400, erro.getStatusCode().value()); verify(taskRepository, never()).save(any());
     }
 
     private void prepararGestorEBoardVazio(List<Usuario> usuariosAtivos) {
