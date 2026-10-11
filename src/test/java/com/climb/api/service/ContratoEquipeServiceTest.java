@@ -30,7 +30,8 @@ class ContratoEquipeServiceTest {
         contrato = new Contrato(); contrato.setIdContrato(10L); contrato.setStatus("APROVADO"); contrato.setResponsavel(lider);
         when(contratos.findById(10L)).thenReturn(Optional.of(contrato));
         when(contratos.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
-        when(contratos.findByStatus("APROVADO")).thenReturn(List.of(contrato));
+        when(contratos.buscarVisiveisParaKanban(anyLong(), anyBoolean())).thenAnswer(i ->
+                service.podeVisualizar(contrato, i.getArgument(0)) ? List.of(contrato) : List.of());
         when(usuarios.findAllBySituacaoOrderByNomeCompletoAsc("ATIVO")).thenReturn(List.of(lider, ana, bia));
         for (Usuario usuario : List.of(lider, ana, bia)) when(usuarios.findById(usuario.getId())).thenReturn(Optional.of(usuario));
         when(membros.save(any())).thenAnswer(i -> { ContratoEquipeMembro m = i.getArgument(0); fixos.add(m); return m; });

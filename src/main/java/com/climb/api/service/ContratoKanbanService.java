@@ -9,6 +9,7 @@ import com.climb.api.model.ContratoKanbanTask;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.enums.ContratoKanbanPrioridade;
 import com.climb.api.model.dto.ContratoKanbanBoardResponseDTO;
+import com.climb.api.model.dto.ContratoKanbanAberturaResponseDTO;
 import com.climb.api.model.dto.ContratoKanbanMoverTaskRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanRaiaRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanRaiaResponseDTO;
@@ -76,6 +77,14 @@ public class ContratoKanbanService {
         Contrato contrato = buscarContrato(contratoId);
         equipeService.exigirAcesso(contrato, usuarioId, false);
         return toBoardResponse(contrato, usuarioId);
+    }
+
+    @Transactional(readOnly = true)
+    public ContratoKanbanAberturaResponseDTO buscarAbertura(Long contratoId, Long usuarioId) {
+        Contrato contrato = buscarContrato(contratoId);
+        var equipe = equipeService.buscarEquipe(contrato, usuarioId);
+        return new ContratoKanbanAberturaResponseDTO(equipe,
+                equipe.configurada() ? toBoardResponse(contrato, usuarioId) : null);
     }
 
     @Transactional(readOnly = true)

@@ -5,7 +5,6 @@ import com.climb.api.repository.NotificacaoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -19,8 +18,9 @@ class NotificacaoEntregaServiceTest {
     static class Config {
         @Bean NotificacaoRepository repository() { return mock(NotificacaoRepository.class); }
         @Bean EmailService email() { return mock(EmailService.class); }
-        @Bean NotificacaoEntregaService entrega(NotificacaoRepository repo, ApplicationEventPublisher events, EmailService email) {
-            return new NotificacaoEntregaService(repo, events, email, "https://app.example.test/");
+        @Bean EmailNotificacaoFilaService fila() { return mock(EmailNotificacaoFilaService.class); }
+        @Bean NotificacaoEntregaService entrega(NotificacaoRepository repo, EmailNotificacaoFilaService fila) {
+            return new NotificacaoEntregaService(repo, fila);
         }
         @Bean AbstractPlatformTransactionManager transactionManager() {
             return new AbstractPlatformTransactionManager() {
@@ -33,14 +33,17 @@ class NotificacaoEntregaServiceTest {
     }
     @Autowired NotificacaoEntregaService entrega;
     @Autowired EmailService email;
+    @Autowired EmailNotificacaoFilaService fila;
     @Autowired NotificacaoRepository repository;
     @Autowired AbstractPlatformTransactionManager manager;
-    @BeforeEach void limpar() { reset(email, repository); }
-    @Test void enviaEmailApenasDepoisDaConfirmacaoDaOperacao() {
+    @BeforeEach void limpar() { reset(email, repository, fila); }
+    @Test void registraEmailNaFilaSemEsperarSMTP() {
         new TransactionTemplate(manager).executeWithoutResult(status -> {
             notificar(); verify(repository).save(any()); verifyNoInteractions(email);
         });
-        verify(email).enviarEmailComBotao(eq("pessoa@example.test"), eq("Atribuição"), eq("Atribuição"), eq("Você foi atribuído"), anyString(), eq("https://app.example.test/contratos/kanban?contrato=1&tarefaId=2"), anyString());
+        verify(fila).enfileirar(new NotificacaoEntregaService.EmailNotificacao("pessoa@example.test", "Atribuição",
+                "Você foi atribuído", "/contratos/kanban?contrato=1&tarefaId=2"));
+        verifyNoInteractions(email);
     }
     @Test void rollbackNaoEnviaEmailDeUmaTarefaNaoSalva() {
         new TransactionTemplate(manager).executeWithoutResult(status -> { notificar(); status.setRollbackOnly(); });

@@ -158,6 +158,31 @@ existentes. No perfil `prod`, o Flyway aplica migrations na inicialização por
 padrão; com `SPRING_FLYWAY_ENABLED=false`, aplique a migration antes de liberar
 a nova versão da API.
 
+## Carregamento do Kanban e envio de notificações
+
+O menu consulta `GET /contratos/kanban-acesso`, que retorna apenas a existência de
+contratos acessíveis. A lista do Kanban usa `GET /contratos/kanban-resumos`, com
+dados resumidos e os serviços da proposta. Ao selecionar um contrato, equipe e
+quadro são carregados juntos por `GET /contratos/{id}/kanban/abertura`; sem equipe
+configurada, o quadro permanece fechado. Todos esses endpoints exigem token e
+preservam as regras de acesso do contrato.
+
+Os e-mails de tarefas e convites encaminhados por `NotificacaoEntregaService`
+são gravados na mesma transação da operação na tabela
+`emails_notificacao_pendentes` e enviados em segundo plano, em um agendador
+separado. Salvar uma tarefa não espera pelo SMTP. Falhas são reagendadas com
+intervalos crescentes, de um minuto até uma hora. Uma reserva de envio expira
+em dez minutos caso a instância seja interrompida; os registros enviados são
+removidos. A fila usa horários UTC e sobrevive à reinicialização da API.
+
+`app.notificacoes.email.intervalo-ms` controla a consulta à fila (padrão: 1000 ms).
+`app.notificacoes.email.enabled=false` pausa o processamento e preserva os avisos
+pendentes. Após interrupção entre o envio SMTP e sua confirmação, um aviso pode
+ser reenviado.
+
+Publique backend e frontend juntos e aplique
+`V72__fila_emails_notificacao.sql` pelo Flyway antes de iniciar a nova API.
+
 ## Estrutura do projeto
 
 ```

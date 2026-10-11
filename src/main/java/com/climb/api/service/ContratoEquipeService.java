@@ -28,14 +28,42 @@ public class ContratoEquipeService {
     @Transactional(readOnly = true)
     public List<Contrato> listarDisponiveis(Long usuarioId) {
         exigirAutenticado(usuarioId);
-        return contratos.findByStatus(ContratoService.STATUS_APROVADO).stream()
-                .filter(contrato -> podeVisualizar(contrato, usuarioId)).toList();
+        return contratos.buscarVisiveisParaKanban(usuarioId, podeVisualizarTodos(usuarioId));
+    }
+
+    @Transactional(readOnly = true)
+    public boolean temDisponiveis(Long usuarioId) {
+        exigirAutenticado(usuarioId);
+        return contratos.existeVisivelParaKanban(usuarioId, podeVisualizarTodos(usuarioId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContratoKanbanResumoDTO> listarResumos(Long usuarioId) {
+        exigirAutenticado(usuarioId);
+        Map<Long, ContratoKanbanResumoDTO> resumos = new LinkedHashMap<>();
+        for (var linha : contratos.buscarResumosVisiveisParaKanban(usuarioId, podeVisualizarTodos(usuarioId))) {
+            var resumo = resumos.computeIfAbsent(linha.getId(), id -> new ContratoKanbanResumoDTO(id,
+                    linha.getEmpresaNome(), linha.getUrlPdf(), linha.getStatus(), linha.getEquipeConfigurada(),
+                    linha.getServico(), new ArrayList<>()));
+            if (linha.getServicoDaProposta() != null) {
+                resumo.servicos().add(new ContratoKanbanResumoDTO.ServicoResumo(linha.getServicoDaProposta()));
+            }
+        }
+        return List.copyOf(resumos.values());
+    }
+
+    private boolean podeVisualizarTodos(Long usuarioId) {
+        return rbac.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS);
     }
 
     @Transactional(readOnly = true)
     public ContratoEquipeResponseDTO buscarEquipe(Long contratoId, Long usuarioId) {
+        return buscarEquipe(buscarContrato(contratoId), usuarioId);
+    }
+
+    public ContratoEquipeResponseDTO buscarEquipe(Contrato contrato, Long usuarioId) {
         exigirAutenticado(usuarioId);
-        Contrato contrato = buscarContrato(contratoId);
+        exigirAprovado(contrato);
         if (!podeVisualizar(contrato, usuarioId)) throw negado();
         return resposta(contrato, usuarioId);
     }

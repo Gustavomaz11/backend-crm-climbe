@@ -6,6 +6,7 @@ import com.climb.api.model.dto.KanbanArquivamentoRequestDTO;
 import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.ContratoKanbanBoardResponseDTO;
+import com.climb.api.model.dto.ContratoKanbanAberturaResponseDTO;
 import com.climb.api.model.dto.ContratoKanbanMoverTaskRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanRaiaRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanSubtarefaConclusaoRequestDTO;
@@ -30,6 +31,11 @@ public class ContratoKanbanController {
     @GetMapping
     public ResponseEntity<ApiResponse<ContratoKanbanBoardResponseDTO>> buscarBoard(@PathVariable Long contratoId) {
         return ResponseEntity.ok(ApiResponse.ok(service.buscarBoard(contratoId, getAuthenticatedUserId())));
+    }
+
+    @GetMapping("/abertura")
+    public ResponseEntity<ApiResponse<ContratoKanbanAberturaResponseDTO>> buscarAbertura(@PathVariable Long contratoId) {
+        return ResponseEntity.ok(ApiResponse.ok(service.buscarAbertura(contratoId, getAuthenticatedUserId())));
     }
 
     @PostMapping("/raias")

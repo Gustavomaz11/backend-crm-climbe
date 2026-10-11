@@ -20,6 +20,12 @@ public class ContratoEquipeController {
     @GetMapping("/kanban-disponiveis")
     public List<Contrato> listar() { return service.listarDisponiveis(usuarioId()); }
 
+    @GetMapping("/kanban-acesso")
+    public boolean temDisponiveis() { return service.temDisponiveis(usuarioId()); }
+
+    @GetMapping("/kanban-resumos")
+    public List<ContratoKanbanResumoDTO> listarResumos() { return service.listarResumos(usuarioId()); }
+
     @GetMapping("/{id}/equipe")
     public ContratoEquipeResponseDTO buscar(@PathVariable Long id) { return service.buscarEquipe(id, usuarioId()); }
 
