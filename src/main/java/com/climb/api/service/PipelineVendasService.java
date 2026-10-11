@@ -280,7 +280,7 @@ public class PipelineVendasService {
         if (propostaId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione a proposta aprovada pelo cliente");
         Proposta proposta = propostaRepository.findById(propostaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposta não encontrada"));
-        if (proposta.getNegocio() == null || !Objects.equals(proposta.getNegocio().getIdNegocio(), negocio.getIdNegocio())
+        if ((proposta.getNegocio() != null && !Objects.equals(proposta.getNegocio().getIdNegocio(), negocio.getIdNegocio()))
                 || proposta.getEmpresa() == null || negocio.getEmpresa() == null
                 || !Objects.equals(proposta.getEmpresa().getIdEmpresa(), negocio.getEmpresa().getIdEmpresa())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione uma proposta deste negócio e desta empresa");
@@ -292,6 +292,10 @@ public class PipelineVendasService {
         Usuario tecnico = buscarUsuario(tecnicoId, "Responsável técnico não encontrado");
         if (tecnico.getSituacao() != null && !"ATIVO".equalsIgnoreCase(tecnico.getSituacao())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um responsável técnico ativo");
+        }
+        if (proposta.getNegocio() == null) {
+            proposta.setNegocio(negocio);
+            propostaRepository.save(proposta);
         }
         Contrato contrato = contratoService.criarPreparacaoDoPipeline(proposta, buscarUsuario(usuarioId, "Usuário não encontrado"),
                 negocio.getResponsavel(), tecnico);

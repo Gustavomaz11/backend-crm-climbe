@@ -48,6 +48,7 @@ class PipelineTarefaServiceTest {
         Usuario responsavel = usuario(2L, "Maria");
         PipelineVendasNegocio negocio = negocio(10L, responsavel);
         PipelineVendasTarefa atrasada = tarefa(1L, negocio, responsavel, LocalDate.now().minusDays(1), PipelineTarefaStatus.PENDENTE);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL)).thenReturn(false);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(true);
         when(repository.findFiltradas(
@@ -74,7 +75,46 @@ class PipelineTarefaServiceTest {
     }
 
     @Test
+    void acessoComercialPermiteVerTarefasDeQualquerResponsavelNaVisaoPrincipal() {
+        Usuario responsavel = usuario(99L, "Outro responsável");
+        var atividade = tarefa(1L, negocio(10L, responsavel), responsavel, LocalDate.now().plusDays(3), PipelineTarefaStatus.PENDENTE);
+        when(rbacService.temPermissao(eq(1L), any())).thenAnswer(invocation -> invocation.getArgument(1) == PermissaoCodigo.COMERCIAL);
+        when(repository.findFiltradas(eq(true), eq(false), eq(false), eq(false), eq(false), any(LocalDate.class),
+                eq(true), eq(Set.of(1L)), isNull(), isNull(), isNull())).thenReturn(List.of(atividade));
+
+        assertEquals(1L, service.listar(1L, PipelineTarefaVisao.TODAS, null, null, null, null).getFirst().id());
+
+        verifyNoInteractions(cargoHierarquiaAcessoService);
+    }
+
+    @Test
+    void acessoComercialPermiteVerTodasAsTarefasDentroDoNegocioEAbrirUmaTarefa() {
+        Usuario responsavel = usuario(99L, "Outro responsável");
+        var atividade = tarefa(1L, negocio(10L, responsavel), responsavel, LocalDate.now().plusDays(3), PipelineTarefaStatus.PENDENTE);
+        when(rbacService.temPermissao(eq(1L), any())).thenAnswer(invocation -> invocation.getArgument(1) == PermissaoCodigo.COMERCIAL);
+        when(negocioRepository.existsById(10L)).thenReturn(true);
+        when(repository.findByNegocioIdNegocioOrderByPrazoAscCriadoEmDesc(10L)).thenReturn(List.of(atividade));
+        when(repository.findById(1L)).thenReturn(Optional.of(atividade));
+
+        assertEquals(1L, service.listarDoNegocio(10L, 1L).getFirst().id());
+        assertEquals(1L, service.buscarVisivel(1L, 1L).id());
+
+        verifyNoInteractions(cargoHierarquiaAcessoService);
+    }
+
+    @Test
+    void acessoComercialNaoConcedeCriacaoEdicaoConclusaoOuArquivamento() {
+        when(rbacService.temPermissao(eq(1L), any())).thenAnswer(invocation -> invocation.getArgument(1) == PermissaoCodigo.COMERCIAL);
+        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.criar(10L, 1L, null)).getStatusCode().value());
+        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.atualizar(1L, 1L, null)).getStatusCode().value());
+        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.alterarStatus(1L, 1L, PipelineTarefaStatus.CONCLUIDA, null)).getStatusCode().value());
+        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.alterarArquivamento(1L, 1L, true)).getStatusCode().value());
+        verifyNoInteractions(repository);
+    }
+
+    @Test
     void deveForcarFiltroPeloUsuarioQuandoNaoPodeVisualizarTodasAsTarefas() {
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL)).thenReturn(false);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(false);
         when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(1L)).thenReturn(Set.of(1L, 2L));
@@ -86,6 +126,7 @@ class PipelineTarefaServiceTest {
 
     @Test
     void deveAplicarEscopoHierarquicoQuandoNaoPodeVisualizarTodasAsTarefas() {
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL)).thenReturn(false);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(false);
         when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(1L)).thenReturn(Set.of(1L, 2L));
@@ -103,6 +144,7 @@ class PipelineTarefaServiceTest {
 
     @Test
     void deveListarNoNegocioSomenteTarefasDoUsuarioSemPermissaoGlobal() {
+        when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL)).thenReturn(false);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
         when(rbacService.temPermissao(1L, PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS)).thenReturn(false);
         when(negocioRepository.existsById(10L)).thenReturn(true);

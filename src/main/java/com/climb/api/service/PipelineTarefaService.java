@@ -60,7 +60,7 @@ public class PipelineTarefaService {
 
     private List<PipelineVendasTarefa> listarEntidades(Long usuarioId, PipelineTarefaVisao visao,
             Long responsavelId, Long negocioId, Long funilId, String tipo) {
-        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
+        exigirPermissaoVisualizacao(usuarioId);
         PipelineTarefaVisao visaoEfetiva = visao == null ? PipelineTarefaVisao.TODAS : visao;
         boolean podeVisualizarTodas = podeVisualizarTodasAsTarefas(usuarioId);
         Set<Long> responsaveisVisiveis = podeVisualizarTodas
@@ -104,7 +104,7 @@ public class PipelineTarefaService {
 
     @Transactional(readOnly = true)
     public List<PipelineTarefaResponseDTO> listarDoNegocio(Long negocioId, Long usuarioId) {
-        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
+        exigirPermissaoVisualizacao(usuarioId);
         exigirNegocioExistente(negocioId);
         List<PipelineVendasTarefa> tarefas = podeVisualizarTodasAsTarefas(usuarioId)
                 ? repository.findByNegocioIdNegocioOrderByPrazoAscCriadoEmDesc(negocioId)
@@ -319,17 +319,24 @@ public class PipelineTarefaService {
     }
 
     private boolean podeVisualizarTodasAsTarefas(Long usuarioId) {
-        return rbacService.temPermissao(
+        return rbacService.temPermissao(usuarioId, PermissaoCodigo.COMERCIAL) || rbacService.temPermissao(
                 usuarioId,
                 PermissaoCodigo.COMERCIAL_KANBAN_VISUALIZAR_TODAS_TAREFAS
         );
+    }
+
+    private void exigirPermissaoVisualizacao(Long usuarioId) {
+        if (usuarioId == null || (!rbacService.temPermissao(usuarioId, PermissaoCodigo.COMERCIAL)
+                && !rbacService.temPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário sem permissão para tarefas comerciais");
+        }
     }
 
     @Transactional(readOnly = true)
     public PipelineVendasTarefa exigirTarefaVisivel(Long tarefaId, Long usuarioId) {
         PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
         if (tarefa.getResponsaveisEfetivos().stream().anyMatch(usuario -> usuario.getId().equals(usuarioId))) return tarefa;
-        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
+        exigirPermissaoVisualizacao(usuarioId);
         if (podeVisualizarTodasAsTarefas(usuarioId)) return tarefa;
         Set<Long> visiveis = cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId);
         if (tarefa.getResponsaveisEfetivos().stream().noneMatch(usuario -> visiveis.contains(usuario.getId()))) {

@@ -6,11 +6,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
 
 import java.io.UnsupportedEncodingException;
+import java.util.UUID;
 
 @Service
 public class EmailService {
@@ -109,6 +111,8 @@ public class EmailService {
             return false;
         }
 
+        String envioId = UUID.randomUUID().toString();
+        String servidorSmtp = mailSender instanceof JavaMailSenderImpl smtp ? smtp.getHost() : "configurado";
         try {
             MimeMessage mensagem = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mensagem, "UTF-8");
@@ -117,11 +121,13 @@ public class EmailService {
             helper.setSubject(assunto);
             helper.setText(html, true);
             mailSender.send(mensagem);
-            log.info("E-mail HTML enviado para {} com assunto '{}'", emailDestino, assunto);
+            log.info("E-mail aceito pelo servidor SMTP: envioId={}, smtp={}, destinatario={}, assunto='{}', messageId={}",
+                    envioId, servidorSmtp, emailDestino, assunto, mensagem.getMessageID());
             return true;
         } catch (Exception e) {
             // A operação principal permanece disponível e o e-mail pode ser reenviado pela revisão.
-            log.error("Falha ao enviar e-mail para {} com assunto '{}': {}", emailDestino, assunto, e.getMessage(), e);
+            log.error("Falha no envio de e-mail: envioId={}, smtp={}, destinatario={}, assunto='{}', erro={}",
+                    envioId, servidorSmtp, emailDestino, assunto, e.getMessage(), e);
             return false;
         }
     }

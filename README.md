@@ -183,6 +183,26 @@ ser reenviado.
 Publique backend e frontend juntos e aplique
 `V72__fila_emails_notificacao.sql` pelo Flyway antes de iniciar a nova API.
 
+## Diagnóstico de envio de propostas e contratos
+
+O status `ENVIADO` da revisão confirma que o servidor SMTP aceitou o envio.
+Ele não confirma entrega na caixa de entrada: rejeições posteriores, atrasos e
+filtros de spam precisam ser consultados no provedor de e-mail.
+
+Nos logs da API publicada, busque `E-mail aceito pelo servidor SMTP` ou
+`Falha no envio de e-mail`, filtrando pelo destinatário e horário do envio.
+Os registros incluem `smtp` (servidor usado), `envioId` (tentativa) e, em caso
+de sucesso, `messageId` para rastrear a mensagem. Não incluem corpo ou link de
+revisão. Em caso de falha, preservam a resposta de erro do servidor.
+
+Se `smtp` for `smtp.resend.com`, consulte a mensagem no painel do Resend e
+verifique os eventos de entrega ou devolução e seus detalhes. Para Gmail/
+Google Workspace, use a Pesquisa de registro de e-mail no Admin Console.
+As variáveis da instalação local não comprovam a configuração do Render.
+
+Referências: [detalhes de entrega no Resend](https://resend.com/changelog/improved-bounced-and-delivery-details)
+e [Pesquisa de registro de e-mail do Google Workspace](https://knowledge.workspace.google.com/admin/gmail/advanced/troubleshoot-message-delivery-with-email-log-search).
+
 ## Estrutura do projeto
 
 ```

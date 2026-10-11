@@ -251,6 +251,55 @@ class PipelineVendasServiceTest {
     }
 
     @Test
+    void deveVincularPropostaAprovadaDaEmpresaAoGanharNegocio() {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        proposta.setNegocio(null);
+        Usuario tecnico = usuario(2L, "Tecnico");
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(tecnico));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(negocio.getResponsavel()));
+        Contrato contrato = new Contrato(); contrato.setIdContrato(50L);
+        when(contratoService.criarPreparacaoDoPipeline(proposta, negocio.getResponsavel(), negocio.getResponsavel(), tecnico)).thenReturn(contrato);
+        when(negocioRepository.save(negocio)).thenReturn(negocio);
+
+        var response = service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L);
+
+        assertEquals(50L, response.contratoId());
+        assertSame(negocio, proposta.getNegocio());
+        verify(propostaRepository).save(proposta);
+    }
+
+    @Test
+    void deveRecusarPropostaAvulsaDeOutraEmpresa() {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        proposta.setNegocio(null);
+        Empresa outraEmpresa = new Empresa(); outraEmpresa.setIdEmpresa(99L);
+        proposta.setEmpresa(outraEmpresa);
+
+        var erro = assertThrows(ResponseStatusException.class, () -> service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L));
+
+        assertEquals(400, erro.getStatusCode().value());
+        assertNull(proposta.getNegocio());
+        verify(propostaRepository, never()).save(any());
+        verifyNoInteractions(contratoService);
+    }
+
+    @Test
+    void naoDeveVincularPropostaAvulsaSemAprovacaoDoCliente() {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        proposta.setNegocio(null);
+        proposta.setStatus(com.climb.api.model.enums.PropostaStatus.PENDENTE);
+
+        assertThrows(ResponseStatusException.class, () -> service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L));
+
+        assertNull(proposta.getNegocio());
+        verify(propostaRepository, never()).save(any());
+        verifyNoInteractions(contratoService);
+    }
+
+    @Test
     void deveRecusarPropostaComRevisaoAindaPendente() {
         var negocio = prepararGanho(); propostaAprovada(negocio);
         RevisaoDocumento revisao = new RevisaoDocumento(); revisao.setStatus(com.climb.api.model.enums.RevisaoDocumentoStatus.AGUARDANDO_CLIENTE);
