@@ -33,6 +33,27 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ReuniaoServiceGoogleSyncTest {
 
+    @Test void ausenciaDeGoogleNaoFingeAgendamentoConfirmado() {
+        when(googleCredentialService.obterAccessToken(7L)).thenReturn(Optional.empty());
+        var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService);
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.criar(new ReuniaoRequestDTO(), 7L));
+        org.mockito.Mockito.verifyNoInteractions(reuniaoRepository, reuniaoEmailService, googleCalendarService);
+    }
+
+    @Test void convidadoNaoApagaReuniaoQuandoEventoNaoEstaNaSuaAgenda() throws Exception {
+        when(googleCredentialService.obterAccessToken(8L)).thenReturn(Optional.of("token-convidado"));
+        Reuniao reuniao = new Reuniao(); reuniao.setIdReuniao(11L); reuniao.setOrganizadorId(7L); reuniao.setGoogleEventId("evento");
+        when(reuniaoRepository.findVisiveisParaUsuario(8L)).thenReturn(List.of(reuniao));
+        when(googleCalendarService.listarEventosPrimarios(eq("token-convidado"), any(), any())).thenReturn(List.of());
+        var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService);
+        assertEquals(1, service.listar(8L).size());
+        org.mockito.Mockito.verify(googleCalendarService, org.mockito.Mockito.never()).eventoExiste(any(), any());
+        org.mockito.Mockito.verify(reuniaoRepository, org.mockito.Mockito.never()).delete(any());
+    }
+
     @Mock private ReuniaoRepository reuniaoRepository;
     @Mock private EmpresaRepository empresaRepository;
     @Mock private GoogleCalendarService googleCalendarService;
@@ -86,16 +107,14 @@ class ReuniaoServiceGoogleSyncTest {
             return reuniao;
         });
         when(usuarioRepository.findAllById(any())).thenReturn(List.of(criador, convidado));
-        when(participanteRepository.findByReuniao_IdReuniao(11L))
-                .thenReturn(List.of(), List.of(participanteCriador, participanteConvidado));
+        when(participanteRepository.findByReuniao_IdReuniao(11L)).thenReturn(List.of());
 
         Event eventoGoogle = new Event()
                 .setId("google-event-11")
                 .setOrganizer(new Organizer().setEmail(criador.getEmail()));
-        when(googleCalendarService.criarEvento(any(Reuniao.class), eq("token-google-7")))
+        when(googleCalendarService.criarEvento(any(Reuniao.class), eq("token-google-7"), any()))
                 .thenReturn(eventoGoogle);
         when(googleCalendarService.extrairLinkMeet(eventoGoogle)).thenReturn("https://meet.google.com/abc-defg-hij");
-        when(usuarioRepository.findByEmail(criador.getEmail())).thenReturn(Optional.of(criador));
 
         ReuniaoRequestDTO request = new ReuniaoRequestDTO();
         request.setTitulo("Reuniao restrita");
@@ -115,15 +134,7 @@ class ReuniaoServiceGoogleSyncTest {
 
         service.criar(request, criador.getId());
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Set<String>> destinatariosCaptor = ArgumentCaptor.forClass(Set.class);
-        verify(reuniaoEmailService).enviarConfirmacaoCriacao(
-                any(Reuniao.class),
-                eq("https://meet.google.com/abc-defg-hij"),
-                eq(criador.getEmail()),
-                eq(criador.getNomeCompleto()),
-                destinatariosCaptor.capture());
-        assertEquals(Set.of(criador.getEmail(), convidado.getEmail()), destinatariosCaptor.getValue());
+        verify(reuniaoEmailService).notificarAgendamento(any(Reuniao.class), eq(List.of(criador, convidado)));
     }
 
     private static Usuario usuario(Long id, String nome, String email) {

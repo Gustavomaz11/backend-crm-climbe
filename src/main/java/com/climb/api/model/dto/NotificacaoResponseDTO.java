@@ -13,6 +13,7 @@ public class NotificacaoResponseDTO {
     private String usuarioNome;
     private String usuarioEmail;
     private String mensagem;
+    private String destino;
     private LocalDate dataEnvio;
     private String tipo;
     private Boolean lida;
@@ -29,6 +30,7 @@ public class NotificacaoResponseDTO {
             dto.setUsuarioEmail(usuario.getEmail());
         }
         dto.setMensagem(notificacao.getMensagem());
+        dto.setDestino(notificacao.getDestino());
         dto.setDataEnvio(notificacao.getDataEnvio());
         dto.setTipo(notificacao.getTipo());
         dto.setLida(Boolean.TRUE.equals(notificacao.getLida()));
@@ -38,6 +40,8 @@ public class NotificacaoResponseDTO {
     }
 
     public Long getId() { return id; }
+    public String getDestino() { return destino; }
+    public void setDestino(String destino) { this.destino = destino; }
     public void setId(Long id) { this.id = id; }
 
     public Long getUsuarioId() { return usuarioId; }

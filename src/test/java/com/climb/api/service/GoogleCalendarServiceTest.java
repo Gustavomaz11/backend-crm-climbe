@@ -19,6 +19,48 @@ import static org.mockito.Mockito.when;
 
 class GoogleCalendarServiceTest {
 
+    @Test void criaEventoComTodosConvidadosEContatoObrigatorio() throws Exception {
+        var calendar = mock(Calendar.class);
+        var events = mock(Calendar.Events.class);
+        var insert = mock(Calendar.Events.Insert.class, Answers.RETURNS_SELF);
+        when(calendar.events()).thenReturn(events);
+        when(events.insert(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.any())).thenReturn(insert);
+        when(insert.execute()).thenReturn(new com.google.api.services.calendar.model.Event().setId("evento"));
+        var service = spy(new GoogleCalendarService()); doReturn(calendar).when(service).buildCalendar("token-teste");
+        var reuniao = new com.climb.api.model.Reuniao(); reuniao.setTitulo("Presencial"); reuniao.setPresencial(true);
+        reuniao.setData(java.time.LocalDate.of(2026,11,15)); reuniao.setHora(java.time.LocalTime.of(14,30)); reuniao.setLocal("Sala 2");
+        service.criarEvento(reuniao, "token-teste", List.of("ana@example.test", "bia@example.test", "CONTATO@CLIMBE.COM.BR", "ana@example.test"));
+        var evento = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
+        verify(events).insert(org.mockito.ArgumentMatchers.eq("primary"), evento.capture());
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees()).extracting(com.google.api.services.calendar.model.EventAttendee::getEmail)
+                .containsExactly("contato@climbe.com.br", "ana@example.test", "bia@example.test");
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getLocation()).isEqualTo("Sala 2");
+        verify(insert).setSendUpdates("all");
+    }
+
+    @Test void atualizarMantemMeetERespostasEReincluiContatoObrigatorio() throws Exception {
+        var calendar = mock(Calendar.class); var events = mock(Calendar.Events.class);
+        var get = mock(Calendar.Events.Get.class);
+        var update = mock(Calendar.Events.Update.class, Answers.RETURNS_SELF);
+        var conference = new com.google.api.services.calendar.model.ConferenceData().setConferenceId("abc-defg-hij");
+        var atual = new com.google.api.services.calendar.model.Event().setId("evento").setConferenceData(conference)
+                .setAttendees(List.of(new com.google.api.services.calendar.model.EventAttendee().setEmail("ana@example.test").setResponseStatus("accepted")));
+        when(calendar.events()).thenReturn(events); when(events.get("primary", "evento")).thenReturn(get); when(get.execute()).thenReturn(atual);
+        when(events.update(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), org.mockito.ArgumentMatchers.any())).thenReturn(update);
+        when(update.execute()).thenReturn(atual);
+        var service = spy(new GoogleCalendarService()); doReturn(calendar).when(service).buildCalendar("token-teste");
+        var reuniao = new com.climb.api.model.Reuniao(); reuniao.setGoogleEventId("evento"); reuniao.setPresencial(false);
+        reuniao.setData(java.time.LocalDate.of(2026,11,15)); reuniao.setHora(java.time.LocalTime.of(14,30));
+        service.atualizarEvento(reuniao, "token-teste", List.of("ana@example.test"));
+        var evento = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
+        verify(events).update(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), evento.capture());
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getConferenceData()).isSameAs(conference);
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees()).extracting(com.google.api.services.calendar.model.EventAttendee::getEmail)
+                .containsExactly("contato@climbe.com.br", "ana@example.test");
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees().get(1).getResponseStatus()).isEqualTo("accepted");
+        verify(update).setSendUpdates("all");
+    }
+
     @Test
     void deveConsultarSomenteAgendaPrimariaDoUsuario() throws Exception {
         Calendar calendar = mock(Calendar.class);

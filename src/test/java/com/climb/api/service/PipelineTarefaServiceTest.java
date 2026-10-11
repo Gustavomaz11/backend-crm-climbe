@@ -31,6 +31,7 @@ class PipelineTarefaServiceTest {
     @Mock private PipelineCadenciaEngine cadenciaEngine;
     @Mock private RbacService rbacService;
     @Mock private CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
+    @Mock private TarefaNotificacaoService notificacoes;
 
     private PipelineTarefaService service;
 
@@ -38,7 +39,7 @@ class PipelineTarefaServiceTest {
     void setUp() {
         service = new PipelineTarefaService(
                 repository, negocioRepository, usuarioRepository, historicoService, cadenciaEngine, rbacService,
-                cargoHierarquiaAcessoService
+                cargoHierarquiaAcessoService, notificacoes
         );
     }
 
@@ -61,6 +62,15 @@ class PipelineTarefaServiceTest {
         verify(repository).findFiltradas(
                 eq(false), eq(false), eq(true), eq(false), eq(false), any(LocalDate.class),
                 eq(true), eq(Set.of(1L)), isNull(), isNull(), isNull());
+    }
+
+    @Test void responsavelConsegueAbrirSuaTarefaSemAcessoComercialGlobal() {
+        Usuario ana = usuario(2L, "Ana"); Usuario bia = usuario(3L, "Bia");
+        PipelineVendasTarefa atividade = tarefa(1L, negocio(10L, ana), ana, LocalDate.now().plusDays(3), PipelineTarefaStatus.PENDENTE);
+        atividade.setResponsaveis(List.of(ana, bia)); when(repository.findById(1L)).thenReturn(Optional.of(atividade));
+        assertEquals(1L, service.buscarVisivel(1L, bia.getId()).id());
+        verifyNoInteractions(rbacService, cargoHierarquiaAcessoService);
+        assertThrows(ResponseStatusException.class, () -> service.buscarVisivel(1L, 99L));
     }
 
     @Test
@@ -268,8 +278,6 @@ class PipelineTarefaServiceTest {
         PipelineVendasTarefa task = tarefa(20L, negocio(10L, ana), ana, LocalDate.now(), PipelineTarefaStatus.PENDENTE);
         task.setResponsaveis(List.of(ana, bia));
         when(repository.findById(20L)).thenReturn(Optional.of(task));
-        when(rbacService.temPermissao(3L, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR)).thenReturn(true);
-        when(cargoHierarquiaAcessoService.buscarUsuariosVisiveis(3L)).thenReturn(Set.of(3L));
         assertEquals(task, service.exigirTarefaVisivel(20L, 3L));
     }
 

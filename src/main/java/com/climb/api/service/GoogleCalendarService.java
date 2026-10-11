@@ -27,22 +27,44 @@ import java.util.UUID;
 public class GoogleCalendarService {
 
     private static final Logger log = LoggerFactory.getLogger(GoogleCalendarService.class);
+    public static final String EMAIL_OBRIGATORIO = "contato@climbe.com.br";
 
     public Event criarEvento(Reuniao reuniao, String accessToken) throws Exception {
+        return criarEvento(reuniao, accessToken, List.of());
+    }
+
+    public Event criarEvento(Reuniao reuniao, String accessToken, List<String> convidados) throws Exception {
         return buildCalendar(accessToken).events()
-                .insert("primary", buildEvent(reuniao))
+                .insert("primary", buildEvent(reuniao, convidados))
                 .setConferenceDataVersion(1)
+                .setSendUpdates("all")
                 .execute();
     }
 
-    public void atualizarEvento(Reuniao reuniao, String accessToken) throws Exception {
+    public Event atualizarEvento(Reuniao reuniao, String accessToken) throws Exception {
+        return atualizarEvento(reuniao, accessToken, List.of());
+    }
+
+    public Event atualizarEvento(Reuniao reuniao, String accessToken, List<String> convidados) throws Exception {
         if (reuniao.getGoogleEventId() == null || reuniao.getGoogleEventId().isBlank()) {
-            return;
+            return null;
         }
 
-        buildCalendar(accessToken).events()
-                .update("primary", reuniao.getGoogleEventId(), buildEvent(reuniao))
+        Calendar calendar = buildCalendar(accessToken);
+        Event atual = calendar.events().get("primary", reuniao.getGoogleEventId()).execute();
+        Event alterado = buildEvent(reuniao, convidados);
+        if (atual.getAttendees() != null) {
+            alterado.setAttendees(alterado.getAttendees().stream().map(convidado -> atual.getAttendees().stream()
+                    .filter(a -> convidado.getEmail().equalsIgnoreCase(a.getEmail())).findFirst()
+                    .map(EventAttendee::clone).orElse(convidado)).toList());
+        }
+        if (Boolean.FALSE.equals(reuniao.getPresencial()) && atual.getConferenceData() != null) {
+            alterado.setConferenceData(atual.getConferenceData());
+        }
+        return calendar.events()
+                .update("primary", reuniao.getGoogleEventId(), alterado)
                 .setConferenceDataVersion(1)
+                .setSendUpdates("all")
                 .execute();
     }
 
@@ -62,6 +84,10 @@ public class GoogleCalendarService {
         }
     }
 
+    public Event buscarEvento(String googleEventId, String accessToken) throws Exception {
+        return buildCalendar(accessToken).events().get("primary", googleEventId).execute();
+    }
+
     Calendar buildCalendar(String accessToken) throws Exception {
         GoogleCredentials credentials = GoogleCredentials
                 .create(new AccessToken(accessToken, null))
@@ -75,11 +101,16 @@ public class GoogleCalendarService {
                 .build();
     }
 
-    private Event buildEvent(Reuniao reuniao) {
+    private Event buildEvent(Reuniao reuniao, List<String> convidados) {
         Event event = new Event()
                 .setSummary(reuniao.getTitulo())
                 .setDescription(reuniao.getPauta())
                 .setLocation(reuniao.getLocal());
+        var emails = new java.util.LinkedHashSet<String>();
+        emails.add(EMAIL_OBRIGATORIO);
+        if (convidados != null) convidados.stream().filter(e -> e != null && !e.isBlank())
+                .map(e -> e.trim().toLowerCase(java.util.Locale.ROOT)).forEach(emails::add);
+        event.setAttendees(emails.stream().map(e -> new EventAttendee().setEmail(e)).toList());
 
         ZoneId zoneId = ZoneId.of("America/Fortaleza");
         ZonedDateTime inicio = ZonedDateTime.of(reuniao.getData(), reuniao.getHora(), zoneId);
@@ -171,7 +202,7 @@ public class GoogleCalendarService {
 
     public void deletarEvento(String googleEventId, String accessToken) throws Exception {
         try {
-            buildCalendar(accessToken).events().delete("primary", googleEventId).execute();
+            buildCalendar(accessToken).events().delete("primary", googleEventId).setSendUpdates("all").execute();
         } catch (GoogleJsonResponseException e) {
             if (e.getStatusCode() != 404 && e.getStatusCode() != 410) {
                 throw e;

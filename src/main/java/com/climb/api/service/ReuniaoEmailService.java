@@ -1,83 +1,33 @@
 package com.climb.api.service;
 
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashSet;
-import java.util.Locale;
-import java.util.Set;
-
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
 import com.climb.api.model.Reuniao;
+import com.climb.api.model.Usuario;
+import org.springframework.stereotype.Service;
+
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Service
 public class ReuniaoEmailService {
+    private final NotificacaoEntregaService entrega;
+    public ReuniaoEmailService(NotificacaoEntregaService entrega) { this.entrega = entrega; }
 
-    private static final DateTimeFormatter DATA_FORMATTER =
-            DateTimeFormatter.ofPattern("dd/MM/yyyy", new Locale("pt", "BR"));
-    private static final DateTimeFormatter HORA_FORMATTER =
-            DateTimeFormatter.ofPattern("HH:mm", new Locale("pt", "BR"));
-
-    private final EmailService emailService;
-
-    public ReuniaoEmailService(EmailService emailService) {
-        this.emailService = emailService;
-    }
-
-    public void enviarConfirmacaoCriacao(Reuniao reuniao,
-                                         String linkMeet,
-                                         String emailCriador,
-                                         String nomeCriador,
-                                         Set<String> emailsConvidados) {
-        if (!StringUtils.hasText(linkMeet)) {
-            return;
+    public void notificarAgendamento(Reuniao reuniao, List<Usuario> convidados) {
+        if (!Boolean.TRUE.equals(reuniao.getPresencial()) && (reuniao.getLinkMeet() == null || reuniao.getLinkMeet().isBlank())) {
+            reuniao.setConvitesNotificados(false);
+            return; // O Google gera o Meet de forma assíncrona; o processador envia o convite completo quando estiver pronto.
         }
-
-        String assunto = "Sua próxima reunião foi agendada com sucesso!";
-        String corpoCriador = montarCorpo(
-                StringUtils.hasText(nomeCriador) ? nomeCriador : "usuario",
-                reuniao,
-                linkMeet,
-                true
-        );
-
-        emailService.enviarEmail(emailCriador, assunto, corpoCriador);
-
-        Set<String> destinatarios = new LinkedHashSet<>();
-        if (emailsConvidados != null) {
-            for (String email : emailsConvidados) {
-                if (StringUtils.hasText(email) && !email.equalsIgnoreCase(emailCriador)) {
-                    destinatarios.add(email.trim());
-                }
-            }
+        String mensagem = "Você foi convidado para a reunião \"" + reuniao.getTitulo() + "\".\n"
+                + "Data: " + reuniao.getData().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                + ". Horário: " + reuniao.getHora().format(DateTimeFormatter.ofPattern("HH:mm")) + ".\n"
+                + (Boolean.TRUE.equals(reuniao.getPresencial()) ? "Local: " + reuniao.getLocal()
+                : "Google Meet: " + (reuniao.getLinkMeet() == null ? "Disponível no convite do Google Agenda" : reuniao.getLinkMeet()));
+        String destino = "/agenda?reuniaoId=" + reuniao.getIdReuniao();
+        convidados.forEach(usuario -> entrega.notificar(usuario, "REUNIAO_AGENDADA", "Convite para reunião",
+                mensagem, destino));
+        if (convidados.stream().noneMatch(u -> GoogleCalendarService.EMAIL_OBRIGATORIO.equalsIgnoreCase(u.getEmail()))) {
+            entrega.avisarPorEmail(GoogleCalendarService.EMAIL_OBRIGATORIO, "Convite para reunião", mensagem, destino);
         }
-
-        String corpoConvidado = montarCorpo("participante", reuniao, linkMeet, false);
-        for (String destinatario : destinatarios) {
-            emailService.enviarEmail(destinatario, assunto, corpoConvidado);
-        }
-    }
-
-    private String montarCorpo(String destinatario, Reuniao reuniao, String linkMeet, boolean criadoPorVoce) {
-        String inicio = reuniao.getData() != null && reuniao.getHora() != null
-                ? reuniao.getData().atTime(reuniao.getHora()).atZone(ZoneId.of("America/Fortaleza")).format(DATA_FORMATTER) + " as " + reuniao.getHora().format(HORA_FORMATTER)
-                : "data e horário a confirmar";
-
-        String confirmacao = criadoPorVoce
-                ? "Sua próxima reunião foi agendada com sucesso."
-                : "Você foi convidado para uma reunião agendada no sistema.";
-
-        return "Ola, " + destinatario + "!\n\n"
-                + confirmacao + "\n\n"
-                + "Titulo: " + valorOuPadrao(reuniao.getTitulo(), "Reunião Climbe") + "\n"
-                + "Empresa: " + (reuniao.getEmpresa() != null ? valorOuPadrao(reuniao.getEmpresa().getNomeFantasia(), reuniao.getEmpresa().getRazaoSocial()) : "Nao informada") + "\n"
-                + "Quando: " + inicio + "\n"
-                + "Link do Google Meet: " + linkMeet + "\n\n"
-                + "Se precisar, acesse o link acima no horário agendado.";
-    }
-
-    private String valorOuPadrao(String valor, String padrao) {
-        return StringUtils.hasText(valor) ? valor : padrao;
+        reuniao.setConvitesNotificados(true);
     }
 }

@@ -19,17 +19,20 @@ public class PipelineCadenciaEngine {
     private final PipelineDiasUteis diasUteis;
     private final PipelineTemplateRenderer renderer;
     private final PipelineHistoricoService historicoService;
+    private final TarefaNotificacaoService notificacoes;
 
     public PipelineCadenciaEngine(PipelineCampanhaExecucaoRepository execucaoRepository,
                                   PipelineVendasTarefaRepository tarefaRepository,
                                   PipelineDiasUteis diasUteis,
                                   PipelineTemplateRenderer renderer,
-                                  PipelineHistoricoService historicoService) {
+                                  PipelineHistoricoService historicoService,
+                                  TarefaNotificacaoService notificacoes) {
         this.execucaoRepository = execucaoRepository;
         this.tarefaRepository = tarefaRepository;
         this.diasUteis = diasUteis;
         this.renderer = renderer;
         this.historicoService = historicoService;
+        this.notificacoes = notificacoes;
     }
 
     @Scheduled(fixedDelayString = "${app.pipeline.cadencia.intervalo-ms:60000}",
@@ -99,6 +102,7 @@ public class PipelineCadenciaEngine {
         }
         PipelineVendasTarefa tarefa = novaTarefa(execucao, etapa, agora.toLocalDate());
         tarefaRepository.save(tarefa);
+        notificacoes.atribuicoes(tarefa, java.util.Set.of());
         execucao.setTarefaAtual(tarefa);
         execucao.setProximaExecucaoEm(null);
         execucaoRepository.save(execucao);

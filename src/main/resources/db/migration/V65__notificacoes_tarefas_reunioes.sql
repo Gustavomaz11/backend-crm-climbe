@@ -1,0 +1,5 @@
+ALTER TABLE notificacoes MODIFY COLUMN mensagem TEXT;
+ALTER TABLE notificacoes ADD COLUMN destino VARCHAR(512);
+ALTER TABLE reunioes ADD COLUMN organizador_id BIGINT;
+ALTER TABLE reunioes ADD COLUMN link_meet VARCHAR(1024);
+ALTER TABLE reunioes ADD COLUMN convites_notificados BOOLEAN NOT NULL DEFAULT FALSE;

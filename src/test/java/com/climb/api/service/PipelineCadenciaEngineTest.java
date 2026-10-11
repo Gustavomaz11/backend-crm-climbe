@@ -27,12 +27,13 @@ class PipelineCadenciaEngineTest {
     @Mock private PipelineCampanhaExecucaoRepository execucaoRepository;
     @Mock private PipelineVendasTarefaRepository tarefaRepository;
     @Mock private PipelineHistoricoService historicoService;
+    @Mock private TarefaNotificacaoService notificacoes;
     private PipelineCadenciaEngine engine;
 
     @BeforeEach
     void setUp() {
         engine = new PipelineCadenciaEngine(execucaoRepository, tarefaRepository,
-                new PipelineDiasUteis(), new PipelineTemplateRenderer(), historicoService);
+                new PipelineDiasUteis(), new PipelineTemplateRenderer(), historicoService, notificacoes);
         when(tarefaRepository.save(any())).thenAnswer(invocation -> {
             PipelineVendasTarefa tarefa = invocation.getArgument(0);
             if (tarefa.getIdTarefa() == null) tarefa.setIdTarefa(System.nanoTime());

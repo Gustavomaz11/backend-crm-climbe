@@ -65,6 +65,7 @@ class ContratoKanbanServiceTest {
     @Mock private ContratoEquipeService equipeService;
     @Mock private ContratoRateioTecnicoService rateioService;
     @Mock private ContratoApoioAtuacaoService atuacaoService;
+    @Mock private TarefaNotificacaoService notificacoes;
 
     @InjectMocks
     private ContratoKanbanService service;

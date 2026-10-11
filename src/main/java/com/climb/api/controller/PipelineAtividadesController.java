@@ -43,6 +43,11 @@ public class PipelineAtividadesController {
         )));
     }
 
+    @GetMapping("/tarefas/{tarefaId}")
+    public ResponseEntity<ApiResponse<PipelineTarefaResponseDTO>> buscarTarefa(@PathVariable Long tarefaId) {
+        return ResponseEntity.ok(ApiResponse.ok(tarefaService.buscarVisivel(tarefaId, authenticatedUser.getUserId())));
+    }
+
     @GetMapping("/negocios/{negocioId}/tarefas")
     public ResponseEntity<ApiResponse<List<PipelineTarefaResponseDTO>>> listarTarefasDoNegocio(
             @PathVariable Long negocioId) {

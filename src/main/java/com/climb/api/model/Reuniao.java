@@ -41,6 +41,15 @@ public class Reuniao {
     @Column(name = "google_event_id")
     private String googleEventId;
 
+    @Column(name = "organizador_id")
+    private Long organizadorId;
+
+    @Column(name = "link_meet", length = 1024)
+    private String linkMeet;
+
+    @Column(name = "convites_notificados", nullable = false)
+    private boolean convitesNotificados;
+
     public Long getIdReuniao() { return idReuniao; }
     public void setIdReuniao(Long idReuniao) { this.idReuniao = idReuniao; }
 
@@ -69,5 +78,11 @@ public class Reuniao {
     public void setStatus(String status) { this.status = status; }
 
     public String getGoogleEventId() { return googleEventId; }
+    public Long getOrganizadorId() { return organizadorId; }
+    public void setOrganizadorId(Long organizadorId) { this.organizadorId = organizadorId; }
+    public String getLinkMeet() { return linkMeet; }
+    public boolean isConvitesNotificados() { return convitesNotificados; }
+    public void setConvitesNotificados(boolean convitesNotificados) { this.convitesNotificados = convitesNotificados; }
+    public void setLinkMeet(String linkMeet) { this.linkMeet = linkMeet; }
     public void setGoogleEventId(String googleEventId) { this.googleEventId = googleEventId; }
 }

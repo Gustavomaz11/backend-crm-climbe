@@ -17,8 +17,11 @@ public class Notificacao {
     @JoinColumn(name = "id_usuario")
     private Usuario usuario;
 
-    @Column(name = "mensagem")
+    @Column(name = "mensagem", columnDefinition = "TEXT")
     private String mensagem;
+
+    @Column(name = "destino", length = 512)
+    private String destino;
 
     @Column(name = "data_envio")
     private LocalDate dataEnvio;
@@ -56,6 +59,9 @@ public class Notificacao {
 
     public String getMensagem() { return mensagem; }
     public void setMensagem(String mensagem) { this.mensagem = mensagem; }
+
+    public String getDestino() { return destino; }
+    public void setDestino(String destino) { this.destino = destino; }
 
     public LocalDate getDataEnvio() { return dataEnvio; }
     public void setDataEnvio(LocalDate dataEnvio) { this.dataEnvio = dataEnvio; }

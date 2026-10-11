@@ -75,7 +75,10 @@ class ContratoEquipeIntegrationTest {
         kanban.criarTask(id, lider.getId(), tarefa(pendente, "Segunda tarefa", apoio.getId()));
         var tarefasDoApoio = tarefas.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(id);
         Long primeira = tarefasDoApoio.get(0).getIdTask(), segunda = tarefasDoApoio.get(1).getIdTask();
-        assertThat(notificacoes.findByUsuario_Id(apoio.getId())).hasSize(1);
+        assertThat(notificacoes.findByUsuario_Id(lider.getId()).stream().filter(n -> "TAREFA_CRIADA".equals(n.getTipo()))).hasSize(2);
+        assertThat(notificacoes.findByUsuario_Id(apoio.getId()).stream().filter(n -> "TAREFA_ATRIBUIDA".equals(n.getTipo())))
+                .hasSize(2).allSatisfy(n -> assertThat(n.getDestino()).contains("/contratos/kanban?contrato=" + id + "&tarefaId="));
+        assertThat(notificacoes.findByUsuario_Id(apoio.getId()).stream().filter(n -> "CONTRATO".equals(n.getTipo()))).hasSize(1);
         assertThat(equipe.buscarEquipe(id, lider.getId()).temporarios().getFirst().tarefas()).hasSize(2);
         assertThat(equipe.listarDisponiveis(apoio.getId())).extracting(Contrato::getIdContrato).contains(id);
         assertThat(kanban.buscarBoard(id, apoio.getId()).podeEditar()).isTrue();
@@ -103,7 +106,7 @@ class ContratoEquipeIntegrationTest {
         assertThat(participantes.findByContrato_IdContratoAndCompetencia(id, mes.atDay(1))).hasSize(3);
         assertThat(rateio.consultar(id, mes.plusMonths(1).toString(), lider.getId()).participantes()).hasSize(2);
         kanban.criarTask(id, lider.getId(), tarefa(pendente, "Novo apoio após conclusão", apoio.getId()));
-        assertThat(notificacoes.findByUsuario_Id(apoio.getId())).hasSize(2);
+        assertThat(notificacoes.findByUsuario_Id(apoio.getId()).stream().filter(n -> "CONTRATO".equals(n.getTipo()))).hasSize(2);
         assertThat(kanban.buscarBoard(id, apoio.getId()).podeEditar()).isTrue();
         verifyNoInteractions(email, storage, assinatura);
     }

@@ -46,6 +46,7 @@ public class ContratoKanbanService {
     private final ContratoRateioTecnicoService rateioService;
     private final ContratoApoioAtuacaoService atuacaoService;
     private final TarefaResponsaveisService responsaveisService;
+    private final TarefaNotificacaoService notificacoes;
 
     public ContratoKanbanService(ContratoRepository contratoRepository,
                                  ContratoKanbanRaiaRepository raiaRepository,
@@ -54,7 +55,8 @@ public class ContratoKanbanService {
                                  UsuarioRepository usuarioRepository,
                                  ContratoEquipeService equipeService,
                                  ContratoRateioTecnicoService rateioService,
-                                 ContratoApoioAtuacaoService atuacaoService) {
+                                 ContratoApoioAtuacaoService atuacaoService,
+                                 TarefaNotificacaoService notificacoes) {
         this.contratoRepository = contratoRepository;
         this.raiaRepository = raiaRepository;
         this.taskRepository = taskRepository;
@@ -63,6 +65,7 @@ public class ContratoKanbanService {
         this.equipeService = equipeService;
         this.rateioService = rateioService;
         this.atuacaoService = atuacaoService;
+        this.notificacoes = notificacoes;
         this.responsaveisService = new TarefaResponsaveisService(usuarioRepository);
     }
 
@@ -89,6 +92,7 @@ public class ContratoKanbanService {
     public ContratoKanbanBoardResponseDTO atualizarRaia(Long contratoId, Long raiaId, Long usuarioId, ContratoKanbanRaiaRequestDTO dto) {
         Contrato contrato = exigirEdicaoContrato(contratoId, usuarioId);
         ContratoKanbanRaia raia = buscarRaia(contratoId, raiaId);
+        String estadoAnterior = TarefaNotificacaoService.estado(raia);
         if (StringUtils.hasText(dto.titulo())) {
             raia.setTitulo(dto.titulo().trim());
         }
@@ -105,6 +109,7 @@ public class ContratoKanbanService {
         taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId)
                 .stream().filter(t -> Objects.equals(t.getRaia().getIdRaia(), raiaId)).forEach(t -> {
                     atuacaoService.sincronizar(t); rateioService.registrarAtuacao(t); taskRepository.save(t);
+                    notificacoes.contratoMovida(t, estadoAnterior);
                 });
         return toBoardResponse(contrato, usuarioId);
     }
@@ -140,6 +145,8 @@ public class ContratoKanbanService {
         justificarConclusao(task, raia, true, dto.justificativaAtraso(), usuarioId);
         equipeService.atribuirResponsaveis(task, usuarioId, Set.of());
         taskRepository.save(task);
+        notificacoes.contratoCriada(task);
+        notificacoes.atribuicoes(task, Set.of());
         atuacaoService.sincronizar(task);
         rateioService.registrarAtuacao(task);
         return toBoardResponse(contrato, usuarioId);
@@ -150,6 +157,7 @@ public class ContratoKanbanService {
         Contrato contrato = exigirEdicaoContrato(contratoId, usuarioId);
         ContratoKanbanTask task = buscarTask(contratoId, taskId);
         Set<Long> responsaveisAnteriores = task.getResponsaveisEfetivos().stream().map(Usuario::getId).collect(Collectors.toSet());
+        String estadoAnterior = TarefaNotificacaoService.estado(task.getRaia());
 
         if (!Objects.equals(task.getDataFim(), dto.dataFim())
                 && (contrato.getResponsavel() == null || !Objects.equals(contrato.getResponsavel().getId(), usuarioId))) {
@@ -188,6 +196,8 @@ public class ContratoKanbanService {
         validarPeriodo(task);
         equipeService.atribuirResponsaveis(task, usuarioId, responsaveisAnteriores);
         taskRepository.save(task);
+        notificacoes.atribuicoes(task, responsaveisAnteriores);
+        notificacoes.contratoMovida(task, estadoAnterior);
         atuacaoService.sincronizar(task);
         rateioService.registrarAtuacao(task);
         return toBoardResponse(contrato, usuarioId);
@@ -199,9 +209,11 @@ public class ContratoKanbanService {
         ContratoKanbanTask task = buscarTask(contratoId, taskId);
 
         ContratoKanbanRaia raia = buscarRaia(contratoId, dto != null ? dto.raiaId() : null);
+        String estadoAnterior = TarefaNotificacaoService.estado(task.getRaia());
         justificarConclusao(task, raia, !task.getRaia().isConcluiTarefas(), dto.justificativaAtraso(), usuarioId);
         task.setRaia(raia);
         taskRepository.save(task);
+        notificacoes.contratoMovida(task, estadoAnterior);
         atuacaoService.sincronizar(task);
         rateioService.registrarAtuacao(task);
         return toBoardResponse(contrato, usuarioId);

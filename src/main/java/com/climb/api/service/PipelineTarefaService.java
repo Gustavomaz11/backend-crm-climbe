@@ -26,6 +26,7 @@ public class PipelineTarefaService {
     private final RbacService rbacService;
     private final CargoHierarquiaAcessoService cargoHierarquiaAcessoService;
     private final TarefaResponsaveisService responsaveisService;
+    private final TarefaNotificacaoService notificacoes;
 
     public PipelineTarefaService(PipelineVendasTarefaRepository repository,
                                  PipelineVendasNegocioRepository negocioRepository,
@@ -33,7 +34,8 @@ public class PipelineTarefaService {
                                  PipelineHistoricoService historicoService,
                                  PipelineCadenciaEngine cadenciaEngine,
                                  RbacService rbacService,
-                                 CargoHierarquiaAcessoService cargoHierarquiaAcessoService) {
+                                 CargoHierarquiaAcessoService cargoHierarquiaAcessoService,
+                                 TarefaNotificacaoService notificacoes) {
         this.repository = repository;
         this.negocioRepository = negocioRepository;
         this.usuarioRepository = usuarioRepository;
@@ -41,6 +43,7 @@ public class PipelineTarefaService {
         this.cadenciaEngine = cadenciaEngine;
         this.rbacService = rbacService;
         this.cargoHierarquiaAcessoService = cargoHierarquiaAcessoService;
+        this.notificacoes = notificacoes;
         this.responsaveisService = new TarefaResponsaveisService(usuarioRepository);
     }
 
@@ -107,6 +110,7 @@ public class PipelineTarefaService {
         justificarConclusao(tarefa, dto.status(), dto.prazo(), dto.justificativaAtraso(), usuarioId);
         aplicarDados(tarefa, dto);
         PipelineVendasTarefa salva = repository.save(tarefa);
+        notificacoes.atribuicoes(salva, Set.of());
         historicoService.registrar(negocio, usuarioId, PipelineHistoricoTipo.CRIACAO_TAREFA,
                 "Tarefa criada: " + salva.getTitulo());
         if (salva.getStatus() == PipelineTarefaStatus.CONCLUIDA) {
@@ -122,10 +126,12 @@ public class PipelineTarefaService {
         validarDatas(dto.dataInicio(), dto.prazo());
         PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
         PipelineTarefaStatus statusAnterior = tarefa.getStatus();
+        Set<Long> anteriores = tarefa.getResponsaveisEfetivos().stream().map(Usuario::getId).collect(java.util.stream.Collectors.toSet());
         exigirPermissaoDeConclusaoSeNecessario(usuarioId, statusAnterior, dto.status());
         justificarConclusao(tarefa, dto.status(), tarefa.getPrazo(), dto.justificativaAtraso(), usuarioId);
         aplicarDados(tarefa, dto);
         PipelineVendasTarefa salva = repository.save(tarefa);
+        notificacoes.atribuicoes(salva, anteriores);
         historicoService.registrar(tarefa.getNegocio(), usuarioId, PipelineHistoricoTipo.ALTERACAO_TAREFA,
                 "Tarefa atualizada: " + tarefa.getTitulo());
         registrarConclusaoSeNecessario(tarefa, usuarioId, statusAnterior);
@@ -298,14 +304,20 @@ public class PipelineTarefaService {
 
     @Transactional(readOnly = true)
     public PipelineVendasTarefa exigirTarefaVisivel(Long tarefaId, Long usuarioId) {
-        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
         PipelineVendasTarefa tarefa = buscarTarefa(tarefaId);
+        if (tarefa.getResponsaveisEfetivos().stream().anyMatch(usuario -> usuario.getId().equals(usuarioId))) return tarefa;
+        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
         if (podeVisualizarTodasAsTarefas(usuarioId)) return tarefa;
         Set<Long> visiveis = cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId);
         if (tarefa.getResponsaveisEfetivos().stream().noneMatch(usuario -> visiveis.contains(usuario.getId()))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Você não tem acesso a esta tarefa.");
         }
         return tarefa;
+    }
+
+    @Transactional(readOnly = true)
+    public PipelineTarefaResponseDTO buscarVisivel(Long tarefaId, Long usuarioId) {
+        return toResponse(exigirTarefaVisivel(tarefaId, usuarioId));
     }
 
     private String normalizar(String valor) {
