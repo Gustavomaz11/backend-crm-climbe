@@ -10,6 +10,11 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanbanTask, Long> {
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("update ContratoKanbanTask item set item.arquivadoEm = :agora " +
+            "where item.arquivadoEm is null and item.arquivarApos <= :agora and item.raia.concluiTarefas = true")
+    int arquivarVencidos(@org.springframework.data.repository.query.Param("agora") java.time.LocalDateTime agora);
+
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
             "contrato", "contrato.responsavel", "contrato.proposta", "contrato.proposta.servicos", "responsavel", "responsaveis"
     })

@@ -6,6 +6,7 @@ import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
+import com.climb.api.model.dto.RefreshTokenResponseDTO;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -16,15 +17,17 @@ public class AuthenticationService {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final UsuarioMapper usuarioMapper;
+    private final SessaoAutenticacaoService sessoes;
 
     public AuthenticationService(UsuarioService usuarioService,
                                  JwtUtil jwtUtil,
                                  PasswordEncoder passwordEncoder,
-                                 UsuarioMapper usuarioMapper) {
+                                 UsuarioMapper usuarioMapper, SessaoAutenticacaoService sessoes) {
         this.usuarioService = usuarioService;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
         this.usuarioMapper = usuarioMapper;
+        this.sessoes = sessoes;
     }
 
     public AuthResult<LoginResponseDTO> autenticar(String email, String senha) {
@@ -53,7 +56,7 @@ public class AuthenticationService {
         return AuthResult.success(buildLoginResponse(usuario));
     }
 
-    public AuthResult<String> refreshAccessToken(String refreshToken) {
+    public AuthResult<RefreshTokenResponseDTO> refreshAccessToken(String refreshToken) {
         if (!jwtUtil.validateToken(refreshToken)) {
             return AuthResult.failure(AuthStatus.INVALID_REFRESH_TOKEN, "Refresh token invalido ou expirado");
         }
@@ -75,7 +78,8 @@ public class AuthenticationService {
             return AuthResult.failure(situacao.status(), situacao.message());
         }
 
-        return AuthResult.success(jwtUtil.generateAccessToken(usuarioId, usuario.getEmail()));
+        return sessoes.renovar(refreshToken).map(AuthResult::success)
+                .orElseGet(() -> AuthResult.failure(AuthStatus.INVALID_REFRESH_TOKEN, "Sessão expirada ou encerrada. Entre novamente."));
     }
 
     public long getAccessTokenExpirationTime() {
@@ -120,13 +124,14 @@ public class AuthenticationService {
         return AuthResult.success(buildLoginResponse(usuario));
     }
 
+    public void encerrarSessao(String refreshToken) { sessoes.encerrar(refreshToken); }
+
     private LoginResponseDTO buildLoginResponse(Usuario usuario) {
-        String accessToken = jwtUtil.generateAccessToken(usuario.getId(), usuario.getEmail());
-        String refreshToken = jwtUtil.generateRefreshToken(usuario.getId(), usuario.getEmail());
+        var tokens = sessoes.criar(usuario);
         UsuarioResponseDTO usuarioDTO = usuarioMapper.toResponse(usuario);
         usuarioDTO.setFotoPerfil(usuarioService.buscarFotoPerfil(usuario));
         long expiresIn = jwtUtil.getAccessTokenExpirationTime();
-        return new LoginResponseDTO(accessToken, refreshToken, usuarioDTO, expiresIn);
+        return new LoginResponseDTO(tokens.accessToken(), tokens.refreshToken(), usuarioDTO, expiresIn);
     }
 
 }

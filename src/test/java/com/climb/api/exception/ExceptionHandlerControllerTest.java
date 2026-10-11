@@ -26,4 +26,12 @@ class ExceptionHandlerControllerTest {
         assertNotNull(response.getBody());
         assertEquals("Empresa possui registros vinculados", response.getBody().message());
     }
+
+    @Test
+    void atualizacaoConcorrenteRetornaConflitoSemExporDetalhesDoBanco() {
+        var response = handler.handleConcurrentUpdate(new org.springframework.orm.ObjectOptimisticLockingFailureException(
+                com.climb.api.model.Usuario.class, 7L));
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("Esses dados foram alterados por outra pessoa. Atualize a página e tente novamente.", response.getBody().message());
+    }
 }

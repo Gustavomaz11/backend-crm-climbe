@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
@@ -34,6 +35,7 @@ public class PropostaController {
     }
 
     @GetMapping
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_LER')")
     public ResponseEntity<ApiResponse<List<PropostaResponseDTO>>> listar(
             @RequestParam(value = "empresaId", required = false) Long empresaId,
             @RequestParam(value = "negocioId", required = false) Long negocioId) {
@@ -41,6 +43,7 @@ public class PropostaController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.lerProposta(#id)")
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> buscarPorId(@PathVariable Long id) {
         try {
             return ResponseEntity.ok(ApiResponse.ok(service.buscarPorId(id)));
@@ -50,6 +53,7 @@ public class PropostaController {
     }
 
     @GetMapping("/{id}/download-url")
+    @PreAuthorize("@permissaoAcesso.lerProposta(#id)")
     public ResponseEntity<ApiResponse<String>> gerarUrlDownload(@PathVariable Long id) {
         try {
             return ResponseEntity.ok(ApiResponse.ok(service.gerarUrlDownload(id)));
@@ -62,6 +66,7 @@ public class PropostaController {
     }
 
     @GetMapping("/status/{status}")
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_LER')")
     public ResponseEntity<ApiResponse<List<PropostaResponseDTO>>> listarPorStatus(@PathVariable PropostaStatus status) {
         try {
             return ResponseEntity.ok(ApiResponse.ok(service.listarPorStatus(status)));
@@ -71,6 +76,7 @@ public class PropostaController {
     }
 
     @PostMapping
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_CRIAR')")
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> criar(@Valid @RequestBody PropostaRequestDTO proposta) {
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(service.criar(proposta)));
@@ -80,6 +86,7 @@ public class PropostaController {
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_CRIAR')")
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> criarComUpload(
             @RequestParam(value = "empresaId", required = false) Long empresaId,
             @RequestParam(value = "negocioId", required = false) Long negocioId,
@@ -97,6 +104,7 @@ public class PropostaController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_EDITAR')")
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> atualizar(@PathVariable Long id,
                                                                        @Valid @RequestBody PropostaRequestDTO atualizada) {
         try {
@@ -110,6 +118,7 @@ public class PropostaController {
     }
 
     @PatchMapping("/{id}/aprovar")
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_EDITAR')")
     public ResponseEntity<ApiResponse<PropostaResponseDTO>> aprovar(@PathVariable Long id,
                                                                      @Valid @RequestBody PropostaAprovacaoRequestDTO aprovacao) {
         try {
@@ -130,7 +139,7 @@ public class PropostaController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Usuário não autenticado"));
             }
 
-            if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRUD)) {
+            if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_EDITAR)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("Usuário não tem permissão para aprovar/rejeitar propostas"));
             }
 
@@ -144,6 +153,7 @@ public class PropostaController {
     }
 
     @GetMapping("/{id}/historico")
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_LER')")
     public ResponseEntity<ApiResponse<List<com.climb.api.model.dto.HistoricoAprovacaoPropostaResponseDTO>>> historico(@PathVariable Long id) {
         try {
             return ResponseEntity.ok(ApiResponse.ok(service.listarHistorico(id)));
@@ -156,6 +166,7 @@ public class PropostaController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PROPOSTA_DELETAR')")
     public ResponseEntity<ApiResponse<Void>> deletar(@PathVariable Long id) {
         try {
             service.deletar(id);

@@ -108,7 +108,7 @@ class UsuarioServiceAprovacaoTest {
     @Test
     void deveCriarUsuarioGoogleAprovadoAntesDaConclusaoDoPerfil() {
         Cargo cargo = cargo(2L, "Analista Comercial");
-        Permissao permissao = permissao(10L, "CONTRATO_CRUD");
+        Permissao permissao = permissao(10L, "CONTRATO_LER");
         OAuth2PendingRegistration pending = pendingAprovado(cargo, Set.of(permissao));
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {
             Usuario novo = invocation.getArgument(0);
@@ -131,11 +131,11 @@ class UsuarioServiceAprovacaoTest {
     @Test
     void deveConcluirMesmoUsuarioPreservandoPermissoesECargoEditadosAposAprovacao() {
         Cargo cargoAprovado = cargo(2L, "Analista Comercial");
-        Permissao permissaoAprovada = permissao(10L, "CONTRATO_CRUD");
+        Permissao permissaoAprovada = permissao(10L, "CONTRATO_LER");
         OAuth2PendingRegistration pending = pendingAprovado(cargoAprovado, Set.of(permissaoAprovada));
         pending.setExpiraEm(LocalDateTime.now().minusDays(1));
         Cargo cargoEditado = cargo(3L, "Diretor Comercial");
-        Permissao permissaoEditada = permissao(11L, "PROPOSTA_CRUD");
+        Permissao permissaoEditada = permissao(11L, "PROPOSTA_LER");
         Usuario provisionado = usuario(7L, "COMPLETAR_CADASTRO", cargoEditado, Set.of(permissaoEditada));
         provisionado.setEmail(pending.getEmail());
         UsuarioOAuth vinculo = new UsuarioOAuth();
@@ -166,7 +166,7 @@ class UsuarioServiceAprovacaoTest {
     @Test
     void naoDeveSobrescreverUsuarioExistenteAoAprovarCadastroGoogle() {
         Cargo cargo = cargo(2L, "Analista Comercial");
-        Permissao permissao = permissao(10L, "CONTRATO_CRUD");
+        Permissao permissao = permissao(10L, "CONTRATO_LER");
         OAuth2PendingRegistration pending = pendingAprovado(cargo, Set.of(permissao));
         Usuario existente = usuario(7L, "REVOGADO", cargo, Set.of());
         when(usuarioRepository.findByEmail(pending.getEmail())).thenReturn(Optional.of(existente));

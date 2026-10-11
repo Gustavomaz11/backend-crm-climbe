@@ -76,7 +76,7 @@ class RevisaoContratoEnvioTest {
         RevisaoDocumento revisao = iniciarRevisaoInterativa();
         revisao.setStatus(RevisaoDocumentoStatus.AJUSTES_SOLICITADOS);
         when(revisoes.findById(1L)).thenReturn(Optional.of(revisao));
-        when(rbac.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(rbac.temPermissao(1L, PermissaoCodigo.JURIDICO_CONTRATO_ENVIAR_NOVA_VERSAO)).thenReturn(true);
         when(usuarios.findById(1L)).thenReturn(Optional.of(new Usuario()));
         var arquivo = new MockMultipartFile("arquivo", "contrato-v2.pdf", "application/pdf", new byte[]{1});
         when(storage.salvar(arquivo, "revisoes/contrato-10")).thenReturn(new ArquivoUploadResponseDTO(
@@ -85,6 +85,19 @@ class RevisaoContratoEnvioTest {
         assertThat(response.status()).isEqualTo("AGUARDANDO_CLIENTE");
         assertThat(contrato.getEtapaPreparacao()).isEqualTo(ContratoPreparacaoEtapa.EM_ANDAMENTO);
         assertThat(contrato.getUrlPdf()).endsWith("contrato-v2.pdf");
+    }
+
+    @Test
+    void reenviarEEnviarNovaVersaoExigemPermissoesIndependentes() {
+        RevisaoDocumento revisao = iniciarRevisaoInterativa();
+        when(revisoes.findById(1L)).thenReturn(Optional.of(revisao));
+        clearInvocations(email, storage);
+        when(rbac.temPermissao(1L, PermissaoCodigo.JURIDICO_CONTRATO_REENVIAR)).thenReturn(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.novaVersao(1L, 1L, null))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        verifyNoInteractions(email, storage);
+        service.reenviar(1L, 1L);
+        verify(email).enviarEmailComBotao(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test

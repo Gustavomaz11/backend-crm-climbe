@@ -129,7 +129,10 @@ class GoogleOAuthServiceTest {
         when(googleCalendarConfig.getClientSecret()).thenReturn("client-secret");
         when(googleCalendarConfig.getRedirectUri()).thenReturn("https://api.climbe.com/auth/google/callback");
 
-        String authorizationUrl = googleOAuthService.gerarUrlAutorizacao().authorizationUrl();
+        String authorizationUrl = googleOAuthService.gerarUrlAutorizacao("state-aleatorio", "challenge-seguro").authorizationUrl();
+        assertTrue(authorizationUrl.contains("state=state-aleatorio"));
+        assertTrue(authorizationUrl.contains("code_challenge=challenge-seguro"));
+        assertTrue(authorizationUrl.contains("code_challenge_method=S256"));
 
         assertFalse(authorizationUrl.contains("prompt=consent"));
         assertTrue(authorizationUrl.contains("access_type=offline"));

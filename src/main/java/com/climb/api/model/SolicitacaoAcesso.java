@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -65,4 +66,14 @@ public class SolicitacaoAcesso {
 
     @Column(name = "decidido_por")
     private Long decididoPor;
+
+    @Column(name = "excluido_em")
+    private LocalDateTime excluidoEm;
+
+    @Column(name = "excluido_por")
+    private Long excluidoPor;
+
+    @Version
+    @Column(nullable = false)
+    private Long versao;
 }

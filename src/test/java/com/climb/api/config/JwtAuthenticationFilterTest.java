@@ -1,7 +1,7 @@
 package com.climb.api.config;
 
 import com.climb.api.model.Usuario;
-import com.climb.api.repository.UsuarioRepository;
+import com.climb.api.service.SessaoAutenticacaoService;
 import com.climb.api.service.JwtUtil;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 class JwtAuthenticationFilterTest {
 
     @Mock private JwtUtil jwtUtil;
-    @Mock private UsuarioRepository usuarioRepository;
+    @Mock private SessaoAutenticacaoService sessoes;
     @Mock private FilterChain filterChain;
 
     @AfterEach
@@ -57,14 +57,15 @@ class JwtAuthenticationFilterTest {
         when(jwtUtil.extractTokenType("token")).thenReturn(JwtUtil.TYPE_ACCESS);
         when(jwtUtil.extractEmail("token")).thenReturn(usuario.getEmail());
         when(jwtUtil.extractUserId("token")).thenReturn(usuario.getId());
-        when(usuarioRepository.existsByIdAndSituacao(usuario.getId(), "ATIVO"))
+        when(jwtUtil.extractSessionId("token")).thenReturn("session-id");
+        when(sessoes.estaAtiva("session-id", usuario.getId()))
                 .thenReturn("ATIVO".equals(usuario.getSituacao()));
     }
 
     private void executarFiltro() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer token");
-        new JwtAuthenticationFilter(jwtUtil, usuarioRepository)
+        new JwtAuthenticationFilter(jwtUtil, sessoes)
                 .doFilterInternal(request, new MockHttpServletResponse(), filterChain);
     }
 

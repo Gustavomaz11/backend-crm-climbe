@@ -227,7 +227,7 @@ public class PropostaService {
 
     public PropostaResponseDTO criar(PropostaRequestDTO dto) {
         // exige permissão para criar propostas
-        if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_CRUD)) {
+        if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_CRIAR)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
         }
         validarEmpresaObrigatoria(dto.empresaId());
@@ -250,7 +250,7 @@ public class PropostaService {
     @Transactional
     public PropostaResponseDTO criarComArquivo(Long empresaId, Long negocioId, Long usuarioId, org.springframework.web.multipart.MultipartFile arquivo,
                                                BigDecimal valuation, PropostaComercialRequestDTO configuracao) {
-        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRUD)) {
+        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_CRIAR)) {
             throw new RuntimeException("Usuário não tem permissão para criar propostas");
         }
         validarEmpresaObrigatoria(empresaId);
@@ -377,7 +377,7 @@ public class PropostaService {
 
     public PropostaResponseDTO atualizar(Long id, PropostaRequestDTO dto) {
         // exige permissão para editar propostas
-        if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_CRUD)) {
+        if (dto.usuarioId() == null || !rbacService.temPermissao(dto.usuarioId(), PermissaoCodigo.PROPOSTA_EDITAR)) {
             throw new RuntimeException("Usuário não tem permissão para editar propostas");
         }
         validarEmpresaObrigatoria(dto.empresaId());

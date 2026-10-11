@@ -9,7 +9,10 @@ import java.util.Set;
 
 @Entity
 @Table(name = "contratos")
-public class Contrato {
+public class Contrato extends ItemArquivavelKanban {
+
+    @Override
+    public boolean podeArquivar() { return etapaPreparacao == ContratoPreparacaoEtapa.CONCLUIDO || "APROVADO".equals(status); }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

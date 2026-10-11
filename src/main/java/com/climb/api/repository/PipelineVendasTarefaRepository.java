@@ -13,6 +13,11 @@ import java.util.Set;
 import java.time.LocalDate;
 
 public interface PipelineVendasTarefaRepository extends JpaRepository<PipelineVendasTarefa, Long> {
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("update PipelineVendasTarefa item set item.arquivadoEm = :agora " +
+            "where item.arquivadoEm is null and item.arquivarApos <= :agora and item.status = com.climb.api.model.enums.PipelineTarefaStatus.CONCLUIDA")
+    int arquivarVencidos(@org.springframework.data.repository.query.Param("agora") java.time.LocalDateTime agora);
+
     @EntityGraph(attributePaths = {"negocio", "responsavel", "subtarefas"})
     List<PipelineVendasTarefa> findAllByOrderByPrazoAscCriadoEmDesc();
 

@@ -1,5 +1,7 @@
 package com.climb.api.service;
 
+import com.climb.api.model.dto.KanbanItemArquivadoDTO;
+import com.climb.api.security.ContratoPermissoes;
 import com.climb.api.model.Contrato;
 import com.climb.api.model.ContratoParcela;
 import com.climb.api.model.Empresa;
@@ -95,12 +97,39 @@ public class ContratoService {
         return repository.findAll();
     }
 
+    @Transactional(readOnly = true)
+    public List<KanbanItemArquivadoDTO> listarArquivados(Long usuarioId) {
+        if (!ContratoPermissoes.permite(rbacService, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_LER)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissão para visualizar contratos.");
+        }
+        return repository.findAll().stream().filter(Contrato::estaArquivado)
+                .map(c -> new KanbanItemArquivadoDTO(c.getIdContrato(),
+                        "Criação de Contrato - " + c.getEmpresaNomeFantasia(), "Concluído",
+                        c.getResponsavel() == null ? null : c.getResponsavel().getNomeCompleto(), c.getArquivadoEm(), c)).toList();
+    }
+
+    @Transactional
+    public void alterarArquivamento(Long contratoId, Long usuarioId, boolean arquivado) {
+        exigirAcao(usuarioId, arquivado ? PermissaoCodigo.JURIDICO_CONTRATO_ARQUIVAR : PermissaoCodigo.JURIDICO_CONTRATO_DESARQUIVAR);
+        Contrato contrato = buscarPorId(contratoId);
+        contrato.alterarArquivamento(arquivado, LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo")));
+        repository.save(contrato);
+    }
+
     public Contrato buscarPorId(Long id) {
         return repository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato nao encontrado"));
     }
 
     public List<Contrato> listarPorStatus(String status) {
         return repository.findByStatus(status);
+    }
+
+    @Transactional
+    public Contrato criar(Contrato contrato, Long usuarioId) {
+        exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_CRIAR);
+        if (contrato.getStatus() == null) contrato.setStatus(STATUS_PENDENTE);
+        if (!STATUS_PENDENTE.equals(contrato.getStatus())) exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_APROVAR);
+        return criar(contrato);
     }
 
     public Contrato criar(Contrato contrato) {
@@ -152,7 +181,7 @@ public class ContratoService {
 
     @Transactional
     public Contrato moverPreparacao(Long id, Long usuarioId, ContratoPreparacaoEtapa etapa) {
-        exigirEdicaoPreparacao(usuarioId);
+        exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_MOVIMENTAR);
         Contrato contrato = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
         if (etapa == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione uma coluna do kanban");
@@ -171,7 +200,7 @@ public class ContratoService {
 
     @Transactional
     public RevisaoDocumentoResponseDTO enviarAoCliente(Long id, Long usuarioId, MultipartFile arquivo) {
-        exigirEdicaoPreparacao(usuarioId);
+        exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_ENVIAR_CLIENTE);
         Contrato contrato = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
         if (StringUtils.hasText(contrato.getUrlPdf())) {
@@ -191,9 +220,9 @@ public class ContratoService {
                 buscarUsuarioOuFalhar(usuarioId, "Usuário não encontrado"));
     }
 
-    private void exigirEdicaoPreparacao(Long usuarioId) {
-        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Você não tem permissão para editar ou enviar contratos");
+    private void exigirAcao(Long usuarioId, PermissaoCodigo permissao) {
+        if (!ContratoPermissoes.permite(rbacService, usuarioId, permissao)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Você não tem permissão para realizar esta ação em contratos.");
         }
     }
 
@@ -204,10 +233,14 @@ public class ContratoService {
                                     Long responsavelId,
                                     List<Long> participanteIds,
                                     MultipartFile arquivo) {
-        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+        if (usuarioId == null || !ContratoPermissoes.permite(rbacService, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_CRIAR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para criar contratos");
         }
 
+        // Este fluxo cria o contrato e envia o arquivo ao cliente.
+        if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRIAR)) {
+            exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_ENVIAR_CLIENTE);
+        }
         validarEmpresaObrigatoria(empresaId);
         validarResponsavelObrigatorio(responsavelId);
         validarParticipantesObrigatorios(participanteIds);
@@ -248,6 +281,29 @@ public class ContratoService {
         return salvo;
     }
 
+    @Transactional
+    public Contrato atualizar(Long id, Contrato atualizado, Long usuarioId) {
+        exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_EDITAR);
+        Contrato atual = buscarPorId(id);
+        if (atualizado.getStatus() == null) atualizado.setStatus(atual.getStatus());
+        if (!Objects.equals(atual.getStatus(), atualizado.getStatus())) exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_APROVAR);
+        boolean responsavelInformado = atualizado.getResponsavel() != null && atualizado.getResponsavel().getId() != null;
+        boolean mudaResponsavel = responsavelInformado && (atual.getResponsavel() == null
+                || !Objects.equals(atual.getResponsavel().getId(), atualizado.getResponsavel().getId()));
+        boolean mudaParticipantes = atualizado.getParticipantes() != null
+                && (responsavelInformado || !atualizado.getParticipantes().isEmpty())
+                && !idsParticipantes(atual).equals(idsParticipantes(atualizado));
+        if (mudaResponsavel || mudaParticipantes) {
+            exigirAcao(usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_RESPONSAVEIS_EDITAR);
+        }
+        return atualizar(id, atualizado);
+    }
+
+    private Set<Long> idsParticipantes(Contrato contrato) {
+        if (contrato.getParticipantes() == null) return Set.of();
+        return contrato.getParticipantes().stream().map(Usuario::getId).collect(Collectors.toSet());
+    }
+
     public Contrato atualizar(Long id, Contrato atualizado) {
         Contrato contrato = buscarPorId(id);
         Contrato anterior = snapshot(contrato);
@@ -271,7 +327,7 @@ public class ContratoService {
         if (usuarioId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não autenticado");
         }
-        if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+        if (!ContratoPermissoes.permite(rbacService, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_RESPONSAVEIS_EDITAR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para editar contratos");
         }
 
@@ -326,7 +382,7 @@ public class ContratoService {
         if (usuarioId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não autenticado");
         }
-        if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+        if (!ContratoPermissoes.permite(rbacService, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_APROVAR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para aprovar/rejeitar contratos");
         }
 
@@ -370,7 +426,7 @@ public class ContratoService {
         if (usuarioId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuário não autenticado");
         }
-        if (!rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+        if (!ContratoPermissoes.permite(rbacService, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_DESVINCULAR_PROPOSTA)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para editar contratos");
         }
 
@@ -510,7 +566,7 @@ public class ContratoService {
 
     @Transactional
     public Contrato alterarVencimentoParcela(Long id, Long parcelaId, Long usuarioId, LocalDate vencimento) {
-        if (usuarioId == null || !rbacService.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_CRUD)) {
+        if (usuarioId == null || !ContratoPermissoes.permite(rbacService, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_VENCIMENTOS_EDITAR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário não tem permissão para editar contratos");
         }
         if (vencimento == null) {

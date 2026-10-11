@@ -9,6 +9,11 @@ import org.springframework.data.repository.query.Param;
 import com.climb.api.model.Reuniao;
 
 public interface ReuniaoRepository extends JpaRepository<Reuniao, Long> {
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("update Reuniao item set item.arquivadoEm = :agora " +
+            "where item.arquivadoEm is null and item.arquivarApos <= :agora and item.status in ('REALIZADA', 'REALIZADO', 'CONCLUIDA', 'CONCLUIDO')")
+    int arquivarVencidos(@org.springframework.data.repository.query.Param("agora") java.time.LocalDateTime agora);
+
 
     @Query("select r.idReuniao from Reuniao r where r.convitesNotificados = false and r.organizadorId is not null and r.googleEventId is not null and r.presencial = false and r.status <> 'CANCELADA'")
     List<Long> findIdsConvitesPendentes();

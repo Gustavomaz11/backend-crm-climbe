@@ -1,5 +1,7 @@
 package com.climb.api.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.climb.api.config.PendingPrincipal;
 import com.climb.api.model.OAuth2PendingRegistration;
 import com.climb.api.model.PermissaoCodigo;
+import com.climb.api.model.SolicitacaoAcessoOrigem;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.AlterarCargoRequestDTO;
 import com.climb.api.model.dto.AprovarAcessoRequestDTO;
@@ -115,6 +118,14 @@ public class UsuarioController {
         return solicitacaoAcessoService.listar();
     }
 
+    @DeleteMapping("/solicitacoes/{origem}/{id}")
+    public ResponseEntity<ApiResponse<Void>> excluirSolicitacaoAcesso(
+            @PathVariable SolicitacaoAcessoOrigem origem, @PathVariable Long id) {
+        exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
+        solicitacaoAcessoService.excluir(origem, id, usuarioAutenticadoId());
+        return ResponseEntity.ok(ApiResponse.ok(null, "Solicitação de acesso excluída."));
+    }
+
     @GetMapping("/acessos")
     public List<UsuarioResponseDTO> listarAcessosGerenciaveis() {
         exigirPermissao(PermissaoCodigo.PERMITIR_ACESSO);
@@ -138,12 +149,14 @@ public class UsuarioController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public UsuarioResponseDTO atualizar(@PathVariable Long id,
                                         @RequestBody UsuarioRequestDTO dto) {
         return service.atualizar(id, dto);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public void deletar(@PathVariable Long id) {
         service.deletar(id, usuarioAutenticadoId());
     }

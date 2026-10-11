@@ -1,5 +1,7 @@
 package com.climb.api.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import com.climb.api.model.UsuarioPermissao;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.UsuarioPermissaoDTO;
@@ -20,11 +22,13 @@ public class UsuarioPermissaoController {
     }
 
     @GetMapping
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public ResponseEntity<ApiResponse<List<UsuarioPermissao>>> listar() {
         return ResponseEntity.ok(ApiResponse.ok(service.listar()));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public ResponseEntity<ApiResponse<UsuarioPermissao>> buscarPorId(@PathVariable Long id) {
         try {
             return ResponseEntity.ok(ApiResponse.ok(service.buscarPorId(id)));
@@ -34,11 +38,13 @@ public class UsuarioPermissaoController {
     }
 
     @GetMapping("/usuario/{usuarioId}")
+    @PreAuthorize("@permissaoAcesso.proprioOuAdministrador(#usuarioId)")
     public ResponseEntity<ApiResponse<List<UsuarioPermissao>>> listarPorUsuario(@PathVariable Long usuarioId) {
         return ResponseEntity.ok(ApiResponse.ok(service.listarPorUsuario(usuarioId)));
     }
 
     @PostMapping
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public ResponseEntity<ApiResponse<UsuarioPermissao>> criar(@RequestBody UsuarioPermissaoDTO dto) {
         try {
             return ResponseEntity.status(201).body(ApiResponse.ok(
@@ -51,6 +57,7 @@ public class UsuarioPermissaoController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public ResponseEntity<ApiResponse<Void>> deletar(@PathVariable Long id) {
         try {
             service.deletar(id);

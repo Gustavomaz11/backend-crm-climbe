@@ -4,6 +4,7 @@ import com.climb.api.model.Cargo;
 import com.climb.api.model.OAuthProvider;
 import com.climb.api.model.Permissao;
 import com.climb.api.model.Usuario;
+import com.climb.api.model.SolicitacaoAcessoOrigem;
 import com.climb.api.model.dto.CompletarCadastroRequestDTO;
 import com.climb.api.repository.CargoRepository;
 import com.climb.api.repository.OAuth2PendingRegistrationRepository;
@@ -31,6 +32,7 @@ class GoogleAccessLifecycleIntegrationTest {
     @Autowired private UsuarioService usuarioService;
     @Autowired private GoogleOAuthService googleService;
     @Autowired private AuthenticationService authenticationService;
+    @Autowired private SolicitacaoAcessoService solicitacoes;
     @Autowired private UsuarioRepository usuarios;
     @Autowired private CargoRepository cargos;
     @Autowired private PermissaoRepository permissoes;
@@ -43,8 +45,8 @@ class GoogleAccessLifecycleIntegrationTest {
     void deveGerenciarAprovadoAntesDoPrimeiroAcessoEConcluirOMesmoUsuario() {
         Cargo cargo = salvarCargo("Analista Comercial");
         Cargo novoCargo = salvarCargo("Diretor Comercial");
-        Permissao permissao = salvarPermissao("CONTRATO_CRUD");
-        Permissao novaPermissao = salvarPermissao("PROPOSTA_CRUD");
+        Permissao permissao = salvarPermissao("CONTRATO_LER");
+        Permissao novaPermissao = salvarPermissao("PROPOSTA_LER");
         var pending = pendingService.criarPendingGoogle("google-nathan", "nathan@test.com", "Nathan", null);
         pendingService.aprovar(pending.getId(), null, cargo.getId(), Set.of(permissao.getIdPermissao()));
 
@@ -91,7 +93,7 @@ class GoogleAccessLifecycleIntegrationTest {
         Cargo cargoAtual = salvarCargo("Diretor Comercial");
         Cargo cargoSolicitado = salvarCargo("Analista Comercial");
         Permissao permissaoAtual = salvarPermissao("PERMITIR_ACESSO");
-        Permissao permissaoSolicitada = salvarPermissao("CONTRATO_CRUD");
+        Permissao permissaoSolicitada = salvarPermissao("CONTRATO_LER");
         var pending = pendingService.criarPendingGoogle("google-existente", "existente@test.com", "Existente", null);
         Usuario existente = new Usuario();
         existente.setNomeCompleto("Existente");
@@ -112,6 +114,64 @@ class GoogleAccessLifecycleIntegrationTest {
         assertSame(cargoAtual, existente.getCargo());
         assertEquals(Set.of(permissaoAtual), existente.getPermissoes());
         assertTrue(pending.getConsumido());
+    }
+
+    @Test
+    void deveCancelarGooglePendenteEEsconderPedidoExcluidoMesmoDepoisDeNovaSolicitacao() {
+        var cargo = salvarCargo("Analista");
+        var permissao = salvarPermissao("CONTRATO_LER");
+        var pending = pendingService.criarPendingGoogle("google-excluir", "excluir@test.com", "Excluir", null);
+
+        solicitacoes.excluir(SolicitacaoAcessoOrigem.GOOGLE, pending.getId(), null);
+
+        assertTrue(pendings.findById(pending.getId()).orElseThrow().getConsumido());
+        assertTrue(pendingService.listarPendentes().isEmpty());
+        assertTrue(solicitacoes.listar().isEmpty());
+        assertThrows(RuntimeException.class,
+                () -> pendingService.aprovar(pending.getId(), null, cargo.getId(), Set.of(permissao.getIdPermissao())));
+        var novo = pendingService.criarPendingGoogle("google-excluir", "excluir@test.com", "Excluir", null);
+        assertNotEquals(pending.getId(), novo.getId());
+        assertEquals(1, solicitacoes.listar().size());
+        assertEquals(novo.getId(), solicitacoes.listar().get(0).getId());
+    }
+
+    @Test
+    void devePreservarCadastroGoogleAprovadoDepoisDeExcluirSolicitacao() {
+        var cargo = salvarCargo("Analista");
+        var permissao = salvarPermissao("CONTRATO_LER");
+        var pending = pendingService.criarPendingGoogle("google-aprovado", "aprovado@test.com", "Aprovado", null);
+        pendingService.aprovar(pending.getId(), null, cargo.getId(), Set.of(permissao.getIdPermissao()));
+        var usuario = usuarios.findByEmail(pending.getEmail()).orElseThrow();
+
+        solicitacoes.excluir(SolicitacaoAcessoOrigem.GOOGLE, pending.getId(), null);
+
+        assertTrue(solicitacoes.listar().isEmpty());
+        assertTrue(usuarios.existsById(usuario.getId()));
+        assertEquals("COMPLETAR_CADASTRO", usuario.getSituacao());
+        assertEquals(Set.of(permissao), usuario.getPermissoes());
+        assertFalse(pending.getConsumido());
+        assertEquals(GoogleOAuthService.STATUS_COMPLETAR_CADASTRO,
+                googleService.resolverLoginGoogle("google-aprovado", pending.getEmail(), "Aprovado", null).getStatus());
+    }
+
+    @Test
+    void deveCancelarPedidoManualSemExcluirCadastroENemPermitirLogin() {
+        var usuario = new Usuario();
+        usuario.setNomeCompleto("Manual Pendente");
+        usuario.setEmail("manual-pendente@test.com");
+        usuario.setContato("79999999999");
+        usuario.setSenhaHash(passwordEncoder.encode("senha-segura"));
+        usuario.setSituacao("ESPERANDO_APROVACAO");
+        usuarios.saveAndFlush(usuario);
+        solicitacoes.registrarUsuario(usuario);
+
+        solicitacoes.excluir(SolicitacaoAcessoOrigem.USUARIO, usuario.getId(), null);
+
+        assertTrue(usuarios.existsById(usuario.getId()));
+        assertEquals("INATIVO", usuarios.findById(usuario.getId()).orElseThrow().getSituacao());
+        assertTrue(usuarioService.listarUsuariosPendentes().isEmpty());
+        assertTrue(solicitacoes.listar().isEmpty());
+        assertFalse(authenticationService.autenticar(usuario.getEmail(), "senha-segura").isSuccess());
     }
 
     private Cargo salvarCargo(String nome) {

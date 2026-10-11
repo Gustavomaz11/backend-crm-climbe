@@ -4,6 +4,7 @@ import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.LoginRequestDTO;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.RefreshTokenRequestDTO;
+import com.climb.api.model.dto.RefreshTokenResponseDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 import com.climb.api.service.AuthenticationService;
 import com.climb.api.service.GoogleOAuthService;
@@ -74,16 +75,15 @@ class AuthControllerTest {
         request.setRefreshToken("refresh-token");
 
         when(authenticationService.refreshAccessToken(eq("refresh-token")))
-                .thenReturn(AuthResult.success("novo-access-token"));
-        when(authenticationService.getAccessTokenExpirationTime())
-                .thenReturn(7200000L);
+                .thenReturn(AuthResult.success(new RefreshTokenResponseDTO("novo-access-token", "novo-refresh-token", 7200000L)));
 
         mockMvc.perform(post("/auth/refresh")
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken").value("novo-access-token"))
-                .andExpect(jsonPath("$.data.expiresIn").value(7200000));
+                .andExpect(jsonPath("$.data.expiresIn").value(7200000))
+                .andExpect(jsonPath("$.data.refreshToken").value("novo-refresh-token"));
     }
 
     private LoginResponseDTO criarLoginResponse() {

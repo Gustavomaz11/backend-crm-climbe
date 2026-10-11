@@ -1,5 +1,7 @@
 package com.climb.api.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import com.climb.api.model.Notificacao;
 import com.climb.api.model.dto.NotificacaoRequestDTO;
 import com.climb.api.model.dto.NotificacaoResponseDTO;
@@ -23,6 +25,7 @@ public class NotificacaoController {
     }
 
     @GetMapping
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public List<NotificacaoResponseDTO> listar() {
         return service.listarDTO();
     }
@@ -44,37 +47,44 @@ public class NotificacaoController {
     }
 
     @GetMapping("/usuario/{usuarioId}")
+    @PreAuthorize("@permissaoAcesso.proprioOuAdministrador(#usuarioId)")
     public List<NotificacaoResponseDTO> listarPorUsuario(@PathVariable Long usuarioId) {
         return service.listarPorUsuario(usuarioId);
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@notificacaoAcesso.podeAcessar(#id)")
     public NotificacaoResponseDTO buscarPorId(@PathVariable Long id) {
         return service.buscarPorIdDTO(id);
     }
 
     @PostMapping
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public NotificacaoResponseDTO criar(@Valid @RequestBody NotificacaoRequestDTO notificacao) {
         return service.criar(notificacao);
     }
 
     @PostMapping("/usuario/{usuarioId}")
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public NotificacaoResponseDTO criarParaUsuario(@PathVariable Long usuarioId,
                                                    @RequestBody NotificacaoRequestDTO notificacao) {
         return service.criarParaUsuario(usuarioId, notificacao);
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public Notificacao atualizarLegado(@PathVariable Long id, @RequestBody Notificacao atualizada) {
         return service.atualizar(id, atualizada);
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('PERMITIR_ACESSO')")
     public NotificacaoResponseDTO atualizar(@PathVariable Long id, @Valid @RequestBody NotificacaoRequestDTO atualizada) {
         return service.atualizar(id, atualizada);
     }
 
     @PatchMapping("/{id}/lida")
+    @PreAuthorize("@notificacaoAcesso.podeAcessar(#id)")
     public NotificacaoResponseDTO marcarComoLida(@PathVariable Long id) {
         return service.marcarComoLida(id);
     }
@@ -91,6 +101,7 @@ public class NotificacaoController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("@notificacaoAcesso.podeAcessar(#id)")
     public void deletar(@PathVariable Long id) {
         service.deletar(id);
     }

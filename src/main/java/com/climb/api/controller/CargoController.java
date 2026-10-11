@@ -36,19 +36,19 @@ public class CargoController {
 
     @PostMapping
     public Cargo criar(@RequestBody Cargo cargo) {
-        exigirPermissao(PermissaoCodigo.CARGO_CRUD, "Sem permissao para gerenciar cargos");
+        exigirPermissao(PermissaoCodigo.CARGO_CRIAR, "Sem permissao para gerenciar cargos");
         return service.criar(cargo);
     }
 
     @PutMapping("/{id}")
     public Cargo atualizar(@PathVariable Long id, @RequestBody Cargo atualizado) {
-        exigirPermissao(PermissaoCodigo.CARGO_CRUD, "Sem permissao para gerenciar cargos");
+        exigirPermissao(PermissaoCodigo.CARGO_EDITAR, "Sem permissao para gerenciar cargos");
         return service.atualizar(id, atualizado);
     }
 
     @DeleteMapping("/{id}")
     public void deletar(@PathVariable Long id) {
-        exigirPermissao(PermissaoCodigo.CARGO_CRUD, "Sem permissao para gerenciar cargos");
+        exigirPermissao(PermissaoCodigo.CARGO_DELETAR, "Sem permissao para gerenciar cargos");
         service.deletar(id);
     }
 

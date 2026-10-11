@@ -22,11 +22,11 @@ class RbacServiceTest {
     void deveCarregarPermissoesComUmaUnicaConsultaEscalar() {
         when(usuarioRepository.findCodigosPermissoesById(7L)).thenReturn(List.of(
                 PermissaoCodigo.COMERCIAL.name(),
-                PermissaoCodigo.PROPOSTA_CRUD.name(),
+                PermissaoCodigo.PROPOSTA_LER.name(),
                 "CODIGO_LEGADO_INVALIDO"));
 
         assertEquals(
-                java.util.Set.of(PermissaoCodigo.COMERCIAL, PermissaoCodigo.PROPOSTA_CRUD),
+                java.util.Set.of(PermissaoCodigo.COMERCIAL, PermissaoCodigo.PROPOSTA_LER),
                 service.getPermissoesDoUsuario(7L));
         verify(usuarioRepository).findCodigosPermissoesById(7L);
     }

@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -38,6 +39,7 @@ public class RelatorioController {
             @ApiResponse(responseCode = "500", description = "Erro ao salvar o PDF do relatório")
     })
     @PostMapping(value = "/upload-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_CRIAR')")
     public ResponseEntity<RelatorioResponseDTO> uploadPdf(
             @RequestParam("contratoId") Long contratoId,
             @RequestParam("file") MultipartFile file
@@ -48,6 +50,7 @@ public class RelatorioController {
     @Operation(summary = "Listar todos os relatórios")
     @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso")
     @GetMapping
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_LER')")
     public ResponseEntity<List<RelatorioResponseDTO>> listar() {
         return ResponseEntity.ok(service.listar());
     }
@@ -55,6 +58,7 @@ public class RelatorioController {
     @Operation(summary = "Listar relatórios por contrato")
     @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso")
     @GetMapping("/contrato/{contratoId}")
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_LER')")
     public ResponseEntity<List<RelatorioResponseDTO>> listarPorContrato(
             @PathVariable Long contratoId
     ) {
@@ -67,6 +71,7 @@ public class RelatorioController {
             @ApiResponse(responseCode = "404", description = "Relatório não encontrado")
     })
     @GetMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_LER')")
     public ResponseEntity<RelatorioResponseDTO> buscarPorId(@PathVariable Long id) {
         return ResponseEntity.ok(service.buscarPorIdResponse(id));
     }
@@ -82,6 +87,7 @@ public class RelatorioController {
             @ApiResponse(responseCode = "500", description = "Erro ao salvar o PDF do relatório")
     })
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_EDITAR')")
     public ResponseEntity<RelatorioResponseDTO> atualizar(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file
@@ -99,6 +105,7 @@ public class RelatorioController {
             @ApiResponse(responseCode = "500", description = "Erro ao carregar o PDF anexado")
     })
     @GetMapping(value = "/{id}/visualizar-pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_LER')")
     public ResponseEntity<byte[]> visualizarPdf(@PathVariable Long id) {
         RelatorioPdfDownloadDTO pdf = service.obterPdfInline(id);
         return ResponseEntity.ok()
@@ -117,6 +124,7 @@ public class RelatorioController {
             @ApiResponse(responseCode = "500", description = "Erro ao carregar o PDF anexado")
     })
     @GetMapping("/{id}/download")
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_LER')")
     public ResponseEntity<byte[]> baixarPdf(@PathVariable Long id) {
         RelatorioPdfDownloadDTO pdf = service.obterPdfParaDownload(id);
         return ResponseEntity.ok()
@@ -131,6 +139,7 @@ public class RelatorioController {
             @ApiResponse(responseCode = "404", description = "Relatório não encontrado")
     })
     @DeleteMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('RELATORIO_DELETAR')")
     public ResponseEntity<Void> deletar(@PathVariable Long id) {
         service.deletar(id);
         return ResponseEntity.noContent().build();

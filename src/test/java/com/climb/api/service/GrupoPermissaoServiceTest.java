@@ -28,7 +28,7 @@ class GrupoPermissaoServiceTest {
     void deveCriarGrupoComAsPermissoesSelecionadas() {
         Permissao permissao = new Permissao();
         permissao.setIdPermissao(3L);
-        permissao.setCodigo("CONTRATO_CRUD");
+        permissao.setCodigo("CONTRATO_LER");
         when(permissaoRepository.findAllById(Set.of(3L))).thenReturn(List.of(permissao));
         when(repository.save(any(GrupoPermissao.class))).thenAnswer(invocation -> {
             GrupoPermissao grupo = invocation.getArgument(0);
@@ -49,10 +49,10 @@ class GrupoPermissaoServiceTest {
     void deveEditarNomeDescricaoEPermissoesDoGrupo() {
         Permissao permissaoAtual = new Permissao();
         permissaoAtual.setIdPermissao(3L);
-        permissaoAtual.setCodigo("CONTRATO_CRUD");
+        permissaoAtual.setCodigo("CONTRATO_LER");
         Permissao novaPermissao = new Permissao();
         novaPermissao.setIdPermissao(4L);
-        novaPermissao.setCodigo("PROPOSTA_CRUD");
+        novaPermissao.setCodigo("PROPOSTA_LER");
 
         GrupoPermissao grupo = new GrupoPermissao();
         grupo.setId(9L);

@@ -85,6 +85,7 @@ public class PipelineVendasService {
         IndicadoresProposta indicadores = buscarIndicadoresProposta(negocios);
         Map<Long, List<PipelineNegocioResponseDTO>> negociosPorEtapa = negocios
                 .stream()
+                .filter(negocio -> !negocio.estaArquivado())
                 .map(negocio -> toResponse(negocio, indicadores))
                 .collect(Collectors.groupingBy(PipelineNegocioResponseDTO::etapaId));
 
@@ -623,6 +624,24 @@ public class PipelineVendasService {
     }
     @Transactional
     public PipelineNegocioResponseDTO buscar(Long id, Long usuario) { exigirPermissao(usuario, PermissaoCodigo.COMERCIAL); return toResponse(buscarNegocio(id)); }
+
+    @Transactional(readOnly = true)
+    public List<KanbanItemArquivadoDTO> listarArquivados(Long usuarioId, Long funilId) {
+        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL);
+        PipelineVendasFunil funil = buscarFunilAtivo(funilId);
+        return negocioRepository.findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(funil.getIdFunil()).stream()
+                .filter(PipelineVendasNegocio::estaArquivado)
+                .map(n -> new KanbanItemArquivadoDTO(n.getIdNegocio(), n.getNomeEmpresa(), n.getEtapa().getNome(),
+                        n.getResponsavel().getNomeCompleto(), n.getArquivadoEm(), toResponse(n))).toList();
+    }
+
+    @Transactional
+    public void alterarArquivamento(Long negocioId, Long usuarioId, boolean arquivado) {
+        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_EDITAR);
+        PipelineVendasNegocio negocio = buscarNegocio(negocioId);
+        negocio.alterarArquivamento(arquivado, LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo")));
+        negocioRepository.save(negocio);
+    }
     @Transactional
     public List<PipelineNegocioResponseDTO> criarLote(Long usuario, List<PipelineNegocioRequestDTO> dados) {
         exigirPermissao(usuario, PermissaoCodigo.COMERCIAL_CRIAR);

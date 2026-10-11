@@ -1,6 +1,8 @@
 package com.climb.api.controller;
 
 import com.climb.api.model.dto.UsuarioRequestDTO;
+import com.climb.api.model.SolicitacaoAcessoOrigem;
+import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.service.AuthenticationService;
 import com.climb.api.service.OAuth2PendingService;
 import com.climb.api.service.RbacService;
@@ -25,8 +27,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -157,6 +161,26 @@ class UsuarioControllerTest {
         SecurityContextHolder.getContext().setAuthentication(authentication);
         when(rbacService.temPermissao(id, com.climb.api.model.PermissaoCodigo.PERMITIR_ACESSO))
                 .thenReturn(true);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(SolicitacaoAcessoOrigem.class)
+    void deveExcluirSolicitacaoDaOrigemCorretaSemDeletarUsuario(SolicitacaoAcessoOrigem origem) throws Exception {
+        autenticarAdministrador(3L);
+        mockMvc.perform(delete("/usuarios/solicitacoes/{origem}/{id}", origem, 7L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+        verify(solicitacaoAcessoService).excluir(origem, 7L, 3L);
+        verifyNoInteractions(usuarioService, pendingService);
+    }
+
+    @Test
+    void deveNegarExclusaoParaUsuarioSemPermissaoDeGerenciarAcessos() throws Exception {
+        autenticarAdministrador(3L);
+        when(rbacService.temPermissao(3L, PermissaoCodigo.PERMITIR_ACESSO)).thenReturn(false);
+        mockMvc.perform(delete("/usuarios/solicitacoes/USUARIO/7"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(solicitacaoAcessoService, usuarioService, pendingService);
     }
 
     private UsuarioRequestDTO request(String email) {

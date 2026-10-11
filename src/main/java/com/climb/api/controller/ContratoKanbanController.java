@@ -1,5 +1,9 @@
 package com.climb.api.controller;
 
+import java.util.List;
+import jakarta.validation.Valid;
+import com.climb.api.model.dto.KanbanArquivamentoRequestDTO;
+import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.ContratoKanbanBoardResponseDTO;
 import com.climb.api.model.dto.ContratoKanbanMoverTaskRequestDTO;
@@ -126,6 +130,17 @@ public class ContratoKanbanController {
         return ResponseEntity.ok(ApiResponse.ok(
                 service.removerSubtarefa(contratoId, taskId, subtarefaId, getAuthenticatedUserId())
         ));
+    }
+
+    @GetMapping("/arquivados")
+    public List<KanbanItemArquivadoDTO> listarArquivados(@PathVariable Long contratoId) {
+        return service.listarArquivados(contratoId, getAuthenticatedUserId());
+    }
+
+    @PatchMapping("/tasks/{taskId}/arquivamento")
+    public void alterarArquivamento(@PathVariable Long contratoId, @PathVariable Long taskId,
+            @Valid @RequestBody KanbanArquivamentoRequestDTO dto) {
+        service.alterarArquivamento(contratoId, taskId, getAuthenticatedUserId(), dto.arquivado());
     }
 
     private Long getAuthenticatedUserId() {

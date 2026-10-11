@@ -25,6 +25,7 @@ public class ReuniaoListItemDTO {
     private Boolean presencial;
     private String pauta;
     private String status;
+    private java.time.LocalDateTime arquivadoEm;
     private String googleEventId;
     private String linkMeet;
     /** true quando o Google envia só {@code start.date} (evento de dia inteiro). */
@@ -46,6 +47,7 @@ public class ReuniaoListItemDTO {
         d.setPresencial(r.getPresencial());
         d.setPauta(r.getPauta());
         d.setStatus(r.getStatus());
+        d.setArquivadoEm(r.getArquivadoEm());
         d.setGoogleEventId(r.getGoogleEventId());
         d.setLinkMeet(r.getLinkMeet());
         d.setDiaInteiro(false);

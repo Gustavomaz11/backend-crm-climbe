@@ -1,5 +1,7 @@
 package com.climb.api.service;
 
+import com.climb.api.security.ContratoPermissoes;
+
 import com.climb.api.model.*;
 import com.climb.api.model.dto.*;
 import com.climb.api.model.enums.PropostaStatus;
@@ -233,7 +235,7 @@ public class RevisaoDocumentoService {
     @Transactional
     public RevisaoDocumentoResponseDTO novaVersao(Long revisaoId, Long usuarioId, MultipartFile arquivo) {
         RevisaoDocumento revisao = buscarPorId(revisaoId);
-        validarPermissao(revisao, usuarioId);
+        validarPermissao(revisao, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_ENVIAR_NOVA_VERSAO);
         previewService.validarArquivoRevisavel(arquivo);
         ArquivoUploadResponseDTO upload = storageService.salvar(arquivo,
                 "revisoes/" + revisao.getTipo().name().toLowerCase(Locale.ROOT) + "-" + revisao.getReferenciaId());
@@ -257,7 +259,7 @@ public class RevisaoDocumentoService {
     @Transactional
     public RevisaoDocumentoResponseDTO reenviar(Long revisaoId, Long usuarioId) {
         RevisaoDocumento revisao = buscarPorId(revisaoId);
-        validarPermissao(revisao, usuarioId);
+        validarPermissao(revisao, usuarioId, PermissaoCodigo.JURIDICO_CONTRATO_REENVIAR);
         atualizarDestinatario(revisao);
         renovarAcesso(revisao);
         enviarAoCliente(revisao, revisao.getVersaoAtual() > 1);
@@ -607,10 +609,11 @@ public class RevisaoDocumentoService {
         }
     }
 
-    private void validarPermissao(RevisaoDocumento revisao, Long usuarioId) {
-        PermissaoCodigo permissao = revisao.getTipo() == RevisaoDocumentoTipo.PROPOSTA
-                ? PermissaoCodigo.PROPOSTA_CRUD : PermissaoCodigo.CONTRATO_CRUD;
-        if (usuarioId == null || !rbacService.temPermissao(usuarioId, permissao)) {
+    private void validarPermissao(RevisaoDocumento revisao, Long usuarioId, PermissaoCodigo acaoContrato) {
+        boolean permitido = usuarioId != null && (revisao.getTipo() == RevisaoDocumentoTipo.PROPOSTA
+                ? rbacService.temPermissao(usuarioId, PermissaoCodigo.PROPOSTA_EDITAR)
+                : ContratoPermissoes.permite(rbacService, usuarioId, acaoContrato));
+        if (!permitido) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário sem permissão para alterar esta revisão");
         }
     }

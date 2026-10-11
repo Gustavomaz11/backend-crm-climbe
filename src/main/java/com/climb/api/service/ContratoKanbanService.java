@@ -1,5 +1,7 @@
 package com.climb.api.service;
 
+import java.time.LocalDateTime;
+import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import com.climb.api.model.Contrato;
 import com.climb.api.model.ContratoKanbanRaia;
 import com.climb.api.model.ContratoKanbanSubtarefa;
@@ -76,6 +78,27 @@ public class ContratoKanbanService {
         return toBoardResponse(contrato, usuarioId);
     }
 
+    @Transactional(readOnly = true)
+    public List<KanbanItemArquivadoDTO> listarArquivados(Long contratoId, Long usuarioId) {
+        Contrato contrato = buscarContrato(contratoId);
+        equipeService.exigirAcesso(contrato, usuarioId, false);
+        return taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId).stream()
+                .filter(ContratoKanbanTask::estaArquivado)
+                .map(task -> new KanbanItemArquivadoDTO(task.getIdTask(), task.getTitulo(),
+                        task.getRaia().getTitulo(), task.getResponsaveisEfetivos().stream().map(Usuario::getNomeCompleto)
+                        .collect(Collectors.joining(", ")), task.getArquivadoEm(),
+                        toTaskResponse(task, subtarefaRepository.findByTask_IdTaskOrderByPosicaoAscIdSubtarefaAsc(task.getIdTask()))))
+                .toList();
+    }
+
+    @Transactional
+    public void alterarArquivamento(Long contratoId, Long taskId, Long usuarioId, boolean arquivado) {
+        exigirEdicaoContrato(contratoId, usuarioId);
+        ContratoKanbanTask task = buscarTask(contratoId, taskId);
+        task.alterarArquivamento(arquivado, LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo")));
+        taskRepository.save(task);
+    }
+
     @Transactional
     public ContratoKanbanBoardResponseDTO criarRaia(Long contratoId, Long usuarioId, ContratoKanbanRaiaRequestDTO dto) {
         Contrato contrato = exigirEdicaoContrato(contratoId, usuarioId);
@@ -118,6 +141,11 @@ public class ContratoKanbanService {
     public ContratoKanbanBoardResponseDTO removerRaia(Long contratoId, Long raiaId, Long usuarioId) {
         Contrato contrato = exigirEdicaoContrato(contratoId, usuarioId);
         ContratoKanbanRaia raia = buscarRaia(contratoId, raiaId);
+        if (taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId).stream()
+                .anyMatch(task -> task.estaArquivado() && Objects.equals(task.getRaia().getIdRaia(), raiaId))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Esta coluna contém tarefas arquivadas. Desarquive e mova essas tarefas antes de excluir a coluna.");
+        }
         taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId).stream()
                 .filter(t -> Objects.equals(t.getRaia().getIdRaia(), raiaId)).forEach(this::encerrarAtuacao);
         raiaRepository.delete(raia);
@@ -317,7 +345,8 @@ public class ContratoKanbanService {
 
     private ContratoKanbanBoardResponseDTO toBoardResponse(Contrato contrato, Long usuarioId) {
         List<ContratoKanbanRaia> raias = raiaRepository.findByContrato_IdContratoOrderByPosicaoAscIdRaiaAsc(contrato.getIdContrato());
-        List<ContratoKanbanTask> tasks = taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contrato.getIdContrato());
+        List<ContratoKanbanTask> tasks = taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contrato.getIdContrato())
+                .stream().filter(task -> !task.estaArquivado()).toList();
         Set<Long> taskIds = tasks.stream().map(ContratoKanbanTask::getIdTask).collect(Collectors.toSet());
         List<ContratoKanbanSubtarefa> subtarefas = taskIds.isEmpty()
                 ? List.of()

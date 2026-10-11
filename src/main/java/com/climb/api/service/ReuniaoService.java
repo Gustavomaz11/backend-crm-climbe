@@ -1,5 +1,7 @@
 package com.climb.api.service;
 
+import java.time.LocalDateTime;
+import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -116,6 +118,21 @@ public class ReuniaoService {
                 .orElseThrow(() -> new RuntimeException("Reuniao nao encontrada"));
         exigirParticipante(reuniao.getIdReuniao(), usuarioId);
         return reuniao;
+    }
+
+    @Transactional(readOnly = true)
+    public List<KanbanItemArquivadoDTO> listarArquivados(Long usuarioId) {
+        exigirUsuarioAutenticado(usuarioId);
+        return repository.findVisiveisParaUsuario(usuarioId).stream().filter(Reuniao::estaArquivado)
+                .map(r -> new KanbanItemArquivadoDTO(r.getIdReuniao(), r.getTitulo(),
+                        "Realizado", null, r.getArquivadoEm(), ReuniaoListItemDTO.fromEntity(r))).toList();
+    }
+
+    @Transactional
+    public void alterarArquivamento(Long reuniaoId, Long usuarioId, boolean arquivado) {
+        Reuniao reuniao = buscarPorId(reuniaoId, usuarioId);
+        reuniao.alterarArquivamento(arquivado, LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo")));
+        repository.save(reuniao);
     }
 
     public List<Reuniao> listarPorEmpresa(Long empresaId, Long usuarioId) {

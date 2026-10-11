@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,5 +43,11 @@ public class ExceptionHandlerController {
         return ResponseEntity
                 .status(exception.getStatusCode())
                 .body(ApiResponse.error(message));
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentUpdate(ObjectOptimisticLockingFailureException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(
+                "Esses dados foram alterados por outra pessoa. Atualize a página e tente novamente."));
     }
 }

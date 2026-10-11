@@ -11,6 +11,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineVendasNegocio, Long> {
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("update PipelineVendasNegocio item set item.arquivadoEm = :agora " +
+            "where item.arquivadoEm is null and item.arquivarApos <= :agora and item.resultado in (com.climb.api.model.enums.PipelineVendasResultado.GANHO, com.climb.api.model.enums.PipelineVendasResultado.PERDIDO)")
+    int arquivarVencidos(@org.springframework.data.repository.query.Param("agora") java.time.LocalDateTime agora);
+
     @EntityGraph(attributePaths = {"funil", "etapa", "responsavel", "empresa", "contrato", "motivoPerda", "servicosInteresse"})
     List<PipelineVendasNegocio> findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(Long funilId);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)

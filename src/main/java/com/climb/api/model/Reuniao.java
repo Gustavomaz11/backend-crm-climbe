@@ -6,7 +6,13 @@ import java.time.LocalTime;
 
 @Entity
 @Table(name = "reunioes")
-public class Reuniao {
+public class Reuniao extends ItemArquivavelKanban {
+
+    @Override
+    public boolean podeArquivar() {
+        return "REALIZADA".equals(status) || "REALIZADO".equals(status)
+                || "CONCLUIDA".equals(status) || "CONCLUIDO".equals(status);
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -31,6 +31,17 @@ public class PipelineAtividadesController {
         this.authenticatedUser = authenticatedUser;
     }
 
+    @GetMapping("/tarefas/arquivados")
+    public List<KanbanItemArquivadoDTO> listarArquivados(@RequestParam(required = false) Long negocioId, @RequestParam(required = false) Long funilId) {
+        return tarefaService.listarArquivados(authenticatedUser.getUserId(), negocioId, funilId);
+    }
+
+    @PatchMapping("/tarefas/{tarefaId}/arquivamento")
+    public void alterarArquivamento(@PathVariable Long tarefaId,
+            @Valid @RequestBody KanbanArquivamentoRequestDTO dto) {
+        tarefaService.alterarArquivamento(tarefaId, authenticatedUser.getUserId(), dto.arquivado());
+    }
+
     @GetMapping("/tarefas")
     public ResponseEntity<ApiResponse<List<PipelineTarefaResponseDTO>>> listarTarefas(
             @RequestParam(required = false) PipelineTarefaVisao visao,

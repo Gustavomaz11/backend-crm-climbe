@@ -4,6 +4,7 @@ import com.climb.api.mapper.UsuarioMapper;
 import com.climb.api.model.AuthStatus;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.AuthResult;
+import com.climb.api.model.dto.RefreshTokenResponseDTO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -22,6 +23,7 @@ class AuthenticationServiceTest {
     @Mock private JwtUtil jwtUtil;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private UsuarioMapper usuarioMapper;
+    @Mock private SessaoAutenticacaoService sessoes;
 
     @Test
     void naoDeveRenovarTokenDeUsuarioRevogado() {
@@ -35,10 +37,10 @@ class AuthenticationServiceTest {
         when(usuarioService.buscarPorId(7L)).thenReturn(usuario);
 
         AuthenticationService service = new AuthenticationService(
-                usuarioService, jwtUtil, passwordEncoder, usuarioMapper);
-        AuthResult<String> resultado = service.refreshAccessToken("refresh-token");
+                usuarioService, jwtUtil, passwordEncoder, usuarioMapper, sessoes);
+        AuthResult<RefreshTokenResponseDTO> resultado = service.refreshAccessToken("refresh-token");
 
         assertEquals(AuthStatus.INATIVO, resultado.status());
-        verify(jwtUtil, never()).generateAccessToken(7L, usuario.getEmail());
+        verify(sessoes, never()).renovar("refresh-token");
     }
 }

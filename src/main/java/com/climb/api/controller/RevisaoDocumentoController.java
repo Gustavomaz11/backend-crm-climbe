@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.concurrent.TimeUnit;
@@ -68,6 +69,7 @@ public class RevisaoDocumentoController {
     }
 
     @GetMapping("/{tipo}/{referenciaId}")
+    @PreAuthorize("@permissaoAcesso.lerDocumentoRevisao(#tipo, #referenciaId)")
     public ResponseEntity<ApiResponse<RevisaoDocumentoResponseDTO>> buscarInterna(
             @PathVariable RevisaoDocumentoTipo tipo,
             @PathVariable Long referenciaId) {
@@ -75,6 +77,7 @@ public class RevisaoDocumentoController {
     }
 
     @GetMapping(value = "/{id}/paginas/{versao}/{pagina}", produces = MediaType.IMAGE_PNG_VALUE)
+    @PreAuthorize("@permissaoAcesso.lerRevisao(#id)")
     public ResponseEntity<byte[]> paginaInterna(@PathVariable Long id,
                                                 @PathVariable int versao,
                                                 @PathVariable int pagina) {

@@ -42,35 +42,35 @@ public class GrupoCargoController {
 
     @PostMapping
     public GrupoCargo criar(@Valid @RequestBody GrupoCargoRequestDTO request) {
-        exigirPermissao();
+        exigirPermissao(PermissaoCodigo.CARGO_CRIAR);
         return service.criar(request);
     }
 
     @PutMapping("/{id}")
     public GrupoCargo atualizar(@PathVariable Long id,
                                 @Valid @RequestBody GrupoCargoRequestDTO request) {
-        exigirPermissao();
+        exigirPermissao(PermissaoCodigo.CARGO_EDITAR);
         return service.atualizar(id, request);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void desativar(@PathVariable Long id) {
-        exigirPermissao();
+        exigirPermissao(PermissaoCodigo.CARGO_DELETAR);
         service.desativar(id);
     }
 
     @PutMapping("/cargos/{cargoId}")
     public Cargo vincularCargo(@PathVariable Long cargoId,
                                @RequestBody CargoGrupoVinculoRequestDTO request) {
-        exigirPermissao();
+        exigirPermissao(PermissaoCodigo.CARGO_EDITAR);
         return service.vincularCargo(cargoId, request.grupoId());
     }
 
-    private void exigirPermissao() {
+    private void exigirPermissao(PermissaoCodigo permissao) {
         Object details = SecurityContextHolder.getContext().getAuthentication().getDetails();
         if (!(details instanceof Number id)
-                || !rbacService.temPermissao(id.longValue(), PermissaoCodigo.CARGO_CRUD)) {
+                || !rbacService.temPermissao(id.longValue(), permissao)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem permissao para gerenciar grupos de cargos");
         }
     }

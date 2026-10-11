@@ -14,7 +14,10 @@ import java.util.Set;
 
 @Entity
 @Table(name = "pipeline_vendas_tarefas")
-public class PipelineVendasTarefa {
+public class PipelineVendasTarefa extends ItemArquivavelKanban {
+
+    @Override
+    public boolean podeArquivar() { return status == PipelineTarefaStatus.CONCLUIDA; }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -36,6 +36,7 @@ public class DocumentoController {
     @Operation(summary = "Listar todos os documentos")
     @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso")
     @GetMapping
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_LER')")
     public ResponseEntity<List<DocumentoResponseDTO>> listar() {
         List<DocumentoResponseDTO> lista = documentoService.listar();
         return ResponseEntity.ok(lista);
@@ -47,6 +48,7 @@ public class DocumentoController {
             @ApiResponse(responseCode = "404", description = "Empresa não encontrada")
     })
     @GetMapping("/empresa/{empresaId}")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_LER')")
     public ResponseEntity<List<DocumentoResponseDTO>> listarPorEmpresa(@PathVariable Long empresaId) {
         List<DocumentoResponseDTO> lista = documentoService.listarPorEmpresa(empresaId);
         return ResponseEntity.ok(lista);
@@ -58,6 +60,7 @@ public class DocumentoController {
             @ApiResponse(responseCode = "404", description = "Documento não encontrado")
     })
     @GetMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_LER')")
     public ResponseEntity<DocumentoResponseDTO> buscarPorId(@PathVariable Long id) {
         DocumentoResponseDTO documento = documentoService.buscarPorId(id);
         return ResponseEntity.ok(documento);
@@ -78,6 +81,7 @@ public class DocumentoController {
             @ApiResponse(responseCode = "404", description = "Empresa ou analista não encontrado")
     })
     @PostMapping("/solicitar")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_CRIAR')")
     public ResponseEntity<DocumentoResponseDTO> solicitar(@Valid @RequestBody DocumentoSolicitacaoRequestDTO dto) {
         DocumentoResponseDTO criado = documentoService.solicitar(dto, getAuthenticatedUserId());
         URI location = ServletUriComponentsBuilder
@@ -89,6 +93,7 @@ public class DocumentoController {
     }
 
     @PostMapping("/solicitar-lote")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_CRIAR')")
     public ResponseEntity<DocumentoLoteResponseDTO> solicitarLote(@Valid @RequestBody DocumentoLoteRequestDTO dto) {
         return ResponseEntity.status(201).body(documentoService.solicitarLote(dto, getAuthenticatedUserId()));
     }
@@ -107,6 +112,7 @@ public class DocumentoController {
             @ApiResponse(responseCode = "404", description = "Documento não encontrado")
     })
     @PatchMapping("/{id}/validar")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_EDITAR')")
     public ResponseEntity<DocumentoResponseDTO> validar(
             @PathVariable Long id,
             @Valid @RequestBody DocumentoValidacaoRequestDTO dto) {
@@ -123,6 +129,7 @@ public class DocumentoController {
             @ApiResponse(responseCode = "404", description = "Documento não encontrado")
     })
     @PatchMapping("/{id}/reenviar")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_EDITAR')")
     public ResponseEntity<DocumentoResponseDTO> reenviarSolicitacao(@PathVariable Long id) {
         DocumentoResponseDTO atualizado = documentoService.reenviarSolicitacao(id);
         return ResponseEntity.ok(atualizado);
@@ -130,6 +137,7 @@ public class DocumentoController {
 
     @Operation(summary = "Gerar URL temporária de download do documento")
     @GetMapping("/{id}/download-url")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_LER')")
     public ResponseEntity<String> gerarUrlDownload(@PathVariable Long id) {
         return ResponseEntity.ok(documentoService.gerarUrlDownload(id));
     }
@@ -140,6 +148,7 @@ public class DocumentoController {
             @ApiResponse(responseCode = "404", description = "Documento não encontrado")
     })
     @DeleteMapping("/{id}")
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_DELETAR')")
     public ResponseEntity<Void> deletar(@PathVariable Long id) {
         documentoService.deletar(id);
         return ResponseEntity.noContent().build();

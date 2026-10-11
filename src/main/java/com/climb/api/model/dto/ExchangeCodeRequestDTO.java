@@ -4,5 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record ExchangeCodeRequestDTO(
     @NotBlank(message = "Code é obrigatório")
-    String code
+    String code,
+    @NotBlank(message = "A autenticação deve ser iniciada neste navegador")
+    String codeVerifier
 ) {}

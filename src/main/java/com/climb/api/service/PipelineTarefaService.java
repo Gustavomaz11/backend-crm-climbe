@@ -54,6 +54,12 @@ public class PipelineTarefaService {
                                                   Long negocioId,
                                                   Long funilId,
                                                   String tipo) {
+        return listarEntidades(usuarioId, visao, responsavelId, negocioId, funilId, tipo).stream()
+                .filter(tarefa -> !tarefa.estaArquivado()).map(this::toResponse).toList();
+    }
+
+    private List<PipelineVendasTarefa> listarEntidades(Long usuarioId, PipelineTarefaVisao visao,
+            Long responsavelId, Long negocioId, Long funilId, String tipo) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_VISUALIZAR);
         PipelineTarefaVisao visaoEfetiva = visao == null ? PipelineTarefaVisao.TODAS : visao;
         boolean podeVisualizarTodas = podeVisualizarTodasAsTarefas(usuarioId);
@@ -76,8 +82,24 @@ public class PipelineTarefaService {
                         visaoEfetiva == PipelineTarefaVisao.CONCLUIDAS,
                         hoje, todosResponsaveis, responsaveisVisiveis, negocioId, funilId, normalizar(tipo)).stream()
                 .distinct()
-                .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<KanbanItemArquivadoDTO> listarArquivados(Long usuarioId, Long negocioId, Long funilId) {
+        return listarEntidades(usuarioId, PipelineTarefaVisao.TODAS, null, negocioId, funilId, null).stream()
+                .filter(PipelineVendasTarefa::estaArquivado)
+                .map(t -> new KanbanItemArquivadoDTO(t.getIdTarefa(), t.getTitulo(), "Concluída",
+                        t.getResponsaveisEfetivos().stream().map(Usuario::getNomeCompleto).collect(java.util.stream.Collectors.joining(", ")),
+                        t.getArquivadoEm(), toResponse(t))).toList();
+    }
+
+    @Transactional
+    public void alterarArquivamento(Long tarefaId, Long usuarioId, boolean arquivado) {
+        exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_TAREFA_EDITAR);
+        PipelineVendasTarefa tarefa = exigirTarefaVisivel(tarefaId, usuarioId);
+        tarefa.alterarArquivamento(arquivado, LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo")));
+        repository.save(tarefa);
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +113,7 @@ public class PipelineTarefaService {
                         cargoHierarquiaAcessoService.buscarUsuariosVisiveis(usuarioId), negocioId, null, null
                 );
         return tarefas.stream()
+                .filter(tarefa -> !tarefa.estaArquivado())
                 .distinct()
                 .map(this::toResponse)
                 .toList();

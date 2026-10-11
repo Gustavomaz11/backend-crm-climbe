@@ -11,7 +11,10 @@ import java.util.List;
 
 @Entity
 @Table(name = "pipeline_vendas_negocios")
-public class PipelineVendasNegocio {
+public class PipelineVendasNegocio extends ItemArquivavelKanban {
+
+    @Override
+    public boolean podeArquivar() { return resultado == PipelineVendasResultado.GANHO || resultado == PipelineVendasResultado.PERDIDO; }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

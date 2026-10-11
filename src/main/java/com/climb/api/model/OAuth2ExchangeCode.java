@@ -19,6 +19,9 @@ public class OAuth2ExchangeCode {
     @Column(nullable = false, unique = true, length = 64)
     private String code;
 
+    @Column(name = "app_challenge", length = 43)
+    private String appChallenge;
+
     @Column(name = "access_token", nullable = false, length = 2048)
     private String accessToken;
 

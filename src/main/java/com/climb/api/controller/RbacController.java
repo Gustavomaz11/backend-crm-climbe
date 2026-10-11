@@ -1,5 +1,7 @@
 package com.climb.api.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import com.climb.api.model.PermissaoCodigo;
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.RbacDTO;
@@ -24,6 +26,7 @@ public class RbacController {
 
     // Retorna todas as permissões do usuário
     @GetMapping("/usuario/{usuarioId}/permissoes")
+    @PreAuthorize("@permissaoAcesso.proprioOuAdministrador(#usuarioId)")
     public ResponseEntity<ApiResponse<Set<PermissaoCodigo>>> getPermissoesDoUsuario(
             @PathVariable Long usuarioId) {
         try {
@@ -35,6 +38,7 @@ public class RbacController {
 
     // Verifica se o usuário tem uma permissão específica
     @GetMapping("/usuario/{usuarioId}/tem-permissao/{permissao}")
+    @PreAuthorize("@permissaoAcesso.proprioOuAdministrador(#usuarioId)")
     public ResponseEntity<ApiResponse<Boolean>> temPermissao(
             @PathVariable Long usuarioId,
             @PathVariable String permissao) {
@@ -51,6 +55,7 @@ public class RbacController {
 
     // Retorna o perfil completo do usuário
     @GetMapping("/usuario/{usuarioId}/perfil")
+    @PreAuthorize("@permissaoAcesso.proprioOuAdministrador(#usuarioId)")
     public ResponseEntity<ApiResponse<RbacDTO>> getPerfilRbac(
             @PathVariable Long usuarioId) {
         try {

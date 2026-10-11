@@ -1,5 +1,6 @@
 package com.climb.api.controller;
 
+import java.util.List;
 import com.climb.api.model.dto.*;
 import com.climb.api.model.enums.PipelineVendasResultado;
 import com.climb.api.security.AuthenticatedUserProvider;
@@ -18,6 +19,17 @@ public class PipelineVendasController {
     public PipelineVendasController(PipelineVendasService service, AuthenticatedUserProvider authenticatedUser) {
         this.service = service;
         this.authenticatedUser = authenticatedUser;
+    }
+
+    @GetMapping("/arquivados")
+    public List<KanbanItemArquivadoDTO> listarArquivados(@RequestParam(required = false) Long funilId) {
+        return service.listarArquivados(authenticatedUser.getUserId(), funilId);
+    }
+
+    @PatchMapping("/negocios/{negocioId}/arquivamento")
+    public void alterarArquivamento(@PathVariable Long negocioId,
+            @Valid @RequestBody KanbanArquivamentoRequestDTO dto) {
+        service.alterarArquivamento(negocioId, authenticatedUser.getUserId(), dto.arquivado());
     }
 
     @GetMapping
@@ -99,7 +111,7 @@ public class PipelineVendasController {
     @GetMapping("/negocios/{id}")
     public ApiResponse<PipelineNegocioResponseDTO> buscar(@PathVariable Long id) { return ApiResponse.ok(service.buscar(id, authenticatedUser.getUserId())); }
     @PostMapping("/negocios/lote")
-    public ApiResponse<java.util.List<PipelineNegocioResponseDTO>> lote(@Valid @RequestBody java.util.List<@Valid PipelineNegocioRequestDTO> dados) { return ApiResponse.ok(service.criarLote(authenticatedUser.getUserId(), dados)); }
+    public ApiResponse<List<PipelineNegocioResponseDTO>> lote(@Valid @RequestBody List<@Valid PipelineNegocioRequestDTO> dados) { return ApiResponse.ok(service.criarLote(authenticatedUser.getUserId(), dados)); }
     @PostMapping("/negocios/{id}/reiniciar-cadencia")
     public ApiResponse<String> reiniciar(@PathVariable Long id) { service.reiniciarCadencia(id, authenticatedUser.getUserId()); return ApiResponse.ok("Cadência reiniciada"); }
 

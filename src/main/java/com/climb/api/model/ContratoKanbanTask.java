@@ -10,7 +10,10 @@ import java.util.Set;
 
 @Entity
 @Table(name = "contrato_kanban_tasks")
-public class ContratoKanbanTask {
+public class ContratoKanbanTask extends ItemArquivavelKanban {
+
+    @Override
+    public boolean podeArquivar() { return raia != null && raia.isConcluiTarefas(); }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

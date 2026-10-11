@@ -114,17 +114,30 @@ GOOGLE_CALENDAR_FRONTEND_URL=http://localhost:5173
 
 Endpoints adicionais:
 
-- `GET /auth/google/url`
+- `GET /auth/google/start?codeChallenge=...`
+- `GET /auth/google/url?codeChallenge=...` (alternativa que retorna JSON e exige preservação do cookie)
 - `GET /auth/google/callback`
+- `POST /auth/exchange`
 
 Fluxo:
 
-1. Chame `GET /auth/google/url`.
-2. O backend responde JSON simples com o campo `authorizationUrl`.
-3. Abra a `authorizationUrl` retornada no navegador e conclua o consentimento.
-4. O Google redireciona para `GET /auth/google/callback`.
-5. A API troca o `code` por token e redireciona de volta para `GOOGLE_CALENDAR_FRONTEND_URL`.
-6. Os dados do OAuth retornam no fragmento da URL, por exemplo `#google_oauth=success&google_access_token=...`.
+1. O frontend gera um verifier aleatório, guarda-o no `sessionStorage` e calcula seu challenge SHA-256 em Base64URL.
+2. Navega para `GET /auth/google/start?codeChallenge=...`. A API registra um `state` de uso único, seu próprio PKCE e um cookie HttpOnly de vinculação ao navegador.
+3. O Google retorna para `/auth/google/callback` com `code` e `state`. O backend valida o state e o cookie antes de trocar o código com seu verifier PKCE.
+4. A API redireciona para `GOOGLE_CALENDAR_FRONTEND_URL` somente com um código temporário de troca, válido por 60 segundos.
+5. O frontend chama `POST /auth/exchange` com `{ "code": "...", "codeVerifier": "..." }`. A API exige o verifier original e consome o código uma única vez.
+
+## Configuração e atualização de segurança
+
+`JWT_SECRET` é obrigatório: use uma chave aleatória com pelo menos 256 bits. A aplicação rejeita uma chave curta ou o antigo valor padrão. `JWT_ISSUER` e `JWT_AUDIENCE` devem corresponder à aplicação; ambos usam `climb-api` por padrão.
+
+Configure `CORS_ALLOWED_ORIGINS` com as origens completas dos frontends, separadas por vírgula, sem curingas. Na ausência dessa variável, a API usa `APP_FRONTEND_URL` e `GOOGLE_CALENDAR_FRONTEND_URL` (localhost no desenvolvimento).
+
+Atualize backend e frontend juntos e aplique as migrations V70 e V71 pelo Flyway antes de validar o schema. Tokens anteriores à atualização são rejeitados; os usuários precisam entrar novamente.
+
+`POST /auth/refresh` retorna `accessToken`, um novo `refreshToken` e `expiresIn` em milissegundos. Substitua os dois tokens a cada renovação. Reutilizar um refresh anterior revoga a sessão inteira. `POST /auth/logout`, com o refresh token no corpo, encerra a sessão no servidor. Trocar senha ou e-mail e revogar o usuário invalida suas sessões anteriores.
+
+A gestão de usuários e permissões exige `PERMITIR_ACESSO`. Uploads gerais exigem `ARQUIVO_UPLOAD`; o envio interno de documentos exige `DOCUMENTO_JURIDICO_EDITAR`. As permissões `PLANILHA_LER`, `PLANILHA_CRIAR`, `PLANILHA_EDITAR`, `PLANILHA_DELETAR` e `PLANILHA_CONFIGURAR_ACESSO` são independentes e também exigem acesso ao contrato vinculado. As novas permissões devem ser atribuídas pelo administrador; as migrations não concedem acesso automaticamente.
 
 ## Aprovação de cadastros Google
 

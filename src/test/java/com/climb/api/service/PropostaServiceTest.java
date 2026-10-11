@@ -66,7 +66,7 @@ class PropostaServiceTest {
         negocio.setFunil(new com.climb.api.model.PipelineVendasFunil());
         negocio.setIdNegocio(3L);
         negocio.setEmpresa(empresa);
-        when(rbacService.temPermissao(2L, PermissaoCodigo.PROPOSTA_CRUD)).thenReturn(true);
+        when(rbacService.temPermissao(2L, PermissaoCodigo.PROPOSTA_CRIAR)).thenReturn(true);
         when(empresaRepository.findById(1L)).thenReturn(Optional.of(empresa));
         when(usuarioRepository.findById(2L)).thenReturn(Optional.of(usuario));
         when(negocioRepository.findById(3L)).thenReturn(Optional.of(negocio));
@@ -115,7 +115,7 @@ class PropostaServiceTest {
         empresa.setIdEmpresa(1L);
         Usuario usuario = new Usuario();
         usuario.setId(2L);
-        when(rbacService.temPermissao(2L, PermissaoCodigo.PROPOSTA_CRUD)).thenReturn(true);
+        when(rbacService.temPermissao(2L, PermissaoCodigo.PROPOSTA_CRIAR)).thenReturn(true);
         when(empresaRepository.findById(1L)).thenReturn(Optional.of(empresa));
         when(usuarioRepository.findById(2L)).thenReturn(Optional.of(usuario));
         when(storageService.salvar(any(), anyString())).thenReturn(new ArquivoUploadResponseDTO(

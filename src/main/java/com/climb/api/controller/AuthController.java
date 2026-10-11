@@ -5,7 +5,6 @@ import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.ExchangeCodeRequestDTO;
 import com.climb.api.model.dto.ExchangeCodeResponseDTO;
-import com.climb.api.model.dto.GoogleAuthorizationUrlResponseDTO;
 import com.climb.api.model.dto.LoginRequestDTO;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.RefreshTokenRequestDTO;
@@ -15,17 +14,13 @@ import com.climb.api.service.GoogleOAuthService;
 import com.climb.api.util.LogSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.net.URI;
 
 @RestController
 @RequestMapping("/auth")
@@ -52,68 +47,27 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<RefreshTokenResponseDTO>> refresh(@RequestBody RefreshTokenRequestDTO dto) {
-        AuthResult<String> result = authenticationService.refreshAccessToken(dto.getRefreshToken());
+    public ResponseEntity<ApiResponse<RefreshTokenResponseDTO>> refresh(@jakarta.validation.Valid @RequestBody RefreshTokenRequestDTO dto) {
+        AuthResult<RefreshTokenResponseDTO> result = authenticationService.refreshAccessToken(dto.getRefreshToken());
         if (result.isSuccess()) {
-            RefreshTokenResponseDTO response = new RefreshTokenResponseDTO(
-                    result.data(),
-                    authenticationService.getAccessTokenExpirationTime()
-            );
-            return ResponseEntity.ok(ApiResponse.ok(response, "Token renovado com sucesso"));
+            return ResponseEntity.ok(ApiResponse.ok(result.data(), "Token renovado com sucesso"));
         }
         return ResponseEntity.status(httpStatusFor(result.status()))
                 .body(ApiResponse.error(result.message()));
     }
 
-    @GetMapping("/google/url")
-    public ResponseEntity<?> googleAuthorizationUrl() {
-        try {
-            GoogleAuthorizationUrlResponseDTO response = googleOAuthService.gerarUrlAutorizacao();
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-        }
-    }
-
-    @GetMapping("/google/callback")
-    public ResponseEntity<Void> googleCallback(
-            @RequestParam(required = false) String code,
-            @RequestParam(required = false) String error) {
-        log.info("GET /auth/google/callback — error param: {}, authorization code: {}",
-                error == null || error.isBlank() ? "absent" : "present(length=" + error.length() + ")",
-                LogSanitizer.oauthCodeForLog(code));
-        try {
-            if (error != null && !error.isBlank()) {
-                URI redirectUri = googleOAuthService.gerarRedirecionamentoErro("Google retornou erro: " + error);
-                return redirect(redirectUri);
-            }
-
-            if (code == null || code.isBlank()) {
-                URI redirectUri = googleOAuthService.gerarRedirecionamentoErro("Parametro code e obrigatorio");
-                return redirect(redirectUri);
-            }
-
-            URI redirectUri = googleOAuthService.resolverCallbackGoogle(code);
-            return redirect(redirectUri);
-
-        } catch (RuntimeException e) {
-            URI redirectUri = googleOAuthService.gerarRedirecionamentoErro(e.getMessage());
-            return redirect(redirectUri);
-        }
-    }
-
-    private ResponseEntity<Void> redirect(URI uri) {
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .header(HttpHeaders.LOCATION, uri.toASCIIString())
-                .build();
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@jakarta.validation.Valid @RequestBody RefreshTokenRequestDTO dto) {
+        authenticationService.encerrarSessao(dto.getRefreshToken());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/exchange")
     public ResponseEntity<ApiResponse<ExchangeCodeResponseDTO>> exchangeCode(
-            @RequestBody ExchangeCodeRequestDTO dto) {
+            @jakarta.validation.Valid @RequestBody ExchangeCodeRequestDTO dto) {
         log.info("POST /auth/exchange — exchange code: {}", LogSanitizer.oauthCodeForLog(dto.code()));
         try {
-            ExchangeCodeResponseDTO response = googleOAuthService.exchangeCode(dto.code());
+            ExchangeCodeResponseDTO response = googleOAuthService.exchangeCode(dto.code(), dto.codeVerifier());
             return ResponseEntity.ok(ApiResponse.ok(response, "Tokens obtidos com sucesso"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(e.getMessage()));

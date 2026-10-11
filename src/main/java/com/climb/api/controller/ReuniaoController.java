@@ -1,5 +1,8 @@
 package com.climb.api.controller;
 
+import jakarta.validation.Valid;
+import com.climb.api.model.dto.KanbanArquivamentoRequestDTO;
+import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import com.climb.api.model.Reuniao;
 import com.climb.api.model.dto.ReuniaoListItemDTO;
 import com.climb.api.model.dto.ReuniaoRequestDTO;
@@ -56,6 +59,17 @@ public class ReuniaoController {
     @DeleteMapping("/{id}")
     public void deletar(@PathVariable Long id) {
         service.deletar(id, getAuthenticatedUserId());
+    }
+
+    @GetMapping("/arquivados")
+    public List<KanbanItemArquivadoDTO> listarArquivados() {
+        return service.listarArquivados(getAuthenticatedUserId());
+    }
+
+    @PatchMapping("/{id}/arquivamento")
+    public void alterarArquivamento(@PathVariable Long id,
+            @Valid @RequestBody KanbanArquivamentoRequestDTO dto) {
+        service.alterarArquivamento(id, getAuthenticatedUserId(), dto.arquivado());
     }
 
     private Long getAuthenticatedUserId() {

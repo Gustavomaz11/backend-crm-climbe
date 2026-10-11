@@ -1,291 +1,64 @@
-# Fluxo de Autenticação Google OAuth2
+# Login Google e sessões
 
-## Base URL
+O frontend e a API vinculam cada autenticação ao navegador que iniciou o fluxo. O verifier do frontend fica em `sessionStorage`; a API mantém state, PKCE do Google e vinculação ao cookie em registros válidos por dez minutos.
 
-```
-https://climb-api-dev.72.61.38.51.sslip.io
-```
+## Início
 
----
-
-## 🔐 Cenário 1: Usuário EXISTENTE (Login)
-
-### Passo 1: Obter URL de autorização do Google
+O frontend gera 32 bytes aleatórios usando Web Crypto, codifica em Base64URL sem padding e calcula `BASE64URL(SHA256(verifier))`. Navega para:
 
 ```http
-GET /auth/google/url
+GET /auth/google/start?codeChallenge=<challenge-do-frontend>
 ```
 
-**Response:**
+A API registra o challenge e cria seu próprio verifier PKCE, um state aleatório e o cookie `CLIMB_OAUTH_BINDING` (HttpOnly, SameSite=Lax e Secure em HTTPS). Redireciona para o Google com state, `code_challenge` e `code_challenge_method=S256`.
 
-```json
-{
-  "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...&scope=..."
-}
+A alternativa `GET /auth/google/url?codeChallenge=...` retorna a URL como JSON e define o mesmo cookie; o cliente deve preservá-lo. O aplicativo usa navegação direta para evitar dependência de cookies de terceiros em chamadas Ajax.
+
+## Callback e troca
+
+```http
+GET /auth/google/callback?code=<codigo-google>&state=<state-original>
 ```
 
-### Passo 2: Redirecionar usuário
+A API exige state não expirado e cookie correspondente, consome o state uma vez e troca o código com o verifier PKCE armazenado. Erros ou cancelamentos voltam ao frontend com uma mensagem humanizada.
 
-```javascript
-window.location.href = response.authorizationUrl;
-```
+Após autenticar uma conta autorizada, redireciona para o frontend com `google_oauth=success&code=<codigo-temporario>`. Cadastros aprovados que ainda precisam de perfil usam `google_oauth=completar_cadastro`. Contas pendentes/desativadas seguem as regras de aprovação existentes.
 
-### Passo 3: Callback automático
-
-O Google redireciona para a API, que processa e redireciona para o frontend:
-
-```
-https://dev-climb-app.vercel.app?google_oauth=success&code=CODIGO_TEMPORARIO
-```
-
-### Passo 4: Trocar código por tokens
+O código temporário expira em 60 segundos e sua troca exige o verifier original do frontend:
 
 ```http
 POST /auth/exchange
 Content-Type: application/json
 
-{
-  "code": "CODIGO_TEMPORARIO"
-}
+{"code":"<codigo-temporario>","codeVerifier":"<verifier-original-do-frontend>"}
 ```
 
-**Response (usuário existente):**
+A resposta usa o envelope `success`, `data`, `message` e `timestamp`. Os dados incluem os tokens da aplicação e o usuário; dados de integração Google dependem da configuração da agenda. A API compara o hash do verifier e bloqueia um segundo consumo do código com lock no banco. Tokens não são enviados na URL de redirecionamento.
 
-```json
-{
-  "success": true,
-  "message": "Tokens obtidos com sucesso",
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 86400,
-    "googleAccessToken": "ya29.a0AfH6SMB...",
-    "googleRefreshToken": "1//0eXXXXXXXXXXXX",
-    "usuario": {
-      "id": 1,
-      "nomeCompleto": "João Silva",
-      "cpf": "123.456.789-00",
-      "email": "joao@email.com",
-      "contato": "(11) 99999-9999",
-      "situacao": "ATIVO",
-      "cargoNome": "Administrador"
-    }
-  }
-}
-```
+O frontend compartilha trocas concorrentes do mesmo código e remove o verifier após sucesso. Para completar o cadastro, usa `POST /usuarios/completar-cadastro` com o token de cadastro no header Authorization.
 
-✅ **Login completo!** Salve os tokens e redirecione para o dashboard.
-
----
-
-## 📝 Cenário 2: Usuário NOVO (Cadastro)
-
-### Passos 1-3: Igual ao login
-
-### Passo 4: Trocar código por tokens
-
-```http
-POST /auth/exchange
-Content-Type: application/json
-
-{
-  "code": "CODIGO_TEMPORARIO"
-}
-```
-
-**Response (usuário novo - precisa completar cadastro):**
-
-```json
-{
-  "success": true,
-  "message": "Tokens obtidos com sucesso",
-  "data": {
-    "accessToken": null,
-    "refreshToken": null,
-    "expiresIn": null,
-    "googleAccessToken": "ya29.a0AfH6SMB...",
-    "googleRefreshToken": "1//0eXXXXXXXXXXXX",
-    "usuario": null,
-    "pendingToken": "abc123xyz...",
-    "email": "novo@email.com",
-    "nome": "Nome do Google"
-  }
-}
-```
-
-⚠️ **Usuário novo detectado!** Redirecione para tela de completar cadastro.
-
-### Passo 5: Completar cadastro
-
-```http
-POST /auth/google/complete-registration
-Content-Type: application/json
-
-{
-  "pendingToken": "abc123xyz...",
-  "cpf": "123.456.789-00",
-  "contato": "(11) 99999-9999",
-  "senha": "senha123",
-  "cargoId": 1
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Cadastro Google concluido com sucesso",
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 86400,
-    "usuario": {
-      "id": 2,
-      "nomeCompleto": "Nome do Google",
-      "cpf": "123.456.789-00",
-      "email": "novo@email.com",
-      "contato": "(11) 99999-9999",
-      "situacao": "ATIVO",
-      "cargoNome": "Usuário"
-    }
-  }
-}
-```
-
-✅ **Cadastro completo!**
-
----
-
-## 🔄 Renovar Token (quando expirar)
+## Renovação e encerramento
 
 ```http
 POST /auth/refresh
 Content-Type: application/json
 
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
+{"refreshToken":"<refresh-atual>"}
 ```
 
-**Response:**
+`data` contém `accessToken`, `refreshToken` e `expiresIn` em milissegundos. O cliente substitui os dois tokens. Cada renovação rotaciona o refresh, sem prolongar a validade original da sessão. O servidor guarda somente o hash do refresh na tabela de sessões. Reutilizar um refresh anterior encerra essa sessão.
 
-```json
-{
-  "success": true,
-  "message": "Token renovado com sucesso",
-  "data": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
+O frontend agrupa renovações simultâneas e usa Web Locks, quando disponível, para coordenar abas. O token é lido e salvo dentro do lock. Uma resposta atrasada de refresh não restaura uma sessão encerrada no mesmo navegador.
+
+```http
+POST /auth/logout
+Content-Type: application/json
+
+{"refreshToken":"<refresh-da-sessao>"}
 ```
 
----
+O logout retorna 204 e revoga a sessão no servidor. Access tokens somente autorizam rotas privadas enquanto sua sessão estiver ativa e o usuário continuar ativo. Alterações de senha/e-mail e mudanças de situação invalidam tokens anteriores, mesmo após reativação da conta.
 
-## ❌ Tratamento de Erros
+## Configuração
 
-Se houver erro no OAuth, o redirect será:
-
-```
-https://dev-climb-app.vercel.app?google_oauth=error&message=Descrição+do+erro
-```
-
----
-
-## 📊 Fluxograma Visual
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         FRONTEND                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│  1. Clica "Login com Google"                                        │
-│           │                                                          │
-│           ▼                                                          │
-│  2. GET /auth/google/url                                            │
-│           │                                                          │
-│           ▼                                                          │
-│  3. Redireciona para Google ──────────────────┐                     │
-│                                                │                     │
-│  4. Google autentica ◄────────────────────────┘                     │
-│           │                                                          │
-│           ▼                                                          │
-│  5. Callback → API processa → Redireciona para Frontend             │
-│           │                                                          │
-│           ▼                                                          │
-│  6. Captura ?code=xxx da URL                                        │
-│           │                                                          │
-│           ▼                                                          │
-│  7. POST /auth/exchange { code }                                    │
-│           │                                                          │
-│           ▼                                                          │
-│  8. Verifica resposta:                                              │
-│      ├── usuario != null → Login OK → Dashboard                     │
-│      └── usuario == null → Novo usuário → Tela de Cadastro          │
-│                                    │                                 │
-│                                    ▼                                 │
-│                    9. POST /auth/google/complete-registration       │
-│                                    │                                 │
-│                                    ▼                                 │
-│                              Dashboard                               │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 💻 Exemplo de Implementação (React)
-
-```typescript
-// 1. Iniciar login com Google
-async function loginWithGoogle() {
-  const response = await fetch('/auth/google/url');
-  const data = await response.json();
-  window.location.href = data.authorizationUrl;
-}
-
-// 2. Na página de callback (useEffect no componente principal)
-useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  const googleOauth = params.get('google_oauth');
-  
-  if (googleOauth === 'success' && code) {
-    exchangeCode(code);
-  } else if (googleOauth === 'error') {
-    const message = params.get('message');
-    showError(message);
-  }
-}, []);
-
-// 3. Trocar código por tokens
-async function exchangeCode(code: string) {
-  const response = await fetch('/auth/exchange', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code })
-  });
-  
-  const data = await response.json();
-  
-  if (data.data.usuario) {
-    // Usuário existente - login completo
-    saveTokens(data.data.accessToken, data.data.refreshToken);
-    navigate('/dashboard');
-  } else {
-    // Usuário novo - precisa completar cadastro
-    navigate('/complete-registration', { 
-      state: { 
-        pendingToken: data.data.pendingToken,
-        email: data.data.email,
-        nome: data.data.nome
-      }
-    });
-  }
-}
-```
-
----
-
-## 🔒 Notas de Segurança
-
-- O código temporário (`code`) expira em **60 segundos**
-- O código só pode ser usado **uma única vez**
-- Tokens sensíveis nunca são expostos na URL
-- O `pendingToken` para cadastro também tem validade limitada
+Consulte [README.md](README.md#configuração-e-atualização-de-segurança) para JWT_SECRET, issuer, audience, origens CORS e migrations V70/V71. Backend e frontend devem ser atualizados juntos. Tokens anteriores à atualização exigem novo login.

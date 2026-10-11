@@ -130,7 +130,7 @@ public class ContratoEquipeService {
         tarefa.getResponsaveisEfetivos().forEach(u -> ids.add(u.getId()));
         return tarefa.getApoios().stream().filter(u -> ids.contains(u.getId())).toList();
     }
-    private boolean podeVisualizar(Contrato contrato, Long usuarioId) {
+    public boolean podeVisualizar(Contrato contrato, Long usuarioId) {
         return isLider(contrato, usuarioId) || podeEditar(contrato, usuarioId)
                 || rbac.temPermissao(usuarioId, PermissaoCodigo.CONTRATO_KANBAN_VISUALIZAR_TODAS_TAREFAS);
     }

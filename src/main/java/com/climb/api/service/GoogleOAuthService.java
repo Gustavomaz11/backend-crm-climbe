@@ -12,7 +12,6 @@ import com.climb.api.model.dto.AuthResult;
 import com.climb.api.model.dto.ExchangeCodeResponseDTO;
 import com.climb.api.model.dto.GoogleAuthorizationUrlResponseDTO;
 import com.climb.api.model.dto.GoogleOAuthResolveResponseDTO;
-import com.climb.api.model.dto.GoogleTokenResponseDTO;
 import com.climb.api.model.dto.LoginResponseDTO;
 import com.climb.api.model.dto.UsuarioResponseDTO;
 import com.climb.api.repository.OAuth2ExchangeCodeRepository;
@@ -20,6 +19,7 @@ import com.climb.api.repository.OAuth2PendingRegistrationRepository;
 import com.climb.api.repository.UsuarioOAuthRepository;
 import com.climb.api.repository.UsuarioRepository;
 import com.climb.api.util.LogSanitizer;
+import com.climb.api.security.TokenSeguro;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -105,7 +105,7 @@ public class GoogleOAuthService {
 
     // ==================== Google Calendar API Integration ====================
 
-    public GoogleAuthorizationUrlResponseDTO gerarUrlAutorizacao() {
+    public GoogleAuthorizationUrlResponseDTO gerarUrlAutorizacao(String state, String codeChallenge) {
         validarConfiguracao();
 
         String authorizationUrl = UriComponentsBuilder
@@ -113,6 +113,9 @@ public class GoogleOAuthService {
                 .queryParam("client_id", googleCalendarConfig.getClientId())
                 .queryParam("redirect_uri", googleCalendarConfig.getRedirectUri())
                 .queryParam("response_type", "code")
+                .queryParam("state", state)
+                .queryParam("code_challenge", codeChallenge)
+                .queryParam("code_challenge_method", "S256")
                 .queryParam("scope", GOOGLE_SCOPE)
                 .queryParam("access_type", "offline")
                 .queryParam("include_granted_scopes", "true")
@@ -127,48 +130,6 @@ public class GoogleOAuthService {
         );
     }
 
-    public GoogleTokenResponseDTO trocarCodePorToken(String code) {
-        validarConfiguracao();
-
-        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-        formData.add("code", code);
-        formData.add("client_id", googleCalendarConfig.getClientId());
-        formData.add("client_secret", googleCalendarConfig.getClientSecret());
-        formData.add("redirect_uri", googleCalendarConfig.getRedirectUri());
-        formData.add("grant_type", "authorization_code");
-
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = restClient.post()
-                    .uri(GOOGLE_TOKEN_URI)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(formData)
-                    .retrieve()
-                    .body(Map.class);
-
-            if (response == null || response.get("access_token") == null) {
-                throw new RuntimeException("Resposta invalida ao trocar o code por token");
-            }
-
-            String googleAccessToken = response.get("access_token").toString();
-            UsuarioResponseDTO usuario = autenticarUsuarioGoogle(googleAccessToken);
-
-            return new GoogleTokenResponseDTO(
-                    googleAccessToken,
-                    response.get("refresh_token") != null ? response.get("refresh_token").toString() : null,
-                    response.get("token_type") != null ? response.get("token_type").toString() : null,
-                    response.get("expires_in") instanceof Number number ? number.longValue() : null,
-                    response.get("scope") != null ? response.get("scope").toString() : null,
-                    jwtUtil.generateAccessToken(usuario.getId(), usuario.getEmail()),
-                    jwtUtil.generateRefreshToken(usuario.getId(), usuario.getEmail()),
-                    jwtUtil.getAccessTokenExpirationTime(),
-                    usuario
-            );
-        } catch (RestClientException e) {
-            throw new RuntimeException("Falha ao trocar o code pelo token do Google", e);
-        }
-    }
-
     public boolean isConfigured() {
         return googleCalendarConfig.isEnabled()
                 && googleCalendarConfig.getClientId() != null
@@ -180,25 +141,7 @@ public class GoogleOAuthService {
     }
 
     @Transactional
-    public URI gerarRedirecionamentoFrontend(GoogleTokenResponseDTO tokenResponse) {
-        String code = salvarExchangeCode(
-                tokenResponse.appAccessToken(),
-                tokenResponse.appRefreshToken(),
-                tokenResponse.accessToken(),
-                tokenResponse.refreshToken(),
-                tokenResponse.appExpiresIn(),
-                tokenResponse.usuario());
-
-        return UriComponentsBuilder.fromUriString(googleCalendarConfig.getFrontendUrl())
-                .queryParam("google_oauth", "success")
-                .queryParam("code", code)
-                .build()
-                .encode(StandardCharsets.UTF_8)
-                .toUri();
-    }
-
-    @Transactional
-    public ExchangeCodeResponseDTO exchangeCode(String code) {
+    public ExchangeCodeResponseDTO exchangeCode(String code, String codeVerifier) {
         log.info("GoogleOAuthService.exchangeCode — código: {}", LogSanitizer.oauthCodeForLog(code));
         limparExchangeCodesExpirados();
 
@@ -211,6 +154,10 @@ public class GoogleOAuthService {
             throw new RuntimeException("Codigo expirado");
         }
 
+        if (codeVerifier == null || !codeVerifier.matches("[A-Za-z0-9._~-]{43,128}")
+                || !TokenSeguro.iguais(exchangeCode.getAppChallenge(), TokenSeguro.challenge(codeVerifier))) {
+            throw new RuntimeException("A autenticação não foi iniciada neste navegador. Tente novamente.");
+        }
         exchangeCode.setConsumido(true);
         exchangeCodeRepository.save(exchangeCode);
 
@@ -256,12 +203,13 @@ public class GoogleOAuthService {
                                       String googleAccessToken,
                                       String googleRefreshToken,
                                       Long appExpiresIn,
-                                      UsuarioResponseDTO usuario) {
+                                      UsuarioResponseDTO usuario, String appChallenge) {
         limparExchangeCodesExpirados();
 
         String code = gerarCodigoSeguro();
         OAuth2ExchangeCode exchangeCode = new OAuth2ExchangeCode();
         exchangeCode.setCode(code);
+        exchangeCode.setAppChallenge(appChallenge);
         exchangeCode.setAccessToken(appAccessToken);
         exchangeCode.setRefreshToken(appRefreshToken);
         exchangeCode.setGoogleAccessToken(googleAccessToken);
@@ -452,10 +400,10 @@ public class GoogleOAuthService {
     // ==================== OAuth2 Callback Handler ====================
 
     @Transactional
-    public URI resolverCallbackGoogle(String authorizationCode) {
+    public URI resolverCallbackGoogle(String authorizationCode, String codeVerifier, String appChallenge) {
         validarConfiguracao();
 
-        Map<String, Object> googleResp = trocarCodePorGoogleTokenRaw(authorizationCode);
+        Map<String, Object> googleResp = trocarCodePorGoogleTokenRaw(authorizationCode, codeVerifier);
         String googleAccessToken = googleResp.get("access_token").toString();
         String googleRefreshToken = googleResp.get("refresh_token") != null
                 ? googleResp.get("refresh_token").toString() : null;
@@ -496,9 +444,9 @@ public class GoogleOAuthService {
 
         return switch (resolution.getStatus()) {
             case STATUS_LOGIN_SUCCESS -> redirectAposLogin(resolution.getLogin(),
-                    accessTokenAgenda, refreshTokenAgenda);
+                    accessTokenAgenda, refreshTokenAgenda, appChallenge);
             case STATUS_COMPLETAR_CADASTRO -> redirectCompletarCadastro(resolution.getPendingToken(),
-                    accessTokenAgenda, refreshTokenAgenda);
+                    accessTokenAgenda, refreshTokenAgenda, appChallenge);
             case STATUS_GOOGLE_NOT_LINKED -> UriComponentsBuilder
                     .fromUriString(googleCalendarConfig.getFrontendUrl())
                     .queryParam("google_oauth", "not_linked")
@@ -514,14 +462,14 @@ public class GoogleOAuthService {
     }
 
     private URI redirectAposLogin(LoginResponseDTO login,
-                                  String googleAccessToken, String googleRefreshToken) {
+                                  String googleAccessToken, String googleRefreshToken, String appChallenge) {
         String code = salvarExchangeCode(
                 login.getAccessToken(),
                 login.getRefreshToken(),
                 googleAccessToken,
                 googleRefreshToken,
                 login.getExpiresIn(),
-                login.getUsuario());
+                login.getUsuario(), appChallenge);
 
         return UriComponentsBuilder.fromUriString(googleCalendarConfig.getFrontendUrl())
                 .queryParam("google_oauth", "success")
@@ -530,14 +478,14 @@ public class GoogleOAuthService {
     }
 
     private URI redirectCompletarCadastro(String pendingToken,
-                                          String googleAccessToken, String googleRefreshToken) {
+                                          String googleAccessToken, String googleRefreshToken, String appChallenge) {
         String code = salvarExchangeCode(
                 pendingToken,
                 null,
                 googleAccessToken,
                 googleRefreshToken,
                 jwtUtil.getPendingTokenExpirationTime(),
-                null);
+                null, appChallenge);
 
         return UriComponentsBuilder.fromUriString(googleCalendarConfig.getFrontendUrl())
                 .queryParam("google_oauth", "completar_cadastro")
@@ -553,13 +501,14 @@ public class GoogleOAuthService {
         }
     }
 
-    private Map<String, Object> trocarCodePorGoogleTokenRaw(String code) {
+    private Map<String, Object> trocarCodePorGoogleTokenRaw(String code, String codeVerifier) {
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("code", code);
         formData.add("client_id", googleCalendarConfig.getClientId());
         formData.add("client_secret", googleCalendarConfig.getClientSecret());
         formData.add("redirect_uri", googleCalendarConfig.getRedirectUri());
         formData.add("grant_type", "authorization_code");
+        formData.add("code_verifier", codeVerifier);
 
         try {
             @SuppressWarnings("unchecked")

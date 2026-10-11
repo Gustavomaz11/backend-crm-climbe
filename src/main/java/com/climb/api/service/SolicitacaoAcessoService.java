@@ -7,6 +7,9 @@ import com.climb.api.model.SolicitacaoAcessoStatus;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.UsuarioPendenteResponseDTO;
 import com.climb.api.repository.SolicitacaoAcessoRepository;
+import com.climb.api.repository.UsuarioRepository;
+import com.climb.api.repository.OAuth2PendingRegistrationRepository;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +22,15 @@ import java.util.List;
 public class SolicitacaoAcessoService {
 
     private final SolicitacaoAcessoRepository repository;
+    private final UsuarioRepository usuarioRepository;
+    private final OAuth2PendingRegistrationRepository pendingRepository;
 
-    public SolicitacaoAcessoService(SolicitacaoAcessoRepository repository) {
+    public SolicitacaoAcessoService(SolicitacaoAcessoRepository repository,
+                                   UsuarioRepository usuarioRepository,
+                                   OAuth2PendingRegistrationRepository pendingRepository) {
         this.repository = repository;
+        this.usuarioRepository = usuarioRepository;
+        this.pendingRepository = pendingRepository;
     }
 
     @Transactional
@@ -60,7 +69,7 @@ public class SolicitacaoAcessoService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Historico da solicitacao de acesso nao encontrado"));
-        if (solicitacao.getStatus() != SolicitacaoAcessoStatus.PENDENTE) {
+        if (solicitacao.getExcluidoEm() != null || solicitacao.getStatus() != SolicitacaoAcessoStatus.PENDENTE) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Solicitacao de acesso ja foi decidida");
@@ -71,12 +80,64 @@ public class SolicitacaoAcessoService {
         if (cargoNome != null && !cargoNome.isBlank()) {
             solicitacao.setCargoNome(cargoNome);
         }
-        repository.save(solicitacao);
+        salvarDecisao(solicitacao);
+    }
+
+    @Transactional
+    public void excluir(SolicitacaoAcessoOrigem origem, Long referenciaId, Long excluidoPor) {
+        SolicitacaoAcesso solicitacao = repository.findByOrigemAndReferenciaId(origem, referenciaId)
+                .filter(item -> item.getExcluidoEm() == null)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Essa solicitação não foi encontrada ou já foi excluída."));
+        LocalDateTime agora = LocalDateTime.now();
+        if (solicitacao.getStatus() == SolicitacaoAcessoStatus.PENDENTE) {
+            cancelarPedidoPendente(origem, referenciaId);
+            solicitacao.setStatus(SolicitacaoAcessoStatus.RECUSADO);
+            solicitacao.setDecididoEm(agora);
+            solicitacao.setDecididoPor(excluidoPor);
+        }
+        solicitacao.setExcluidoEm(agora);
+        solicitacao.setExcluidoPor(excluidoPor);
+        salvarDecisao(solicitacao);
+    }
+
+    private void salvarDecisao(SolicitacaoAcesso solicitacao) {
+        try {
+            repository.saveAndFlush(solicitacao);
+        } catch (OptimisticLockingFailureException exception) {
+            throw pedidoAtualizado();
+        }
+    }
+
+    private void cancelarPedidoPendente(SolicitacaoAcessoOrigem origem, Long referenciaId) {
+        if (origem == SolicitacaoAcessoOrigem.USUARIO) {
+            usuarioRepository.findById(referenciaId).ifPresent(usuario -> {
+                if (!"ESPERANDO_APROVACAO".equals(usuario.getSituacao())) {
+                    throw pedidoAtualizado();
+                }
+                usuario.setSituacao("INATIVO");
+                usuarioRepository.save(usuario);
+            });
+        } else {
+            pendingRepository.findById(referenciaId).ifPresent(pending -> {
+                if (Boolean.TRUE.equals(pending.getAprovado())) {
+                    throw pedidoAtualizado();
+                }
+                pending.setConsumido(true);
+                pending.setAprovado(false);
+                pendingRepository.save(pending);
+            });
+        }
+    }
+
+    private ResponseStatusException pedidoAtualizado() {
+        return new ResponseStatusException(HttpStatus.CONFLICT,
+                "Este pedido já foi atualizado. Recarregue a lista antes de excluí-lo.");
     }
 
     @Transactional(readOnly = true)
     public List<UsuarioPendenteResponseDTO> listar() {
-        return repository.findAllByOrderByCriadoEmDescIdDesc().stream()
+        return repository.findByExcluidoEmIsNullOrderByCriadoEmDescIdDesc().stream()
                 .map(this::toResponse)
                 .toList();
     }

@@ -1,5 +1,7 @@
 package com.climb.api.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import com.climb.api.model.dto.ApiResponse;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.service.CloudflareR2ArquivoStorageService;
@@ -38,6 +40,7 @@ public class ArquivoController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Erro ao salvar arquivo", content = @Content)
     })
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permissaoAcesso.tem('ARQUIVO_UPLOAD')")
     public ResponseEntity<ApiResponse<ArquivoUploadResponseDTO>> salvar(
             @Parameter(description = "Arquivo enviado pelo usuário") @RequestParam("arquivo") MultipartFile arquivo,
             @Parameter(description = "Prefixo/pasta lógica dentro do bucket") @RequestParam(value = "prefixo", defaultValue = "arquivos") String prefixo) {

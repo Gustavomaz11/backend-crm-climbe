@@ -1,5 +1,7 @@
 package com.climb.api.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import com.climb.api.model.dto.DocumentoResponseDTO;
 import com.climb.api.service.DocumentoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +37,7 @@ public class DocumentoUploadController {
             @ApiResponse(responseCode = "415", description = "Tipo de mídia não suportado", content = @Content)
     })
     @PatchMapping(value = "/{id}/enviar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@permissaoAcesso.tem('DOCUMENTO_JURIDICO_EDITAR')")
     public ResponseEntity<DocumentoResponseDTO> enviar(
             @Parameter(description = "ID da solicitação gerada pelo analista") @PathVariable Long id,
             @Parameter(description = "Arquivo PDF do documento") @RequestParam("arquivo") MultipartFile arquivo) {

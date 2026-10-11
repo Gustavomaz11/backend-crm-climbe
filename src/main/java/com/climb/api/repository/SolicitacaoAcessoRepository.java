@@ -12,5 +12,5 @@ public interface SolicitacaoAcessoRepository extends JpaRepository<SolicitacaoAc
             SolicitacaoAcessoOrigem origem,
             Long referenciaId);
 
-    List<SolicitacaoAcesso> findAllByOrderByCriadoEmDescIdDesc();
+    List<SolicitacaoAcesso> findByExcluidoEmIsNullOrderByCriadoEmDescIdDesc();
 }

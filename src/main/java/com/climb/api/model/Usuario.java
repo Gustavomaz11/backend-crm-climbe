@@ -45,6 +45,30 @@ public class Usuario {
     @Column(nullable = false, length = 50)
     private String situacao;
 
+    @JsonIgnore
+    @Column(name = "versao_autenticacao", nullable = false)
+    private long versaoAutenticacao;
+
+    @Version
+    @JsonIgnore
+    @Column(name = "versao_registro", nullable = false)
+    private long versaoRegistro;
+
+    public void setSenhaHash(String senhaHash) {
+        if (this.senhaHash != null && !java.util.Objects.equals(this.senhaHash, senhaHash)) versaoAutenticacao++;
+        this.senhaHash = senhaHash;
+    }
+
+    public void setEmail(String email) {
+        if (this.email != null && !java.util.Objects.equals(this.email, email)) versaoAutenticacao++;
+        this.email = email;
+    }
+
+    public void setSituacao(String situacao) {
+        if (this.situacao != null && !java.util.Objects.equals(this.situacao, situacao)) versaoAutenticacao++;
+        this.situacao = situacao;
+    }
+
     @ManyToOne
     @JoinColumn(name = "cargo_id")
     private Cargo cargo;

@@ -1,7 +1,7 @@
 package com.climb.api.config;
 
 import com.climb.api.service.JwtUtil;
-import com.climb.api.repository.UsuarioRepository;
+import com.climb.api.service.SessaoAutenticacaoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,13 +23,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtUtil jwtUtil;
-    private final UsuarioRepository usuarioRepository;
+    private final SessaoAutenticacaoService sessoes;
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String AUTHORIZATION_HEADER = "Authorization";
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UsuarioRepository usuarioRepository) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, SessaoAutenticacaoService sessoes) {
         this.jwtUtil = jwtUtil;
-        this.usuarioRepository = usuarioRepository;
+        this.sessoes = sessoes;
     }
 
     @Override
@@ -48,14 +48,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     if (JwtUtil.TYPE_ACCESS.equals(tokenType)) {
                         Long userId = jwtUtil.extractUserId(token);
-                        if (!usuarioAtivo(userId)) {
-                            filterChain.doFilter(request, response);
-                            return;
+                        if (sessoes.estaAtiva(jwtUtil.extractSessionId(token), userId)) {
+                            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                                    email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                            auth.setDetails(userId);
+                            SecurityContextHolder.getContext().setAuthentication(auth);
                         }
-                        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                                email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
-                        auth.setDetails(userId);
-                        SecurityContextHolder.getContext().setAuthentication(auth);
                     } else if (JwtUtil.TYPE_PENDING_REGISTRATION.equals(tokenType)) {
                         Long pendingId = jwtUtil.extractPendingId(token);
                         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
@@ -72,7 +70,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean usuarioAtivo(Long userId) {
-        return usuarioRepository.existsByIdAndSituacao(userId, "ATIVO");
-    }
 }

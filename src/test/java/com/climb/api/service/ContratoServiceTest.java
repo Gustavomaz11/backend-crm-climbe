@@ -22,6 +22,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -46,6 +47,44 @@ class ContratoServiceTest {
     @Mock private ContratoParcelaCalculator parcelaCalculator;
 
     private ContratoService service;
+
+    @Test
+    void edicaoJuridicaNaoPermiteAprovarPelaAtualizacaoGenerica() {
+        when(rbacService.temPermissao(eq(7L), any(PermissaoCodigo.class)))
+                .thenAnswer(call -> call.getArgument(1) == PermissaoCodigo.JURIDICO_CONTRATO_EDITAR);
+        var atual = new Contrato(); atual.setStatus("PENDENTE");
+        when(repository.findById(1L)).thenReturn(Optional.of(atual));
+        var atualizado = new Contrato(); atualizado.setStatus("APROVADO");
+        assertThat(assertThrows(ResponseStatusException.class, () -> service.atualizar(1L, atualizado, 7L))
+                .getStatusCode().value()).isEqualTo(403);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(contratoNotificacaoService);
+    }
+
+    @Test
+    void edicaoJuridicaNaoPermiteRemoverParticipantesPelaAtualizacaoGenerica() {
+        when(rbacService.temPermissao(eq(7L), any(PermissaoCodigo.class)))
+                .thenAnswer(call -> call.getArgument(1) == PermissaoCodigo.JURIDICO_CONTRATO_EDITAR);
+        var responsavel = new Usuario(); responsavel.setId(8L);
+        var participante = new Usuario(); participante.setId(9L);
+        var atual = new Contrato(); atual.setStatus("PENDENTE"); atual.setResponsavel(responsavel);
+        atual.setParticipantes(Set.of(participante));
+        when(repository.findById(1L)).thenReturn(Optional.of(atual));
+        var atualizado = new Contrato(); atualizado.setResponsavel(responsavel);
+        assertThat(assertThrows(ResponseStatusException.class, () -> service.atualizar(1L, atualizado, 7L))
+                .getStatusCode().value()).isEqualTo(403);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void criacaoJuridicaComUploadExigeTambemEnvioAoCliente() {
+        when(rbacService.temPermissao(eq(7L), any(PermissaoCodigo.class)))
+                .thenAnswer(call -> call.getArgument(1) == PermissaoCodigo.JURIDICO_CONTRATO_CRIAR);
+        assertThat(assertThrows(ResponseStatusException.class,
+                () -> service.criarComArquivo(1L, null, 7L, 8L, java.util.List.of(8L), null))
+                .getStatusCode().value()).isEqualTo(403);
+        verifyNoInteractions(arquivoStorageService, revisaoDocumentoService, contratoNotificacaoService);
+    }
 
     @BeforeEach
     void setUp() {
@@ -127,7 +166,7 @@ class ContratoServiceTest {
     void deveEnviarArquivoNoMesmoContratoEAvancarParaEmAndamento() {
         Contrato contrato = rascunho();
         when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
-        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_EDITAR)).thenReturn(true);
         Usuario usuario = new Usuario(); usuario.setId(1L);
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
         var arquivo = new MockMultipartFile("arquivo", "contrato.pdf", "application/pdf", new byte[]{1});
@@ -144,7 +183,7 @@ class ContratoServiceTest {
     void deveCriarContratoComArquivoEmAndamento() {
         Empresa empresa = rascunho().getEmpresa();
         Usuario usuario = new Usuario(); usuario.setId(1L);
-        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRIAR)).thenReturn(true);
         when(empresaRepository.findById(30L)).thenReturn(Optional.of(empresa));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -163,7 +202,7 @@ class ContratoServiceTest {
         contrato.setUrlPdf("https://storage.test/contrato.pdf");
         contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.EM_ANDAMENTO);
         when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
-        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_EDITAR)).thenReturn(true);
         var erro = assertThrows(ResponseStatusException.class,
                 () -> service.moverPreparacao(10L, 1L, ContratoPreparacaoEtapa.REVISAO));
         assertThat(erro.getReason()).contains("cliente");
@@ -176,7 +215,7 @@ class ContratoServiceTest {
         Contrato contrato = rascunho(); contrato.setUrlPdf("https://storage.test/existente.pdf");
         var arquivo = new MockMultipartFile("arquivo", "contrato.pdf", "application/pdf", new byte[]{1});
         assertThrows(ResponseStatusException.class, () -> service.enviarAoCliente(10L, 1L, arquivo));
-        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_EDITAR)).thenReturn(true);
         when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
         assertThrows(ResponseStatusException.class, () -> service.enviarAoCliente(10L, 1L, arquivo));
         verifyNoInteractions(arquivoStorageService, revisaoDocumentoService);
@@ -187,7 +226,7 @@ class ContratoServiceTest {
         Contrato contrato = rascunho();
         when(repository.findByIdForUpdate(10L)).thenReturn(Optional.of(contrato));
         when(repository.findById(10L)).thenReturn(Optional.of(contrato));
-        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_CRUD)).thenReturn(true);
+        when(rbacService.temPermissao(1L, PermissaoCodigo.CONTRATO_EDITAR)).thenReturn(true);
         assertThrows(ResponseStatusException.class, () -> service.moverPreparacao(10L, 1L, ContratoPreparacaoEtapa.REVISAO));
         assertThrows(ResponseStatusException.class, () -> service.moverPreparacao(10L, 1L, ContratoPreparacaoEtapa.CONCLUIDO));
         assertThrows(ResponseStatusException.class, () -> service.aprovar(10L, 1L, "APROVADO"));
