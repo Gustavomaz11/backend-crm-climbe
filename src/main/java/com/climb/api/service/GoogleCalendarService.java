@@ -59,7 +59,7 @@ public class GoogleCalendarService {
                             && convidado.getEmail().equalsIgnoreCase(a.getEmail())).findFirst()
                     .map(EventAttendee::clone).orElse(convidado)).toList());
         }
-        if (Boolean.FALSE.equals(reuniao.getPresencial()) && atual.getConferenceData() != null) {
+        if (atual.getConferenceData() != null) {
             alterado.setConferenceData(atual.getConferenceData());
         }
         return calendar.events()

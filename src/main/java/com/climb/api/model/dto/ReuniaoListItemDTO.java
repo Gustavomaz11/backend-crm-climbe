@@ -40,6 +40,10 @@ public class ReuniaoListItemDTO {
 
     private static final ZoneId ZONE = ZoneId.of("America/Fortaleza");
 
+    public Boolean getPresencial() {
+        return (local != null && !local.isBlank()) || Boolean.TRUE.equals(presencial);
+    }
+
     public static ReuniaoListItemDTO fromEntity(Reuniao r) {
         ReuniaoListItemDTO d = new ReuniaoListItemDTO();
         d.setIdReuniao(r.getIdReuniao());

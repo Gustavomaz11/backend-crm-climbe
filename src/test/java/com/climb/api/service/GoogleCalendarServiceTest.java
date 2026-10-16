@@ -40,7 +40,9 @@ class GoogleCalendarServiceTest {
         verify(insert).setSendUpdates("all");
     }
 
-    @Test void atualizarMantemMeetERespostasEReincluiContatoObrigatorio() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void atualizarMantemMeetERespostasEReincluiContatoObrigatorio(boolean presencial) throws Exception {
         var calendar = mock(Calendar.class); var events = mock(Calendar.Events.class);
         var get = mock(Calendar.Events.Get.class);
         var update = mock(Calendar.Events.Update.class, Answers.RETURNS_SELF);
@@ -51,7 +53,7 @@ class GoogleCalendarServiceTest {
         when(events.update(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), org.mockito.ArgumentMatchers.any())).thenReturn(update);
         when(update.execute()).thenReturn(atual);
         var service = spy(new GoogleCalendarService()); doReturn(calendar).when(service).buildCalendar("token-teste");
-        var reuniao = new com.climb.api.model.Reuniao(); reuniao.setGoogleEventId("evento"); reuniao.setPresencial(false);
+        var reuniao = new com.climb.api.model.Reuniao(); reuniao.setGoogleEventId("evento"); reuniao.setPresencial(presencial);
         reuniao.setData(java.time.LocalDate.of(2026,11,15)); reuniao.setHora(java.time.LocalTime.of(14,30));
         service.atualizarEvento(reuniao, "token-teste", List.of("ana@example.test"));
         var evento = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);

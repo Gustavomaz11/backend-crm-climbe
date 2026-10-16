@@ -9,6 +9,32 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReuniaoListItemDTOTest {
+    @Test void localPreenchidoClassificaEventoComMeetComoPresencialSemRecursoDeSala() {
+        String local = "Escritório Climbe Cont - Hermes Fontes-2-Sala de Reunião - Climbe Cont (6)";
+        var evento = new Event().setId("evento-com-local").setLocation(local)
+                .setHangoutLink("https://meet.google.com/abc-defg-hij");
+        var resumo = ReuniaoListItemDTO.fromGoogleEventExterno(evento);
+        assertThat(resumo.getPresencial()).isTrue();
+        assertThat(resumo.getLocal()).isEqualTo(local);
+        assertThat(resumo.getLinkMeet()).isEqualTo(evento.getHangoutLink());
+    }
+
+    @Test void corrigeClassificacaoDeReuniaoSalvaComLocalEFlagVirtual() {
+        var reuniao = new com.climb.api.model.Reuniao();
+        reuniao.setPresencial(false); reuniao.setLocal("Sala 1");
+        reuniao.setLinkMeet("https://meet.google.com/abc-defg-hij");
+        var resumo = ReuniaoListItemDTO.fromEntity(reuniao);
+        assertThat(resumo.getPresencial()).isTrue();
+        assertThat(resumo.getLinkMeet()).isEqualTo(reuniao.getLinkMeet());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"  "})
+    void localVazioNaoTransformaEventoVirtualEmPresencial(String local) {
+        var evento = new Event().setId("virtual").setLocation(local).setHangoutLink("https://meet.google.com/abc-defg-hij");
+        assertThat(ReuniaoListItemDTO.fromGoogleEventExterno(evento).getPresencial()).isFalse();
+    }
     @Test void usaSalaFisicaComoLocalMesmoQuandoTambemExisteGoogleMeet() {
         String nome = "Escritório Climbe Cont - Hermes Fontes-2-Sala de Reunião - Climbe Cont (6)";
         var evento = new Event().setId("evento-com-sala").setHangoutLink("https://meet.google.com/abc-defg-hij")
