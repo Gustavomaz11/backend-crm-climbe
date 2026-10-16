@@ -9,6 +9,18 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReuniaoListItemDTOTest {
+    @Test void usaSalaFisicaComoLocalMesmoQuandoTambemExisteGoogleMeet() {
+        String nome = "Escritório Climbe Cont - Hermes Fontes-2-Sala de Reunião - Climbe Cont (6)";
+        var evento = new Event().setId("evento-com-sala").setHangoutLink("https://meet.google.com/abc-defg-hij")
+                .setAttendees(List.of(new EventAttendee().setEmail("sala@resource.calendar.google.com")
+                        .setResource(true).setDisplayName(nome)));
+        var resumo = ReuniaoListItemDTO.fromGoogleEventExterno(evento);
+        assertThat(resumo.getLocal()).isEqualTo(nome);
+        assertThat(resumo.getSalaEmail()).isEqualTo("sala@resource.calendar.google.com");
+        assertThat(resumo.getPresencial()).isTrue();
+        assertThat(resumo.getLinkMeet()).isEqualTo(evento.getHangoutLink());
+        assertThat(resumo.getParticipantes()).isEmpty();
+    }
     @Test void preservaInformacoesDoGoogleSemConfundirSalaComParticipante() {
         var evento = new Event().setId("evento-1").setSummary("Reunião externa").setDescription("Pauta completa")
                 .setLocation("Sala principal").setHangoutLink("https://meet.google.com/abc-defg-hij")

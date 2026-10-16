@@ -143,14 +143,21 @@ omitir `participanteIds` preserva os convidados; enviar uma lista altera a sele�
 Aplique `V73__reunioes_equipe_salas_google.sql` antes de iniciar a nova versão da API.
 A migration preserva as reuniões existentes, permite cliente nulo e adiciona `sala_email`.
 
-`GET /reunioes/salas` consulta as salas do Google Workspace da conta autenticada.
+`GET /reunioes/salas` consulta as salas físicas do campo **Salas ou recursos** do
+Google Agenda. O nome completo do recurso, incluindo escritório, andar e sala,
+é usado como local da reunião; o link do Google Meet fica separado desse local.
 Para o catálogo completo, habilite a **Admin SDK API** no projeto Google Cloud,
 autorize o escopo `https://www.googleapis.com/auth/admin.directory.resource.calendar.readonly`
 e use uma conta com privilégio de leitura dos recursos de calendário no Workspace.
 Contas já conectadas precisam entrar novamente com o Google para conceder o novo escopo.
-Se a conta não tiver acesso ao diretório, a API lista as agendas de salas que ela
-já acompanha no Google Agenda, incluindo agendas ocultas. Outros calendários pessoais
-e recursos classificados como `OTHER` no diretório não entram na seleção.
+Se a conta não tiver acesso ao diretório, a API também descobre as salas físicas
+vinculadas aos eventos da agenda primária nos últimos 90 dias e nos próximos 365 dias,
+sem exigir que o usuário acompanhe a agenda da sala. Esses recursos são combinados
+com as agendas de salas acompanhadas pela conta, incluindo agendas ocultas.
+Participantes comuns e links do Meet não são usados como opções de sala. Outros
+calendários pessoais e recursos classificados como `OTHER` no diretório não entram na seleção.
+Os resumos e detalhes de reuniões já vinculadas ao Google também usam a sala física
+do evento acessível à conta, quando disponível, preservando o link do Meet separado.
 
 Envie o `email` da sala em `salaEmail` para reuniões presenciais. A API valida a sala
 no catálogo, usa seu nome como local e a inclui no evento como participante do tipo

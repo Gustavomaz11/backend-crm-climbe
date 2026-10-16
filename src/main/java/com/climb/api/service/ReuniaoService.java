@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -90,7 +89,7 @@ public class ReuniaoService {
                 .toList());
 
         if (googleAccessToken != null && !googleAccessToken.isBlank()) {
-            adicionarEventosExternosGoogle(resultado, visiveis, googleAccessToken);
+            adicionarEventosExternosGoogle(resultado, googleAccessToken);
         }
 
         resultado.sort(Comparator
@@ -101,12 +100,9 @@ public class ReuniaoService {
     }
 
     private void adicionarEventosExternosGoogle(List<ReuniaoListItemDTO> resultado,
-                                                List<Reuniao> reunioes,
                                                 String accessToken) {
-        Set<String> idsLocais = reunioes.stream()
-                .map(Reuniao::getGoogleEventId)
-                .filter(id -> id != null && !id.isBlank())
-                .collect(Collectors.toCollection(HashSet::new));
+        var resumosLocais = resultado.stream().filter(resumo -> StringUtils.hasText(resumo.getGoogleEventId()))
+                .collect(Collectors.toMap(ReuniaoListItemDTO::getGoogleEventId, resumo -> resumo, (primeiro, outro) -> primeiro));
 
         try {
             Instant inicio = Instant.now().minus(90, ChronoUnit.DAYS);
@@ -114,13 +110,17 @@ public class ReuniaoService {
             googleCalendarService.listarEventosPrimarios(accessToken, inicio, fim).stream()
                     .filter(event -> event != null)
                     .filter(event -> !"cancelled".equalsIgnoreCase(event.getStatus()))
-                    .filter(event -> event.getId() != null && !idsLocais.contains(event.getId()))
-                    .map(event -> {
+                    .filter(event -> event.getId() != null)
+                    .forEach(event -> {
+                        var resumoLocal = resumosLocais.get(event.getId());
+                        if (resumoLocal != null) {
+                            resumoLocal.aplicarSalaFisicaGoogle(event);
+                            return;
+                        }
                         var resumo = ReuniaoListItemDTO.fromGoogleEventExterno(event);
                         resumo.setLinkMeet(googleCalendarService.extrairLinkMeet(event));
-                        return resumo;
-                    })
-                    .forEach(resultado::add);
+                        resultado.add(resumo);
+                    });
         } catch (Exception e) {
             log.warn("Falha ao carregar agenda Google do usuario autenticado: {}", e.getMessage());
         }
@@ -138,6 +138,15 @@ public class ReuniaoService {
     public ReuniaoListItemDTO buscarDetalhes(Long id, Long usuarioId) {
         Reuniao reuniao = buscarPorId(id, usuarioId);
         var detalhes = ReuniaoListItemDTO.fromEntity(reuniao);
+        if (StringUtils.hasText(reuniao.getGoogleEventId())) {
+            googleCredentialService.obterAccessToken(usuarioId).ifPresent(token -> {
+                try {
+                    detalhes.aplicarSalaFisicaGoogle(googleCalendarService.buscarEvento(reuniao.getGoogleEventId(), token));
+                } catch (Exception e) {
+                    log.warn("Não foi possível consultar a sala física da reunião {} no Google Agenda", id);
+                }
+            });
+        }
         detalhes.setParticipantes(participanteReuniaoRepository.findByReuniao_IdReuniao(id).stream()
                 .map(ParticipanteReuniao::getUsuario).filter(java.util.Objects::nonNull)
                 .map(usuario -> new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())).toList());
@@ -266,7 +275,9 @@ public class ReuniaoService {
                 ? request.getSalaEmail().trim() : null;
         String local = request.getLocal();
         if (salaEmail != null) {
-            local = salaEmail.equalsIgnoreCase(reuniao.getSalaEmail()) ? reuniao.getLocal()
+            boolean manterLocal = salaEmail.equalsIgnoreCase(reuniao.getSalaEmail())
+                    && java.util.Objects.equals(local, reuniao.getLocal());
+            local = manterLocal ? reuniao.getLocal()
                     : googleSalaService.listar(accessToken).stream()
                         .filter(sala -> sala.email().equalsIgnoreCase(salaEmail)).findFirst()
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,

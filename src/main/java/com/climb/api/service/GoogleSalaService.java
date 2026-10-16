@@ -15,6 +15,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class GoogleSalaService {
@@ -41,9 +43,19 @@ public class GoogleSalaService {
                 if (e.getStatusCode().value() != 403 && e.getStatusCode().value() != 404) throw e;
                 salas = List.of();
             }
-            if (salas.isEmpty()) salas = listarAgendasDeSalas(accessToken);
+            if (salas.isEmpty()) {
+                var agendasAcompanhadas = listarAgendasDeSalas(accessToken);
+                salas = new ArrayList<>();
+                var inicio = Instant.now().minus(90, ChronoUnit.DAYS);
+                var fim = Instant.now().plus(365, ChronoUnit.DAYS);
+                calendar.listarEventosPrimarios(accessToken, inicio, fim).stream()
+                        .filter(evento -> !"cancelled".equalsIgnoreCase(evento.getStatus()))
+                        .flatMap(evento -> SalaReuniaoDTO.fromGoogleEvent(evento).stream()).forEach(salas::add);
+                salas.addAll(agendasAcompanhadas);
+            }
             Map<String, SalaReuniaoDTO> porEmail = new LinkedHashMap<>();
-            salas.forEach(sala -> porEmail.putIfAbsent(sala.email(), sala));
+            salas.forEach(sala -> porEmail.merge(sala.email().toLowerCase(java.util.Locale.ROOT), sala,
+                    (anterior, atual) -> anterior.nome().equalsIgnoreCase(anterior.email()) ? atual : anterior));
             return porEmail.values().stream().sorted(Comparator.comparing(SalaReuniaoDTO::nome,
                     String.CASE_INSENSITIVE_ORDER)).toList();
         } catch (Exception e) {

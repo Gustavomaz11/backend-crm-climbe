@@ -33,6 +33,25 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ReuniaoServiceGoogleSyncTest {
 
+    @Test void resumoDeReuniaoLocalUsaSalaFisicaDoEventoSemDuplicarReuniao() throws Exception {
+        String nome = "Escritório Climbe Cont - Hermes Fontes-2-Sala de Reunião - Climbe Cont (6)";
+        var reuniao = new Reuniao(); reuniao.setIdReuniao(11L); reuniao.setOrganizadorId(7L);
+        reuniao.setGoogleEventId("evento"); reuniao.setLocal("Local antigo");
+        when(googleCredentialService.obterAccessToken(8L)).thenReturn(Optional.of("token"));
+        when(reuniaoRepository.findVisiveisParaUsuario(8L)).thenReturn(List.of(reuniao));
+        var evento = new Event().setId("evento").setAttendees(List.of(
+                new com.google.api.services.calendar.model.EventAttendee().setEmail("sala@resource.calendar.google.com")
+                        .setResource(true).setDisplayName(nome)));
+        when(googleCalendarService.listarEventosPrimarios(eq("token"), any(), any())).thenReturn(List.of(evento));
+        var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService);
+        var resumos = service.listar(8L);
+        assertEquals(1, resumos.size());
+        assertEquals(11L, resumos.getFirst().getIdReuniao());
+        assertEquals(nome, resumos.getFirst().getLocal());
+        assertEquals("Local antigo", reuniao.getLocal());
+    }
+
     @Test void ausenciaDeGoogleNaoFingeAgendamentoConfirmado() {
         when(googleCredentialService.obterAccessToken(7L)).thenReturn(Optional.empty());
         var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,

@@ -20,6 +20,36 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class GoogleSalaServiceTest {
     private static final String URL = "https://admin.googleapis.com/admin/directory/v1/customer/my_customer/resources/calendars?maxResults=500";
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void descobreSalaFisicaDosEventosMesmoSemAcompanharAgendaDaSala(boolean acompanhaAgenda) throws Exception {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+        var calendarService = mock(GoogleCalendarService.class);
+        var calendar = mock(Calendar.class);
+        var calendarList = mock(Calendar.CalendarList.class);
+        var request = mock(Calendar.CalendarList.List.class, Answers.RETURNS_SELF);
+        when(calendarService.buildCalendar("token")).thenReturn(calendar);
+        when(calendar.calendarList()).thenReturn(calendarList);
+        when(calendarList.list()).thenReturn(request);
+        when(request.execute()).thenReturn(new CalendarList().setItems(acompanhaAgenda
+                ? List.of(new CalendarListEntry().setId("sala@resource.calendar.google.com").setSummary("Sala 1")) : List.of()));
+        String nome = "Escritório Climbe Cont - Hermes Fontes-2-Sala de Reunião - Climbe Cont (6)";
+        var evento = new com.google.api.services.calendar.model.Event().setHangoutLink("https://meet.google.com/teste")
+                .setAttendees(List.of(new com.google.api.services.calendar.model.EventAttendee()
+                        .setEmail("sala@resource.calendar.google.com").setResource(true).setDisplayName(nome),
+                        new com.google.api.services.calendar.model.EventAttendee().setEmail("ana@example.test").setDisplayName("Ana")));
+        when(calendarService.listarEventosPrimarios(eq("token"), any(), any())).thenReturn(List.of(evento, evento));
+
+        var salas = new GoogleSalaService(builder, calendarService).listar("token");
+
+        assertThat(salas).hasSize(1);
+        assertThat(salas.getFirst().nome()).isEqualTo(nome);
+        assertThat(salas.getFirst().email()).isEqualTo("sala@resource.calendar.google.com");
+        server.verify();
+    }
+
     @Test void listaTodasAsPaginasDoCatalogoSemIncluirOutrosRecursos() {
         var builder = RestClient.builder();
         var server = MockRestServiceServer.bindTo(builder).build();

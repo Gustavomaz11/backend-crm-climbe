@@ -85,7 +85,7 @@ public class ReuniaoListItemDTO {
             d.setOrganizador(new UsuarioResumoDTO(null, event.getOrganizer().getDisplayName(), event.getOrganizer().getEmail()));
         }
         d.setParticipantes(event.getAttendees() == null ? List.of() : event.getAttendees().stream()
-                .filter(convidado -> !Boolean.TRUE.equals(convidado.getResource()))
+                .filter(convidado -> !SalaReuniaoDTO.isResource(convidado))
                 .map(convidado -> new UsuarioResumoDTO(null, convidado.getDisplayName(), convidado.getEmail())).toList());
         d.setParticipantesOmitidos(Boolean.TRUE.equals(event.getAttendeesOmitted()));
         boolean diaInteiro =
@@ -110,9 +110,18 @@ public class ReuniaoListItemDTO {
                                 && event.getConferenceData().getEntryPoints() != null
                                 && !event.getConferenceData().getEntryPoints().isEmpty());
         d.setPresencial(!virtual);
+        d.aplicarSalaFisicaGoogle(event);
         d.setPauta(event.getDescription());
         d.setStatus("GOOGLE_CALENDAR");
         return d;
+    }
+
+    public void aplicarSalaFisicaGoogle(Event event) {
+        var salasFisicas = SalaReuniaoDTO.fromGoogleEvent(event);
+        if (salasFisicas.isEmpty()) return;
+        setLocal(salasFisicas.stream().map(SalaReuniaoDTO::nome).collect(java.util.stream.Collectors.joining(", ")));
+        setSalaEmail(salasFisicas.getFirst().email());
+        setPresencial(true);
     }
 
     private static long syntheticId(String googleEventId) {

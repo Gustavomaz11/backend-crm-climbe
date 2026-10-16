@@ -34,6 +34,21 @@ class ReuniaoAgendamentoTest {
     @InjectMocks ReuniaoService service;
     private static final String SALA = "sala@resource.calendar.google.com";
 
+    @Test void detalhesDeReuniaoLocalUsamSalaFisicaVinculadaAoEventoGoogle() throws Exception {
+        String nome = "Escritório Climbe Cont - Hermes Fontes-2-Sala de Reunião - Climbe Cont (6)";
+        var reuniao = new Reuniao(); reuniao.setIdReuniao(3L); reuniao.setGoogleEventId("evento");
+        reuniao.setLocal("Local antigo");
+        when(repository.findById(3L)).thenReturn(Optional.of(reuniao));
+        when(participantes.existsByReuniao_IdReuniaoAndUsuario_Id(3L, 2L)).thenReturn(true);
+        when(credentials.obterAccessToken(2L)).thenReturn(Optional.of("token"));
+        when(calendar.buscarEvento("evento", "token")).thenReturn(new Event().setAttendees(List.of(
+                new com.google.api.services.calendar.model.EventAttendee().setEmail(SALA).setResource(true).setDisplayName(nome))));
+        var detalhes = service.buscarDetalhes(3L, 2L);
+        assertThat(detalhes.getLocal()).isEqualTo(nome);
+        assertThat(detalhes.getSalaEmail()).isEqualTo(SALA);
+        assertThat(reuniao.getLocal()).isEqualTo("Local antigo");
+    }
+
     @Test void consultaDetalhesComParticipantesEOrganizadorSemExigirGoogle() {
         var reuniao = new Reuniao(); reuniao.setIdReuniao(3L); reuniao.setOrganizadorId(1L);
         reuniao.setTitulo("Reunião da equipe"); reuniao.setPauta("Revisar entregas"); reuniao.setLocal("Sala 1");
@@ -107,7 +122,7 @@ class ReuniaoAgendamentoTest {
         when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
         when(usuarios.findAllById(any())).thenReturn(List.of(usuario(1L), usuario(2L)));
         when(calendar.atualizarEvento(any(), eq("token"), any())).thenReturn(new Event().setId("evento"));
-        var request = request(); request.setSalaEmail(SALA); request.setStatus("CONFIRMADA");
+        var request = request(); request.setSalaEmail(SALA); request.setStatus("CONFIRMADA"); request.setLocal("Sala 1");
 
         var atualizada = service.atualizar(3L, 1L, request);
 
