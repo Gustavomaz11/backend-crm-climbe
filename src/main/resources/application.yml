@@ -31,6 +31,8 @@ management:
         include: health,info,metrics
 
 app:
+  cnpja:
+    api-key: ${CNPJA_API_KEY:${cnpja:}}
   frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   mail:
     from: ${APP_MAIL_FROM:no-reply@climbe.com}

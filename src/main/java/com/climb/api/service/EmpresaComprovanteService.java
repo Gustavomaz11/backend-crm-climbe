@@ -1,0 +1,73 @@
+package com.climb.api.service;
+
+import com.climb.api.model.Empresa;
+import com.climb.api.model.EmpresaComprovante;
+import com.climb.api.model.dto.EmpresaComprovanteDTO;
+import com.climb.api.repository.EmpresaRepository;
+import com.climb.api.repository.EmpresaComprovanteRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+public class EmpresaComprovanteService {
+    private final EmpresaRepository empresas;
+    private final EmpresaComprovanteRepository comprovantes;
+
+    public EmpresaComprovanteService(EmpresaRepository empresas, EmpresaComprovanteRepository comprovantes) {
+        this.empresas = empresas;
+        this.comprovantes = comprovantes;
+    }
+
+    public List<EmpresaComprovanteDTO> listar(Long empresaId) {
+        buscarEmpresa(empresaId);
+        return comprovantes.listar(empresaId);
+    }
+
+    @Transactional
+    public List<EmpresaComprovanteDTO> solicitar(Long empresaId) {
+        agendar(buscarEmpresa(empresaId));
+        return comprovantes.listar(empresaId);
+    }
+
+    public void agendar(Empresa empresa) {
+        String cnpj = empresa.getCnpj().replaceAll("\\D", "");
+        for (String tipo : List.of("RFB", "SIMPLES", "CCC", "SUFRAMA")) {
+            var registro = comprovantes.findByEmpresaIdAndTipo(empresa.getIdEmpresa(), tipo).orElseGet(EmpresaComprovante::new);
+            if (registro.getId() != null && cnpj.equals(registro.getCnpj()) && !"ERRO".equals(registro.getStatus())) continue;
+            registro.setEmpresaId(empresa.getIdEmpresa());
+            registro.setCnpj(cnpj);
+            registro.setTipo(tipo);
+            preparar(registro);
+        }
+    }
+
+    @Transactional
+    public void tentarNovamente(Long empresaId, Long id) {
+        buscarEmpresa(empresaId);
+        var registro = buscar(empresaId, id);
+        if (!List.of("ERRO", "INDISPONIVEL").contains(registro.getStatus())) return;
+        preparar(registro);
+    }
+
+    public EmpresaComprovante buscar(Long empresaId, Long id) {
+        return comprovantes.findByIdAndEmpresaId(id, empresaId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Comprovante não encontrado para esta empresa."));
+    }
+
+    private Empresa buscarEmpresa(Long id) {
+        return empresas.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada."));
+    }
+
+    private void preparar(EmpresaComprovante registro) {
+        registro.setStatus("PENDENTE");
+        registro.setMensagem(null);
+        registro.setConteudo(null);
+        registro.setGeradoEm(null);
+        registro.setAtualizadoEm(LocalDateTime.now());
+        comprovantes.save(registro);
+    }
+}

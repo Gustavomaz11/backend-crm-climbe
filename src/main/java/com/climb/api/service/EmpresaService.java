@@ -19,10 +19,12 @@ public class EmpresaService {
 
     private final EmpresaRepository repository;
     private final EmpresaMapper empresaMapper;
+    private final EmpresaComprovanteService comprovantes;
 
-    public EmpresaService(EmpresaRepository repository, EmpresaMapper empresaMapper) {
+    public EmpresaService(EmpresaRepository repository, EmpresaMapper empresaMapper, EmpresaComprovanteService comprovantes) {
         this.repository = repository;
         this.empresaMapper = empresaMapper;
+        this.comprovantes = comprovantes;
     }
 
     public List<EmpresaResponseDTO> listar() {
@@ -35,6 +37,7 @@ public class EmpresaService {
         return empresaMapper.toResponseDto(empresa);
     }
 
+    @Transactional
     public EmpresaResponseDTO criar(EmpresaRequestDTO empresaRequestDto) {
 
         if (repository.findByCnpj(empresaRequestDto.cnpj()).isPresent()) {
@@ -44,13 +47,19 @@ public class EmpresaService {
         }
 
         Empresa empresa = empresaMapper.toEntity(empresaRequestDto);
-        return empresaMapper.toResponseDto(repository.save(empresa));
+        empresa.setDadosCadastrais(CnpjaDadosCadastrais.semHistoricos(empresaRequestDto.dadosCadastrais()));
+        empresa.setDadosCadastrais(CnpjaDadosCadastrais.comDadosBasicos(empresa));
+        empresa = repository.save(empresa);
+        comprovantes.agendar(empresa);
+        return empresaMapper.toResponseDto(empresa);
     }
 
+    @Transactional
     public EmpresaResponseDTO atualizar(Long id, EmpresaRequestDTO atualizada) {
 
         Empresa empresa = repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada"));
+        boolean mudouCnpj = !empresa.getCnpj().replaceAll("\\D", "").equals(atualizada.cnpj().replaceAll("\\D", ""));
 
         repository.findByCnpj(atualizada.cnpj()).ifPresent(e -> {
             if (!e.getIdEmpresa().equals(id)) {
@@ -72,8 +81,13 @@ public class EmpresaService {
         empresa.setRepresentanteNome(atualizada.representanteNome());
         empresa.setRepresentanteCpf(atualizada.representanteCpf());
         empresa.setRepresentanteContato(atualizada.representanteContato());
+        empresa.setTipoEmpresa(atualizada.tipoEmpresa());
+        if (atualizada.dadosCadastrais() != null || mudouCnpj) empresa.setDadosCadastrais(CnpjaDadosCadastrais.semHistoricos(atualizada.dadosCadastrais()));
+        empresa.setDadosCadastrais(CnpjaDadosCadastrais.comDadosBasicos(empresa));
 
-        return empresaMapper.toResponseDto(repository.save(empresa));
+        empresa = repository.save(empresa);
+        comprovantes.agendar(empresa);
+        return empresaMapper.toResponseDto(empresa);
     }
 
     @Transactional

@@ -3,6 +3,9 @@ package com.climb.api.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import org.hibernate.validator.constraints.br.CNPJ;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import java.util.Map;
 
 @Entity
 @Table(name = "empresas")
@@ -56,6 +59,18 @@ public class Empresa {
 
     @Column(name = "representante_contato", length = 50)
     private String representanteContato;
+
+    @Column(name = "tipo_empresa", length = 40)
+    private String tipoEmpresa;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "dados_cadastrais", columnDefinition = "json")
+    private Map<String, Object> dadosCadastrais;
+
+    public String getTipoEmpresa() { return tipoEmpresa; }
+    public void setTipoEmpresa(String tipoEmpresa) { this.tipoEmpresa = tipoEmpresa; }
+    public Map<String, Object> getDadosCadastrais() { return dadosCadastrais; }
+    public void setDadosCadastrais(Map<String, Object> dados) { this.dadosCadastrais = dados; }
 
     public Long getIdEmpresa() { return idEmpresa; }
     public void setIdEmpresa(Long idEmpresa) { this.idEmpresa = idEmpresa; }

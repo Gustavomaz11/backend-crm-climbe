@@ -17,6 +17,8 @@ public record EmpresaRequestDTO(
         String email,
         String representanteNome,
         String representanteCpf,
-        String representanteContato
+        String representanteContato,
+        String tipoEmpresa,
+        java.util.Map<String, Object> dadosCadastrais
 ) {
 }
