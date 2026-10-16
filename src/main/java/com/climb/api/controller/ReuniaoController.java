@@ -45,6 +45,11 @@ public class ReuniaoController {
         return service.listarSalas(getAuthenticatedUserId());
     }
 
+    @GetMapping("/{id}/detalhes")
+    public ReuniaoListItemDTO buscarDetalhes(@PathVariable Long id) {
+        return service.buscarDetalhes(id, getAuthenticatedUserId());
+    }
+
     @GetMapping("/empresa/{empresaId}")
     public List<Reuniao> listarPorEmpresa(@PathVariable Long empresaId) {
         return service.listarPorEmpresa(empresaId, getAuthenticatedUserId());

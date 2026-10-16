@@ -129,6 +129,12 @@ Fluxo:
 
 ## Reuniões da equipe e salas do Google
 
+Ao clicar em um dia com agendamentos no Dashboard ou na Agenda, o frontend abre a
+lista de reuniões e permite consultar seus detalhes. `GET /reunioes/{id}/detalhes`
+retorna os dados da reunião, participantes (nome e e-mail) e organizador, exigindo
+que o usuário autenticado participe da reunião. Eventos externos do Google usam
+os detalhes já retornados na consulta da agenda. Esta alteração não exige migration.
+
 O cliente é opcional em `POST /reunioes` e `PUT /reunioes/{id}`: envie `empresaId: null`
 para uma reunião da equipe e selecione os usuários em `participanteIds`. O organizador
 e `contato@climbe.com.br` continuam incluídos automaticamente. Nas atualizações,

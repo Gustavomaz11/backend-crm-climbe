@@ -26,6 +26,7 @@ import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.ReuniaoListItemDTO;
 import com.climb.api.model.dto.ReuniaoRequestDTO;
 import com.climb.api.model.dto.SalaReuniaoDTO;
+import com.climb.api.model.dto.UsuarioResumoDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.ParticipanteReuniaoRepository;
 import com.climb.api.repository.ReuniaoRepository;
@@ -114,7 +115,11 @@ public class ReuniaoService {
                     .filter(event -> event != null)
                     .filter(event -> !"cancelled".equalsIgnoreCase(event.getStatus()))
                     .filter(event -> event.getId() != null && !idsLocais.contains(event.getId()))
-                    .map(ReuniaoListItemDTO::fromGoogleEventExterno)
+                    .map(event -> {
+                        var resumo = ReuniaoListItemDTO.fromGoogleEventExterno(event);
+                        resumo.setLinkMeet(googleCalendarService.extrairLinkMeet(event));
+                        return resumo;
+                    })
                     .forEach(resultado::add);
         } catch (Exception e) {
             log.warn("Falha ao carregar agenda Google do usuario autenticado: {}", e.getMessage());
@@ -127,6 +132,20 @@ public class ReuniaoService {
                 .orElseThrow(() -> new RuntimeException("Reuniao nao encontrada"));
         exigirParticipante(reuniao.getIdReuniao(), usuarioId);
         return reuniao;
+    }
+
+    @Transactional(readOnly = true)
+    public ReuniaoListItemDTO buscarDetalhes(Long id, Long usuarioId) {
+        Reuniao reuniao = buscarPorId(id, usuarioId);
+        var detalhes = ReuniaoListItemDTO.fromEntity(reuniao);
+        detalhes.setParticipantes(participanteReuniaoRepository.findByReuniao_IdReuniao(id).stream()
+                .map(ParticipanteReuniao::getUsuario).filter(java.util.Objects::nonNull)
+                .map(usuario -> new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())).toList());
+        if (reuniao.getOrganizadorId() != null) {
+            usuarioRepository.findById(reuniao.getOrganizadorId()).ifPresent(usuario -> detalhes.setOrganizador(
+                    new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())));
+        }
+        return detalhes;
     }
 
     @Transactional(readOnly = true)

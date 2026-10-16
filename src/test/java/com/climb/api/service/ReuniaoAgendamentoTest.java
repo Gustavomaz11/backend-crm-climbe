@@ -34,6 +34,38 @@ class ReuniaoAgendamentoTest {
     @InjectMocks ReuniaoService service;
     private static final String SALA = "sala@resource.calendar.google.com";
 
+    @Test void consultaDetalhesComParticipantesEOrganizadorSemExigirGoogle() {
+        var reuniao = new Reuniao(); reuniao.setIdReuniao(3L); reuniao.setOrganizadorId(1L);
+        reuniao.setTitulo("Reunião da equipe"); reuniao.setPauta("Revisar entregas"); reuniao.setLocal("Sala 1");
+        reuniao.setData(LocalDate.of(2026, 10, 19)); reuniao.setHora(LocalTime.of(10, 0));
+        var organizador = usuario(1L); organizador.setNomeCompleto("Ana");
+        var convidado = usuario(2L); convidado.setNomeCompleto("Bruno");
+        var participante = new ParticipanteReuniao(); participante.setUsuario(convidado);
+        when(repository.findById(3L)).thenReturn(Optional.of(reuniao));
+        when(participantes.existsByReuniao_IdReuniaoAndUsuario_Id(3L, 2L)).thenReturn(true);
+        when(participantes.findByReuniao_IdReuniao(3L)).thenReturn(List.of(participante));
+        when(usuarios.findById(1L)).thenReturn(Optional.of(organizador));
+
+        var detalhes = service.buscarDetalhes(3L, 2L);
+
+        assertThat(detalhes.getEmpresa()).isNull();
+        assertThat(detalhes.getPauta()).isEqualTo("Revisar entregas");
+        assertThat(detalhes.getLocal()).isEqualTo("Sala 1");
+        assertThat(detalhes.getOrganizador().nomeCompleto()).isEqualTo("Ana");
+        assertThat(detalhes.getParticipantes()).extracting(pessoa -> pessoa.nomeCompleto()).containsExactly("Bruno");
+        assertThat(detalhes.getDataHoraFim()).isEqualTo("2026-10-19T11:00:00-03:00");
+        verifyNoInteractions(calendar, credentials);
+    }
+
+    @Test void naoExpoeDetalhesOuParticipantesParaUsuarioForaDaReuniao() {
+        var reuniao = new Reuniao(); reuniao.setIdReuniao(3L);
+        when(repository.findById(3L)).thenReturn(Optional.of(reuniao));
+        assertThatThrownBy(() -> service.buscarDetalhes(3L, 99L)).isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403");
+        verify(participantes, never()).findByReuniao_IdReuniao(any());
+        verifyNoInteractions(usuarios, calendar);
+    }
+
     @Test void agendaEquipeSemClienteComParticipantesESalaDoGoogle() throws Exception {
         var request = request();
         request.setSalaEmail(SALA);

@@ -9,6 +9,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Data
 public class ReuniaoListItemDTO {
@@ -29,6 +30,11 @@ public class ReuniaoListItemDTO {
     private java.time.LocalDateTime arquivadoEm;
     private String googleEventId;
     private String linkMeet;
+    private String dataHoraFim;
+    private String googleEventUrl;
+    private UsuarioResumoDTO organizador;
+    private List<UsuarioResumoDTO> participantes;
+    private Boolean participantesOmitidos;
     /** true quando o Google envia só {@code start.date} (evento de dia inteiro). */
     private Boolean diaInteiro;
 
@@ -54,6 +60,10 @@ public class ReuniaoListItemDTO {
         d.setLinkMeet(r.getLinkMeet());
         d.setDiaInteiro(false);
         d.setDataHora(buildDataHoraIso(r.getData(), r.getHora()));
+        if (r.getData() != null && r.getHora() != null) {
+            d.setDataHoraFim(ZonedDateTime.of(r.getData(), r.getHora(), ZONE).plusHours(1)
+                    .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        }
         return d;
     }
 
@@ -65,6 +75,19 @@ public class ReuniaoListItemDTO {
         d.setIdReuniao(syntheticId(event.getId()));
         d.setTitulo(event.getSummary() != null ? event.getSummary() : "(Sem título)");
         d.setGoogleEventId(event.getId());
+        d.setGoogleEventUrl(event.getHtmlLink());
+        d.setLinkMeet(event.getHangoutLink());
+        if (event.getEnd() != null && event.getEnd().getDateTime() != null) {
+            d.setDataHoraFim(ZonedDateTime.ofInstant(java.time.Instant.ofEpochMilli(
+                    event.getEnd().getDateTime().getValue()), ZONE).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        }
+        if (event.getOrganizer() != null) {
+            d.setOrganizador(new UsuarioResumoDTO(null, event.getOrganizer().getDisplayName(), event.getOrganizer().getEmail()));
+        }
+        d.setParticipantes(event.getAttendees() == null ? List.of() : event.getAttendees().stream()
+                .filter(convidado -> !Boolean.TRUE.equals(convidado.getResource()))
+                .map(convidado -> new UsuarioResumoDTO(null, convidado.getDisplayName(), convidado.getEmail())).toList());
+        d.setParticipantesOmitidos(Boolean.TRUE.equals(event.getAttendeesOmitted()));
         boolean diaInteiro =
                 event.getStart() != null
                         && event.getStart().getDate() != null
