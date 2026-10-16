@@ -16,8 +16,8 @@ public class EmpresaComprovanteController {
     @GetMapping
     public List<EmpresaComprovanteDTO> listar(@PathVariable Long empresaId) { return service.listar(empresaId); }
 
-    @PostMapping
-    public List<EmpresaComprovanteDTO> solicitar(@PathVariable Long empresaId) { return service.solicitar(empresaId); }
+    @PostMapping("/{tipo}/solicitar")
+    public List<EmpresaComprovanteDTO> solicitar(@PathVariable Long empresaId, @PathVariable String tipo) { return service.solicitar(empresaId, tipo); }
 
     @PostMapping("/{id}/tentar-novamente")
     public ResponseEntity<Void> tentarNovamente(@PathVariable Long empresaId, @PathVariable Long id) {
