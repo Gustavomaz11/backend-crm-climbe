@@ -12,6 +12,7 @@ public class ReuniaoRequestDTO {
     private LocalTime hora;
     private Boolean presencial;
     private String local;
+    private String salaEmail;
     private String pauta;
     private String status;
     private List<Long> participanteIds;
@@ -33,6 +34,9 @@ public class ReuniaoRequestDTO {
 
     public String getLocal() { return local; }
     public void setLocal(String local) { this.local = local; }
+
+    public String getSalaEmail() { return salaEmail; }
+    public void setSalaEmail(String salaEmail) { this.salaEmail = salaEmail; }
 
     public String getPauta() { return pauta; }
     public void setPauta(String pauta) { this.pauta = pauta; }

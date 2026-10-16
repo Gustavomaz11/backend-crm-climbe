@@ -23,7 +23,7 @@ public class Reuniao extends ItemArquivavelKanban {
     private String titulo;
 
     @ManyToOne
-    @JoinColumn(name = "empresa_id", nullable = false)
+    @JoinColumn(name = "empresa_id")
     private Empresa empresa;
 
     @Column(name = "data")
@@ -37,6 +37,9 @@ public class Reuniao extends ItemArquivavelKanban {
 
     @Column(name = "local")
     private String local;
+
+    @Column(name = "sala_email", length = 320)
+    private String salaEmail;
 
     @Column(name = "pauta", columnDefinition = "TEXT")
     private String pauta;
@@ -76,6 +79,9 @@ public class Reuniao extends ItemArquivavelKanban {
 
     public String getLocal() { return local; }
     public void setLocal(String local) { this.local = local; }
+
+    public String getSalaEmail() { return salaEmail; }
+    public void setSalaEmail(String salaEmail) { this.salaEmail = salaEmail; }
 
     public String getPauta() { return pauta; }
     public void setPauta(String pauta) { this.pauta = pauta; }

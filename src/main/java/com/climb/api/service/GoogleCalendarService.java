@@ -55,7 +55,8 @@ public class GoogleCalendarService {
         Event alterado = buildEvent(reuniao, convidados);
         if (atual.getAttendees() != null) {
             alterado.setAttendees(alterado.getAttendees().stream().map(convidado -> atual.getAttendees().stream()
-                    .filter(a -> convidado.getEmail().equalsIgnoreCase(a.getEmail())).findFirst()
+                    .filter(a -> !Boolean.TRUE.equals(convidado.getResource())
+                            && convidado.getEmail().equalsIgnoreCase(a.getEmail())).findFirst()
                     .map(EventAttendee::clone).orElse(convidado)).toList());
         }
         if (Boolean.FALSE.equals(reuniao.getPresencial()) && atual.getConferenceData() != null) {
@@ -110,7 +111,13 @@ public class GoogleCalendarService {
         emails.add(EMAIL_OBRIGATORIO);
         if (convidados != null) convidados.stream().filter(e -> e != null && !e.isBlank())
                 .map(e -> e.trim().toLowerCase(java.util.Locale.ROOT)).forEach(emails::add);
-        event.setAttendees(emails.stream().map(e -> new EventAttendee().setEmail(e)).toList());
+        List<EventAttendee> participantes = new ArrayList<>(emails.stream()
+                .filter(e -> !e.equalsIgnoreCase(reuniao.getSalaEmail()))
+                .map(e -> new EventAttendee().setEmail(e)).toList());
+        if (Boolean.TRUE.equals(reuniao.getPresencial()) && reuniao.getSalaEmail() != null && !reuniao.getSalaEmail().isBlank()) {
+            participantes.add(new EventAttendee().setEmail(reuniao.getSalaEmail()).setResource(true));
+        }
+        event.setAttendees(participantes);
 
         ZoneId zoneId = ZoneId.of("America/Fortaleza");
         ZonedDateTime inicio = ZonedDateTime.of(reuniao.getData(), reuniao.getHora(), zoneId);

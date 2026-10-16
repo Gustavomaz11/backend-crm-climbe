@@ -25,6 +25,7 @@ import com.climb.api.model.Reuniao;
 import com.climb.api.model.Usuario;
 import com.climb.api.model.dto.ReuniaoListItemDTO;
 import com.climb.api.model.dto.ReuniaoRequestDTO;
+import com.climb.api.model.dto.SalaReuniaoDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.ParticipanteReuniaoRepository;
 import com.climb.api.repository.ReuniaoRepository;
@@ -43,6 +44,7 @@ public class ReuniaoService {
     private final UsuarioRepository usuarioRepository;
     private final ReuniaoEmailService reuniaoEmailService;
     private final GoogleCredentialService googleCredentialService;
+    private final GoogleSalaService googleSalaService;
 
     public ReuniaoService(ReuniaoRepository repository,
                           EmpresaRepository empresaRepository,
@@ -50,7 +52,8 @@ public class ReuniaoService {
                           ParticipanteReuniaoRepository participanteReuniaoRepository,
                           UsuarioRepository usuarioRepository,
                           ReuniaoEmailService reuniaoEmailService,
-                          GoogleCredentialService googleCredentialService) {
+                          GoogleCredentialService googleCredentialService,
+                          GoogleSalaService googleSalaService) {
         this.repository = repository;
         this.empresaRepository = empresaRepository;
         this.googleCalendarService = googleCalendarService;
@@ -58,6 +61,12 @@ public class ReuniaoService {
         this.usuarioRepository = usuarioRepository;
         this.reuniaoEmailService = reuniaoEmailService;
         this.googleCredentialService = googleCredentialService;
+        this.googleSalaService = googleSalaService;
+    }
+
+    public List<SalaReuniaoDTO> listarSalas(Long usuarioId) {
+        exigirUsuarioAutenticado(usuarioId);
+        return googleSalaService.listar(exigirCredencialGoogle(usuarioId));
     }
 
     public List<ReuniaoListItemDTO> listar(Long usuarioId) {
@@ -145,7 +154,7 @@ public class ReuniaoService {
         exigirUsuarioAutenticado(usuarioId);
         String accessToken = exigirCredencialGoogle(usuarioId);
         Reuniao reuniao = new Reuniao();
-        preencherReuniao(reuniao, request);
+        preencherReuniao(reuniao, request, accessToken);
         reuniao.setOrganizadorId(usuarioId);
 
         Reuniao salva = repository.save(reuniao);
@@ -176,7 +185,7 @@ public class ReuniaoService {
         String agendamentoAnterior = assinaturaAgendamento(reuniao);
         Set<Long> convidadosAnteriores = participanteReuniaoRepository.findByReuniao_IdReuniao(id).stream()
                 .map(p -> p.getUsuario().getId()).collect(Collectors.toSet());
-        preencherReuniao(reuniao, request);
+        preencherReuniao(reuniao, request, accessToken);
 
         Reuniao salva = repository.save(reuniao);
         List<Usuario> convidados = salvarParticipantes(salva, incluirUsuarioAutenticado(
@@ -223,22 +232,28 @@ public class ReuniaoService {
         repository.delete(reuniao);
     }
 
-    private void preencherReuniao(Reuniao reuniao, ReuniaoRequestDTO request) {
+    private void preencherReuniao(Reuniao reuniao, ReuniaoRequestDTO request, String accessToken) {
         if (request.getTitulo() == null || request.getTitulo().isBlank()) {
             throw new RuntimeException("Titulo e obrigatorio");
         }
 
-        if (request.getEmpresaId() == null) {
-            throw new RuntimeException("Empresa e obrigatoria");
-        }
-
-        Empresa empresa = empresaRepository.findById(request.getEmpresaId())
+        Empresa empresa = request.getEmpresaId() == null ? null : empresaRepository.findById(request.getEmpresaId())
                 .orElseThrow(() -> new RuntimeException("Empresa nao encontrada"));
 
         if (request.getData() == null || request.getHora() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe a data e o horário da reunião.");
         }
-        if (Boolean.TRUE.equals(request.getPresencial()) && !StringUtils.hasText(request.getLocal())) {
+        String salaEmail = Boolean.TRUE.equals(request.getPresencial()) && StringUtils.hasText(request.getSalaEmail())
+                ? request.getSalaEmail().trim() : null;
+        String local = request.getLocal();
+        if (salaEmail != null) {
+            local = salaEmail.equalsIgnoreCase(reuniao.getSalaEmail()) ? reuniao.getLocal()
+                    : googleSalaService.listar(accessToken).stream()
+                        .filter(sala -> sala.email().equalsIgnoreCase(salaEmail)).findFirst()
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "A sala selecionada não está disponível no catálogo do Google.")).nome();
+        }
+        if (Boolean.TRUE.equals(request.getPresencial()) && !StringUtils.hasText(local)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o local da reunião presencial.");
         }
         reuniao.setTitulo(request.getTitulo());
@@ -246,7 +261,8 @@ public class ReuniaoService {
         reuniao.setData(request.getData());
         reuniao.setHora(request.getHora());
         reuniao.setPresencial(Boolean.TRUE.equals(request.getPresencial()));
-        reuniao.setLocal(request.getLocal());
+        reuniao.setLocal(local);
+        reuniao.setSalaEmail(salaEmail);
         reuniao.setPauta(request.getPauta());
         reuniao.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : "AGENDADA");
     }
@@ -328,6 +344,6 @@ public class ReuniaoService {
     private String assinaturaAgendamento(Reuniao reuniao) {
         return String.join("|", String.valueOf(reuniao.getTitulo()), String.valueOf(reuniao.getData()),
                 String.valueOf(reuniao.getHora()), String.valueOf(reuniao.getPresencial()),
-                String.valueOf(reuniao.getLocal()), String.valueOf(reuniao.getLinkMeet()));
+                String.valueOf(reuniao.getLocal()), String.valueOf(reuniao.getSalaEmail()), String.valueOf(reuniao.getLinkMeet()));
     }
 }

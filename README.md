@@ -127,6 +127,34 @@ Fluxo:
 4. A API redireciona para `GOOGLE_CALENDAR_FRONTEND_URL` somente com um código temporário de troca, válido por 60 segundos.
 5. O frontend chama `POST /auth/exchange` com `{ "code": "...", "codeVerifier": "..." }`. A API exige o verifier original e consome o código uma única vez.
 
+## Reuniões da equipe e salas do Google
+
+O cliente é opcional em `POST /reunioes` e `PUT /reunioes/{id}`: envie `empresaId: null`
+para uma reunião da equipe e selecione os usuários em `participanteIds`. O organizador
+e `contato@climbe.com.br` continuam incluídos automaticamente. Nas atualizações,
+omitir `participanteIds` preserva os convidados; enviar uma lista altera a seleção.
+
+Aplique `V73__reunioes_equipe_salas_google.sql` antes de iniciar a nova versão da API.
+A migration preserva as reuniões existentes, permite cliente nulo e adiciona `sala_email`.
+
+`GET /reunioes/salas` consulta as salas do Google Workspace da conta autenticada.
+Para o catálogo completo, habilite a **Admin SDK API** no projeto Google Cloud,
+autorize o escopo `https://www.googleapis.com/auth/admin.directory.resource.calendar.readonly`
+e use uma conta com privilégio de leitura dos recursos de calendário no Workspace.
+Contas já conectadas precisam entrar novamente com o Google para conceder o novo escopo.
+Se a conta não tiver acesso ao diretório, a API lista as agendas de salas que ela
+já acompanha no Google Agenda, incluindo agendas ocultas. Outros calendários pessoais
+e recursos classificados como `OTHER` no diretório não entram na seleção.
+
+Envie o `email` da sala em `salaEmail` para reuniões presenciais. A API valida a sala
+no catálogo, usa seu nome como local e a inclui no evento como participante do tipo
+recurso. Trocar a sala ou escolher reunião virtual remove o recurso anterior do evento.
+O Google confirma ou recusa a reserva conforme disponibilidade e regras da sala;
+o formulário não apresenta uma sala convidada como reserva confirmada.
+
+Referências: [catálogo de recursos do Workspace](https://developers.google.com/workspace/admin/directory/reference/rest/v1/resources.calendars/list)
+e [reserva de salas pelo Google Agenda](https://developers.google.com/workspace/calendar/api/concepts/domain).
+
 ## Configuração e atualização de segurança
 
 `JWT_SECRET` é obrigatório: use uma chave aleatória com pelo menos 256 bits. A aplicação rejeita uma chave curta ou o antigo valor padrão. `JWT_ISSUER` e `JWT_AUDIENCE` devem corresponder à aplicação; ambos usam `climb-api` por padrão.

@@ -6,6 +6,7 @@ import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import com.climb.api.model.Reuniao;
 import com.climb.api.model.dto.ReuniaoListItemDTO;
 import com.climb.api.model.dto.ReuniaoRequestDTO;
+import com.climb.api.model.dto.SalaReuniaoDTO;
 import com.climb.api.service.ReuniaoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,11 @@ public class ReuniaoController {
     @GetMapping("/{id}")
     public Reuniao buscarPorId(@PathVariable Long id) {
         return service.buscarPorId(id, getAuthenticatedUserId());
+    }
+
+    @GetMapping("/salas")
+    public List<SalaReuniaoDTO> listarSalas() {
+        return service.listarSalas(getAuthenticatedUserId());
     }
 
     @GetMapping("/empresa/{empresaId}")

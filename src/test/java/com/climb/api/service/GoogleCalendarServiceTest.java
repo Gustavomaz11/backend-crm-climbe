@@ -29,11 +29,13 @@ class GoogleCalendarServiceTest {
         var service = spy(new GoogleCalendarService()); doReturn(calendar).when(service).buildCalendar("token-teste");
         var reuniao = new com.climb.api.model.Reuniao(); reuniao.setTitulo("Presencial"); reuniao.setPresencial(true);
         reuniao.setData(java.time.LocalDate.of(2026,11,15)); reuniao.setHora(java.time.LocalTime.of(14,30)); reuniao.setLocal("Sala 2");
+        reuniao.setSalaEmail("sala@resource.calendar.google.com");
         service.criarEvento(reuniao, "token-teste", List.of("ana@example.test", "bia@example.test", "CONTATO@CLIMBE.COM.BR", "ana@example.test"));
         var evento = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
         verify(events).insert(org.mockito.ArgumentMatchers.eq("primary"), evento.capture());
         org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees()).extracting(com.google.api.services.calendar.model.EventAttendee::getEmail)
-                .containsExactly("contato@climbe.com.br", "ana@example.test", "bia@example.test");
+                .containsExactly("contato@climbe.com.br", "ana@example.test", "bia@example.test", "sala@resource.calendar.google.com");
+        assertTrue(evento.getValue().getAttendees().getLast().getResource());
         org.assertj.core.api.Assertions.assertThat(evento.getValue().getLocation()).isEqualTo("Sala 2");
         verify(insert).setSendUpdates("all");
     }
@@ -59,6 +61,33 @@ class GoogleCalendarServiceTest {
                 .containsExactly("contato@climbe.com.br", "ana@example.test");
         org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees().get(1).getResponseStatus()).isEqualTo("accepted");
         verify(update).setSendUpdates("all");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"sala@resource.calendar.google.com", "outra@resource.calendar.google.com"})
+    void atualizaOuRemoveSalaSemReaproveitarAceiteAnterior(String salaEmail) throws Exception {
+        var calendar = mock(Calendar.class); var events = mock(Calendar.Events.class);
+        var get = mock(Calendar.Events.Get.class);
+        var update = mock(Calendar.Events.Update.class, Answers.RETURNS_SELF);
+        var atual = new com.google.api.services.calendar.model.Event().setId("evento").setAttendees(List.of(
+                new com.google.api.services.calendar.model.EventAttendee().setEmail("sala@resource.calendar.google.com").setResource(true).setResponseStatus("accepted")));
+        when(calendar.events()).thenReturn(events); when(events.get("primary", "evento")).thenReturn(get); when(get.execute()).thenReturn(atual);
+        when(events.update(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), org.mockito.ArgumentMatchers.any())).thenReturn(update);
+        var service = spy(new GoogleCalendarService()); doReturn(calendar).when(service).buildCalendar("token");
+        var reuniao = new com.climb.api.model.Reuniao(); reuniao.setGoogleEventId("evento"); reuniao.setPresencial(true);
+        reuniao.setSalaEmail(salaEmail); reuniao.setData(java.time.LocalDate.of(2026, 10, 20)); reuniao.setHora(java.time.LocalTime.NOON);
+        service.atualizarEvento(reuniao, "token", List.of());
+        var evento = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
+        verify(events).update(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), evento.capture());
+        var recursos = evento.getValue().getAttendees().stream().filter(a -> Boolean.TRUE.equals(a.getResource())).toList();
+        if (salaEmail == null || salaEmail.isBlank()) {
+            org.assertj.core.api.Assertions.assertThat(recursos).isEmpty();
+        } else {
+            org.assertj.core.api.Assertions.assertThat(recursos).hasSize(1);
+            org.assertj.core.api.Assertions.assertThat(recursos.getFirst().getEmail()).isEqualTo(salaEmail);
+            org.assertj.core.api.Assertions.assertThat(recursos.getFirst().getResponseStatus()).isNull();
+        }
     }
 
     @Test

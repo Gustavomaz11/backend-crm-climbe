@@ -22,6 +22,7 @@ public class ReuniaoListItemDTO {
     private Long empresaId;
     private EmpresaResumoDTO empresa;
     private String local;
+    private String salaEmail;
     private Boolean presencial;
     private String pauta;
     private String status;
@@ -44,6 +45,7 @@ public class ReuniaoListItemDTO {
             d.setEmpresa(EmpresaResumoDTO.from(r.getEmpresa()));
         }
         d.setLocal(r.getLocal());
+        d.setSalaEmail(r.getSalaEmail());
         d.setPresencial(r.getPresencial());
         d.setPauta(r.getPauta());
         d.setStatus(r.getStatus());

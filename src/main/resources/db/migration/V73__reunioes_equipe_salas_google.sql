@@ -1,0 +1,2 @@
+ALTER TABLE reunioes MODIFY COLUMN empresa_id BIGINT NULL;
+ALTER TABLE reunioes ADD COLUMN sala_email VARCHAR(320) NULL;
