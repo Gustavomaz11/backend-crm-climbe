@@ -65,7 +65,7 @@ public class ReuniaoListItemDTO {
         d.setDiaInteiro(false);
         d.setDataHora(buildDataHoraIso(r.getData(), r.getHora()));
         if (r.getData() != null && r.getHora() != null) {
-            d.setDataHoraFim(ZonedDateTime.of(r.getData(), r.getHora(), ZONE).plusHours(1)
+            d.setDataHoraFim(r.getDataHoraFim().atZone(ZONE)
                     .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         }
         return d;

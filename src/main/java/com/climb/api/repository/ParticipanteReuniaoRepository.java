@@ -11,6 +11,8 @@ public interface ParticipanteReuniaoRepository extends JpaRepository<Participant
 
     List<ParticipanteReuniao> findByReuniao_IdReuniao(Long reuniaoId);
 
+    List<ParticipanteReuniao> findByReuniaoIn(List<com.climb.api.model.Reuniao> reunioes);
+
     boolean existsByReuniao_IdReuniaoAndUsuario_Id(Long reuniaoId, Long usuarioId);
 
     @Query("""

@@ -31,6 +31,7 @@ class ReuniaoAgendamentoTest {
     @Mock ReuniaoEmailService emails;
     @Mock GoogleCredentialService credentials;
     @Mock GoogleSalaService salas;
+    @Mock ReuniaoDisponibilidadeService disponibilidade;
     @InjectMocks ReuniaoService service;
     private static final String SALA = "sala@resource.calendar.google.com";
 
@@ -85,6 +86,7 @@ class ReuniaoAgendamentoTest {
         var request = request();
         request.setSalaEmail(SALA);
         request.setParticipanteIds(List.of(2L));
+        request.setHoraFim(LocalTime.of(12, 30));
         when(credentials.obterAccessToken(1L)).thenReturn(Optional.of("token"));
         when(salas.listar("token")).thenReturn(List.of(new SalaReuniaoDTO(SALA, "Sala 1", 6)));
         when(repository.save(any())).thenAnswer(call -> { Reuniao r = call.getArgument(0); r.setIdReuniao(3L); return r; });
@@ -97,6 +99,8 @@ class ReuniaoAgendamentoTest {
         assertThat(reuniao.getSalaEmail()).isEqualTo(SALA);
         assertThat(reuniao.getLocal()).isEqualTo("Sala 1");
         assertThat(reuniao.getGoogleEventId()).isEqualTo("evento");
+        assertThat(reuniao.getDataHoraFim()).isEqualTo(request.getData().atTime(12, 30));
+        verify(disponibilidade).exigirLocalDisponivel(eq(reuniao), eq("token"));
         verify(calendar).criarEvento(eq(reuniao), eq("token"), eq(List.of("1@example.test", "2@example.test")));
         verifyNoInteractions(empresas);
         verify(emails).notificarAgendamento(eq(reuniao), argThat(lista -> lista.size() == 2));
@@ -111,8 +115,20 @@ class ReuniaoAgendamentoTest {
         verifyNoInteractions(repository, calendar, emails);
     }
 
+    @Test void naoSalvaNemEnviaConviteSeSalaFicouOcupadaAntesDaConfirmacao() {
+        var request = request();
+        when(credentials.obterAccessToken(1L)).thenReturn(Optional.of("token"));
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Sala ocupada"))
+                .when(disponibilidade).exigirLocalDisponivel(any(), eq("token"));
+        assertThatThrownBy(() -> service.criar(request, 1L)).isInstanceOf(ResponseStatusException.class).hasMessageContaining("409");
+        verifyNoInteractions(repository, calendar, emails);
+    }
+
     @Test void permiteRemoverClienteEPreservaParticipantesESalaAoAlterarStatus() throws Exception {
         var reuniao = new Reuniao(); reuniao.setIdReuniao(3L); reuniao.setOrganizadorId(1L);
+        reuniao.setData(LocalDate.of(2026, 10, 20)); reuniao.setHora(LocalTime.of(10, 0));
+        reuniao.setDataHoraFim(reuniao.getData().atTime(12, 30));
+        reuniao.setPresencial(true); reuniao.setStatus("AGENDADA");
         reuniao.setEmpresa(new Empresa()); reuniao.setSalaEmail(SALA); reuniao.setLocal("Sala 1"); reuniao.setGoogleEventId("evento");
         var participante = new ParticipanteReuniao(); participante.setUsuario(usuario(2L));
         when(repository.findById(3L)).thenReturn(Optional.of(reuniao));
@@ -129,8 +145,9 @@ class ReuniaoAgendamentoTest {
         assertThat(atualizada.getEmpresa()).isNull();
         assertThat(atualizada.getSalaEmail()).isEqualTo(SALA);
         assertThat(atualizada.getStatus()).isEqualTo("CONFIRMADA");
+        assertThat(atualizada.getDataHoraFim()).isEqualTo(reuniao.getData().atTime(12, 30));
         verify(usuarios).findAllById(argThat(ids -> { var lista = new java.util.ArrayList<Long>(); ids.forEach(lista::add); return lista.containsAll(List.of(1L, 2L)); }));
-        verifyNoInteractions(empresas, salas);
+        verifyNoInteractions(empresas, salas, disponibilidade);
     }
 
     private ReuniaoRequestDTO request() {

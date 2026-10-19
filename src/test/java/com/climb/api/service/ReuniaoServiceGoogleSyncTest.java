@@ -44,7 +44,7 @@ class ReuniaoServiceGoogleSyncTest {
                         .setResource(true).setDisplayName(nome)));
         when(googleCalendarService.listarEventosPrimarios(eq("token"), any(), any())).thenReturn(List.of(evento));
         var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
-                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService);
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService, disponibilidade);
         var resumos = service.listar(8L);
         assertEquals(1, resumos.size());
         assertEquals(11L, resumos.getFirst().getIdReuniao());
@@ -55,7 +55,7 @@ class ReuniaoServiceGoogleSyncTest {
     @Test void ausenciaDeGoogleNaoFingeAgendamentoConfirmado() {
         when(googleCredentialService.obterAccessToken(7L)).thenReturn(Optional.empty());
         var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
-                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService);
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService, disponibilidade);
         org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException.class,
                 () -> service.criar(new ReuniaoRequestDTO(), 7L));
         org.mockito.Mockito.verifyNoInteractions(reuniaoRepository, reuniaoEmailService, googleCalendarService);
@@ -67,7 +67,7 @@ class ReuniaoServiceGoogleSyncTest {
         when(reuniaoRepository.findVisiveisParaUsuario(8L)).thenReturn(List.of(reuniao));
         when(googleCalendarService.listarEventosPrimarios(eq("token-convidado"), any(), any())).thenReturn(List.of());
         var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
-                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService);
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService, disponibilidade);
         assertEquals(1, service.listar(8L).size());
         org.mockito.Mockito.verify(googleCalendarService, org.mockito.Mockito.never()).eventoExiste(any(), any());
         org.mockito.Mockito.verify(reuniaoRepository, org.mockito.Mockito.never()).delete(any());
@@ -81,6 +81,7 @@ class ReuniaoServiceGoogleSyncTest {
     @Mock private ReuniaoEmailService reuniaoEmailService;
     @Mock private GoogleCredentialService googleCredentialService;
     @Mock private GoogleSalaService googleSalaService;
+    @Mock private ReuniaoDisponibilidadeService disponibilidade;
 
     @Test
     void deveSincronizarComOCredencialDoUsuarioAutenticado() throws Exception {
@@ -97,7 +98,7 @@ class ReuniaoServiceGoogleSyncTest {
                 participanteRepository,
                 usuarioRepository,
                 reuniaoEmailService,
-                googleCredentialService, googleSalaService);
+                googleCredentialService, googleSalaService, disponibilidade);
 
         service.listar(7L);
 
@@ -150,7 +151,7 @@ class ReuniaoServiceGoogleSyncTest {
                 participanteRepository,
                 usuarioRepository,
                 reuniaoEmailService,
-                googleCredentialService, googleSalaService);
+                googleCredentialService, googleSalaService, disponibilidade);
 
         service.criar(request, criador.getId());
 

@@ -3,6 +3,7 @@ package com.climb.api.model;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "reunioes")
@@ -31,6 +32,9 @@ public class Reuniao extends ItemArquivavelKanban {
 
     @Column(name = "hora")
     private LocalTime hora;
+
+    @Column(name = "data_hora_fim")
+    private LocalDateTime dataHoraFim;
 
     @Column(name = "presencial")
     private Boolean presencial;
@@ -73,6 +77,12 @@ public class Reuniao extends ItemArquivavelKanban {
 
     public LocalTime getHora() { return hora; }
     public void setHora(LocalTime hora) { this.hora = hora; }
+
+    public LocalDateTime getDataHoraFim() {
+        if (dataHoraFim != null) return dataHoraFim;
+        return data == null || hora == null ? null : data.atTime(hora).plusHours(1);
+    }
+    public void setDataHoraFim(LocalDateTime dataHoraFim) { this.dataHoraFim = dataHoraFim; }
 
     public Boolean getPresencial() { return presencial; }
     public void setPresencial(Boolean presencial) { this.presencial = presencial; }

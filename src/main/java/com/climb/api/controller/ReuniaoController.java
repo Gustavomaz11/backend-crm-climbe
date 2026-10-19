@@ -7,6 +7,8 @@ import com.climb.api.model.Reuniao;
 import com.climb.api.model.dto.ReuniaoListItemDTO;
 import com.climb.api.model.dto.ReuniaoRequestDTO;
 import com.climb.api.model.dto.SalaReuniaoDTO;
+import com.climb.api.model.dto.ReuniaoDisponibilidadeDTO;
+import com.climb.api.model.dto.ReuniaoDisponibilidadeRequestDTO;
 import com.climb.api.service.ReuniaoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +45,11 @@ public class ReuniaoController {
     @GetMapping("/salas")
     public List<SalaReuniaoDTO> listarSalas() {
         return service.listarSalas(getAuthenticatedUserId());
+    }
+
+    @PostMapping("/disponibilidade")
+    public ReuniaoDisponibilidadeDTO consultarDisponibilidade(@Valid @RequestBody ReuniaoDisponibilidadeRequestDTO request) {
+        return service.consultarDisponibilidade(request, getAuthenticatedUserId());
     }
 
     @GetMapping("/{id}/detalhes")

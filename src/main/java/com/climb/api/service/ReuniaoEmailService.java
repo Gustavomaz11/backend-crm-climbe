@@ -19,7 +19,8 @@ public class ReuniaoEmailService {
         }
         String mensagem = "Você foi convidado para a reunião \"" + reuniao.getTitulo() + "\".\n"
                 + "Data: " + reuniao.getData().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                + ". Horário: " + reuniao.getHora().format(DateTimeFormatter.ofPattern("HH:mm")) + ".\n"
+                + ". Horário: " + reuniao.getHora().format(DateTimeFormatter.ofPattern("HH:mm"))
+                + " às " + reuniao.getDataHoraFim().format(DateTimeFormatter.ofPattern("HH:mm")) + ".\n"
                 + (Boolean.TRUE.equals(reuniao.getPresencial()) ? "Local: " + reuniao.getLocal()
                 : "Google Meet: " + (reuniao.getLinkMeet() == null ? "Disponível no convite do Google Agenda" : reuniao.getLinkMeet()));
         String destino = "/agenda?reuniaoId=" + reuniao.getIdReuniao();

@@ -165,6 +165,27 @@ recurso. Trocar a sala ou escolher reunião virtual remove o recurso anterior do
 O Google confirma ou recusa a reserva conforme disponibilidade e regras da sala;
 o formulário não apresenta uma sala convidada como reserva confirmada.
 
+O formulário permite informar início e término e consulta `POST /reunioes/disponibilidade`
+com `data`, `hora`, `horaFim`, `salaEmails`, `participanteIds`, `local` e, ao editar,
+`reuniaoId`. A resposta contém `salas` e `participantes` com `disponivel` e
+`localDisponivel`. A verificação considera todo o intervalo, reuniões locais não
+canceladas e os períodos ocupados do Google Agenda; a própria reunião é excluída
+ao editar. Reuniões consecutivas, em que uma termina quando a outra começa, são permitidas.
+Salas ocupadas não podem ser selecionadas e a API verifica novamente o local antes
+de salvar uma reserva nova ou alterar seu período/local. Locais digitados livremente
+são comparados com os agendamentos locais pelo nome. Os usuários exibem indicadores
+de disponibilidade, preservando a possibilidade de convidar quem está ocupado.
+Agendas sem permissão de consulta retornam `disponivel: null` ("Não verificada");
+uma sala só pode ser selecionada quando sua disponibilidade estiver confirmada.
+
+Aplique `V75__reuniao_horario_fim.sql` antes de iniciar esta versão. A migration
+adiciona `data_hora_fim` e preserva a duração anterior de uma hora nas reuniões existentes.
+`POST /reunioes` e `PUT /reunioes/{id}` aceitam `horaFim`; omiti-lo preserva o término
+na edição sem mudança de início ou usa uma hora de duração em novos agendamentos.
+O término informado deve ser posterior ao início no mesmo dia. O Google Agenda,
+os detalhes, os cartões da agenda e os convites recebem o horário de término escolhido.
+Referência da consulta: [disponibilidade no Google Agenda](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query).
+
 Referências: [catálogo de recursos do Workspace](https://developers.google.com/workspace/admin/directory/reference/rest/v1/resources.calendars/list)
 e [reserva de salas pelo Google Agenda](https://developers.google.com/workspace/calendar/api/concepts/domain).
 

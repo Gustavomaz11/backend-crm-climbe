@@ -121,7 +121,7 @@ public class GoogleCalendarService {
 
         ZoneId zoneId = ZoneId.of("America/Fortaleza");
         ZonedDateTime inicio = ZonedDateTime.of(reuniao.getData(), reuniao.getHora(), zoneId);
-        ZonedDateTime fim = inicio.plusHours(1);
+        ZonedDateTime fim = reuniao.getDataHoraFim().atZone(zoneId);
         EventDateTime start = new EventDateTime()
                 .setDateTime(new DateTime(inicio.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)))
                 .setTimeZone("America/Fortaleza");

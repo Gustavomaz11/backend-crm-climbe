@@ -26,6 +26,8 @@ import com.climb.api.model.dto.ReuniaoListItemDTO;
 import com.climb.api.model.dto.ReuniaoRequestDTO;
 import com.climb.api.model.dto.SalaReuniaoDTO;
 import com.climb.api.model.dto.UsuarioResumoDTO;
+import com.climb.api.model.dto.ReuniaoDisponibilidadeDTO;
+import com.climb.api.model.dto.ReuniaoDisponibilidadeRequestDTO;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.ParticipanteReuniaoRepository;
 import com.climb.api.repository.ReuniaoRepository;
@@ -45,6 +47,7 @@ public class ReuniaoService {
     private final ReuniaoEmailService reuniaoEmailService;
     private final GoogleCredentialService googleCredentialService;
     private final GoogleSalaService googleSalaService;
+    private final ReuniaoDisponibilidadeService disponibilidade;
 
     public ReuniaoService(ReuniaoRepository repository,
                           EmpresaRepository empresaRepository,
@@ -53,7 +56,8 @@ public class ReuniaoService {
                           UsuarioRepository usuarioRepository,
                           ReuniaoEmailService reuniaoEmailService,
                           GoogleCredentialService googleCredentialService,
-                          GoogleSalaService googleSalaService) {
+                          GoogleSalaService googleSalaService,
+                          ReuniaoDisponibilidadeService disponibilidade) {
         this.repository = repository;
         this.empresaRepository = empresaRepository;
         this.googleCalendarService = googleCalendarService;
@@ -62,6 +66,14 @@ public class ReuniaoService {
         this.reuniaoEmailService = reuniaoEmailService;
         this.googleCredentialService = googleCredentialService;
         this.googleSalaService = googleSalaService;
+        this.disponibilidade = disponibilidade;
+    }
+
+    public ReuniaoDisponibilidadeDTO consultarDisponibilidade(ReuniaoDisponibilidadeRequestDTO request, Long usuarioId) {
+        exigirUsuarioAutenticado(usuarioId);
+        Reuniao editando = request.reuniaoId() == null ? null : buscarPorId(request.reuniaoId(), usuarioId);
+        Long organizador = editando == null || editando.getOrganizadorId() == null ? usuarioId : editando.getOrganizadorId();
+        return disponibilidade.consultar(request, editando, exigirCredencialGoogle(organizador));
     }
 
     public List<SalaReuniaoDTO> listarSalas(Long usuarioId) {
@@ -184,6 +196,7 @@ public class ReuniaoService {
         Reuniao reuniao = new Reuniao();
         preencherReuniao(reuniao, request, accessToken);
         reuniao.setOrganizadorId(usuarioId);
+        disponibilidade.exigirLocalDisponivel(reuniao, accessToken);
 
         Reuniao salva = repository.save(reuniao);
         List<Usuario> convidados = salvarParticipantes(salva, incluirUsuarioAutenticado(request.getParticipanteIds(), usuarioId));
@@ -211,9 +224,13 @@ public class ReuniaoService {
         Long organizadorId = reuniao.getOrganizadorId() == null ? usuarioId : reuniao.getOrganizadorId();
         String accessToken = exigirCredencialGoogle(organizadorId);
         String agendamentoAnterior = assinaturaAgendamento(reuniao);
+        String reservaAnterior = assinaturaReserva(reuniao);
         Set<Long> convidadosAnteriores = participanteReuniaoRepository.findByReuniao_IdReuniao(id).stream()
                 .map(p -> p.getUsuario().getId()).collect(Collectors.toSet());
         preencherReuniao(reuniao, request, accessToken);
+        if (!reservaAnterior.equals(assinaturaReserva(reuniao))) {
+            disponibilidade.exigirLocalDisponivel(reuniao, accessToken);
+        }
 
         Reuniao salva = repository.save(reuniao);
         List<Usuario> convidados = salvarParticipantes(salva, incluirUsuarioAutenticado(
@@ -271,6 +288,9 @@ public class ReuniaoService {
         if (request.getData() == null || request.getHora() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe a data e o horário da reunião.");
         }
+        var fim = request.getHoraFim() == null && request.getData().equals(reuniao.getData())
+                && request.getHora().equals(reuniao.getHora()) && reuniao.getDataHoraFim() != null
+                ? reuniao.getDataHoraFim() : ReuniaoDisponibilidadeService.fim(request.getData(), request.getHora(), request.getHoraFim());
         String salaEmail = Boolean.TRUE.equals(request.getPresencial()) && StringUtils.hasText(request.getSalaEmail())
                 ? request.getSalaEmail().trim() : null;
         String local = request.getLocal();
@@ -290,6 +310,7 @@ public class ReuniaoService {
         reuniao.setEmpresa(empresa);
         reuniao.setData(request.getData());
         reuniao.setHora(request.getHora());
+        reuniao.setDataHoraFim(fim);
         reuniao.setPresencial(Boolean.TRUE.equals(request.getPresencial()));
         reuniao.setLocal(local);
         reuniao.setSalaEmail(salaEmail);
@@ -373,7 +394,14 @@ public class ReuniaoService {
 
     private String assinaturaAgendamento(Reuniao reuniao) {
         return String.join("|", String.valueOf(reuniao.getTitulo()), String.valueOf(reuniao.getData()),
-                String.valueOf(reuniao.getHora()), String.valueOf(reuniao.getPresencial()),
+                String.valueOf(reuniao.getHora()), String.valueOf(reuniao.getDataHoraFim()), String.valueOf(reuniao.getPresencial()),
                 String.valueOf(reuniao.getLocal()), String.valueOf(reuniao.getSalaEmail()), String.valueOf(reuniao.getLinkMeet()));
+    }
+
+    private String assinaturaReserva(Reuniao reuniao) {
+        return String.join("|", String.valueOf(reuniao.getData()), String.valueOf(reuniao.getHora()),
+                String.valueOf(reuniao.getDataHoraFim()), String.valueOf(reuniao.getPresencial()),
+                String.valueOf(reuniao.getSalaEmail()), String.valueOf(reuniao.getLocal()),
+                String.valueOf("CANCELADA".equals(reuniao.getStatus()) || "CANCELADO".equals(reuniao.getStatus())));
     }
 }

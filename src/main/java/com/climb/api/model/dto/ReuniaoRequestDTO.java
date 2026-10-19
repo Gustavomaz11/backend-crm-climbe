@@ -10,6 +10,7 @@ public class ReuniaoRequestDTO {
     private Long empresaId;
     private LocalDate data;
     private LocalTime hora;
+    private LocalTime horaFim;
     private Boolean presencial;
     private String local;
     private String salaEmail;
@@ -28,6 +29,9 @@ public class ReuniaoRequestDTO {
 
     public LocalTime getHora() { return hora; }
     public void setHora(LocalTime hora) { this.hora = hora; }
+
+    public LocalTime getHoraFim() { return horaFim; }
+    public void setHoraFim(LocalTime horaFim) { this.horaFim = horaFim; }
 
     public Boolean getPresencial() { return presencial; }
     public void setPresencial(Boolean presencial) { this.presencial = presencial; }

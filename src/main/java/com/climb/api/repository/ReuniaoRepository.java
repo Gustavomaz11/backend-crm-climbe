@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import com.climb.api.model.Reuniao;
 
 public interface ReuniaoRepository extends JpaRepository<Reuniao, Long> {
+    List<Reuniao> findByDataBetween(java.time.LocalDate inicio, java.time.LocalDate fim);
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("update Reuniao item set item.arquivadoEm = :agora " +
             "where item.arquivadoEm is null and item.arquivarApos <= :agora and item.status in ('REALIZADA', 'REALIZADO', 'CONCLUIDA', 'CONCLUIDO')")

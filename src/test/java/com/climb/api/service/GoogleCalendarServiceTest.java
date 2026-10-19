@@ -30,6 +30,7 @@ class GoogleCalendarServiceTest {
         var reuniao = new com.climb.api.model.Reuniao(); reuniao.setTitulo("Presencial"); reuniao.setPresencial(true);
         reuniao.setData(java.time.LocalDate.of(2026,11,15)); reuniao.setHora(java.time.LocalTime.of(14,30)); reuniao.setLocal("Sala 2");
         reuniao.setSalaEmail("sala@resource.calendar.google.com");
+        reuniao.setDataHoraFim(java.time.LocalDate.of(2026, 11, 15).atTime(17, 0));
         service.criarEvento(reuniao, "token-teste", List.of("ana@example.test", "bia@example.test", "CONTATO@CLIMBE.COM.BR", "ana@example.test"));
         var evento = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
         verify(events).insert(org.mockito.ArgumentMatchers.eq("primary"), evento.capture());
@@ -37,6 +38,8 @@ class GoogleCalendarServiceTest {
                 .containsExactly("contato@climbe.com.br", "ana@example.test", "bia@example.test", "sala@resource.calendar.google.com");
         assertTrue(evento.getValue().getAttendees().getLast().getResource());
         org.assertj.core.api.Assertions.assertThat(evento.getValue().getLocation()).isEqualTo("Sala 2");
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getEnd().getDateTime().getValue()
+                - evento.getValue().getStart().getDateTime().getValue()).isEqualTo(150L * 60 * 1000);
         verify(insert).setSendUpdates("all");
     }
 
