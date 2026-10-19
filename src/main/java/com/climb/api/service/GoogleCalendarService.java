@@ -89,6 +89,30 @@ public class GoogleCalendarService {
         return buildCalendar(accessToken).events().get("primary", googleEventId).execute();
     }
 
+    public Event buscarEventoPorICalUID(String uid, String accessToken) throws Exception {
+        if (uid == null || uid.isBlank()) throw new IllegalArgumentException("Evento sem iCalUID");
+        var client = buildCalendar(accessToken);
+        String pageToken = null;
+        do {
+            var page = client.events().list("primary").setICalUID(uid).setShowDeleted(false).setPageToken(pageToken).execute();
+            if (page.getItems() != null) {
+                var evento = page.getItems().stream().filter(e -> !"cancelled".equals(e.getStatus())).findFirst();
+                if (evento.isPresent()) return evento.get();
+            }
+            pageToken = page.getNextPageToken();
+        } while (pageToken != null);
+        throw new IllegalStateException("Convite ainda não encontrado na agenda do usuário");
+    }
+
+    public void aceitarConvite(Event evento, String email, String accessToken) throws Exception {
+        var convidados = evento.getAttendees() == null ? List.<EventAttendee>of() : evento.getAttendees();
+        var resposta = convidados.stream().filter(a -> Boolean.TRUE.equals(a.getSelf())).findFirst()
+                .orElseGet(() -> convidados.stream().filter(a -> email != null && email.equalsIgnoreCase(a.getEmail())).findFirst().orElse(null));
+        if (resposta == null) throw new IllegalStateException("Usuário não consta no convite do Google");
+        var patch = new Event().setAttendees(List.of(resposta.clone().setResponseStatus("accepted"))).setAttendeesOmitted(true);
+        buildCalendar(accessToken).events().patch("primary", evento.getId(), patch).setSendUpdates("all").execute();
+    }
+
     Calendar buildCalendar(String accessToken) throws Exception {
         GoogleCredentials credentials = GoogleCredentials
                 .create(new AccessToken(accessToken, null))

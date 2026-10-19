@@ -159,7 +159,10 @@ public class ReuniaoService {
                 }
             });
         }
-        detalhes.setParticipantes(participanteReuniaoRepository.findByReuniao_IdReuniao(id).stream()
+        var participantes = participanteReuniaoRepository.findByReuniao_IdReuniao(id);
+        participantes.stream().filter(p -> p.getUsuario() != null && usuarioId.equals(p.getUsuario().getId())).findFirst()
+                .ifPresent(p -> { detalhes.setMinhaResposta(p.getResposta()); detalhes.setRespondidoEm(p.getRespondidoEm()); detalhes.setConviteId(p.getId()); });
+        detalhes.setParticipantes(participantes.stream()
                 .map(ParticipanteReuniao::getUsuario).filter(java.util.Objects::nonNull)
                 .map(usuario -> new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())).toList());
         if (reuniao.getOrganizadorId() != null) {
@@ -338,12 +341,18 @@ public class ReuniaoService {
             if (usuarios.stream().noneMatch(u -> u.getId().equals(contato.getId()))) usuarios.add(contato);
         });
         List<ParticipanteReuniao> atuais = participanteReuniaoRepository.findByReuniao_IdReuniao(reuniao.getIdReuniao());
-        participanteReuniaoRepository.deleteAll(atuais);
+        participanteReuniaoRepository.deleteAll(atuais.stream().filter(p -> usuarios.stream()
+                .noneMatch(u -> u.getId().equals(p.getUsuario().getId()))).toList());
         participanteReuniaoRepository.flush();
         participanteReuniaoRepository.saveAll(usuarios.stream().map(usuario -> {
-            ParticipanteReuniao participante = new ParticipanteReuniao();
+            ParticipanteReuniao participante = atuais.stream().filter(p -> usuario.getId().equals(p.getUsuario().getId()))
+                    .findFirst().orElseGet(ParticipanteReuniao::new);
             participante.setReuniao(reuniao);
             participante.setUsuario(usuario);
+            if (usuario.getId().equals(reuniao.getOrganizadorId())) {
+                participante.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA);
+                participante.setAceiteSincronizadoGoogle(true);
+            }
             return participante;
         }).toList());
         return usuarios;

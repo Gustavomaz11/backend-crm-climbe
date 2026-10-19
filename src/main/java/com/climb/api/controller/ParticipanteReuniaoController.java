@@ -47,6 +47,14 @@ public class ParticipanteReuniaoController {
         Long novaReuniaoId = atualizado.getReuniao() != null ? atualizado.getReuniao().getIdReuniao() : null;
         exigirReuniaoVisivel(novaReuniaoId);
 
+        if (!java.util.Objects.equals(participante.getReuniao().getIdReuniao(), novaReuniaoId)
+                || participante.getUsuario() == null || atualizado.getUsuario() == null
+                || !java.util.Objects.equals(participante.getUsuario().getId(), atualizado.getUsuario().getId())) {
+            participante.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.PENDENTE);
+            participante.setRespondidoEm(null);
+            participante.setAceiteSincronizadoGoogle(false);
+        }
+
         participante.setReuniao(atualizado.getReuniao());
         participante.setUsuario(atualizado.getUsuario());
 

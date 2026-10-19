@@ -130,7 +130,9 @@ class ReuniaoAgendamentoTest {
         reuniao.setDataHoraFim(reuniao.getData().atTime(12, 30));
         reuniao.setPresencial(true); reuniao.setStatus("AGENDADA");
         reuniao.setEmpresa(new Empresa()); reuniao.setSalaEmail(SALA); reuniao.setLocal("Sala 1"); reuniao.setGoogleEventId("evento");
-        var participante = new ParticipanteReuniao(); participante.setUsuario(usuario(2L));
+        var participante = new ParticipanteReuniao(); participante.setId(8L); participante.setUsuario(usuario(2L));
+        participante.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA);
+        participante.setRespondidoEm(java.time.LocalDateTime.of(2026, 10, 19, 10, 0));
         when(repository.findById(3L)).thenReturn(Optional.of(reuniao));
         when(participantes.existsByReuniao_IdReuniaoAndUsuario_Id(3L, 1L)).thenReturn(true);
         when(participantes.findByReuniao_IdReuniao(3L)).thenReturn(List.of(participante));
@@ -148,6 +150,14 @@ class ReuniaoAgendamentoTest {
         assertThat(atualizada.getDataHoraFim()).isEqualTo(reuniao.getData().atTime(12, 30));
         verify(usuarios).findAllById(argThat(ids -> { var lista = new java.util.ArrayList<Long>(); ids.forEach(lista::add); return lista.containsAll(List.of(1L, 2L)); }));
         verifyNoInteractions(empresas, salas, disponibilidade);
+        verify(participantes).saveAll(argThat(registros -> {
+            for (var registro : registros) {
+                if (registro.getUsuario().getId().equals(2L)) return registro == participante
+                        && registro.getResposta() == com.climb.api.model.enums.RespostaConviteReuniao.ACEITA
+                        && registro.getRespondidoEm().equals(java.time.LocalDateTime.of(2026, 10, 19, 10, 0));
+            }
+            return false;
+        }));
     }
 
     private ReuniaoRequestDTO request() {

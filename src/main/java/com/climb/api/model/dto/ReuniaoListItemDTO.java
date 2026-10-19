@@ -35,6 +35,9 @@ public class ReuniaoListItemDTO {
     private UsuarioResumoDTO organizador;
     private List<UsuarioResumoDTO> participantes;
     private Boolean participantesOmitidos;
+    private com.climb.api.model.enums.RespostaConviteReuniao minhaResposta;
+    private Long conviteId;
+    private java.time.LocalDateTime respondidoEm;
     /** true quando o Google envia só {@code start.date} (evento de dia inteiro). */
     private Boolean diaInteiro;
 

@@ -19,6 +19,25 @@ import static org.mockito.Mockito.when;
 
 class GoogleCalendarServiceTest {
 
+    @Test void aceiteAtualizaSomenteRespostaDoConvidadoSemAlterarEvento() throws Exception {
+        var calendar = mock(Calendar.class); var events = mock(Calendar.Events.class);
+        var patch = mock(Calendar.Events.Patch.class, Answers.RETURNS_SELF);
+        when(calendar.events()).thenReturn(events);
+        when(events.patch(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), org.mockito.ArgumentMatchers.any())).thenReturn(patch);
+        var service = spy(new GoogleCalendarService()); doReturn(calendar).when(service).buildCalendar("token");
+        var evento = new com.google.api.services.calendar.model.Event().setId("evento").setAttendees(List.of(
+                new com.google.api.services.calendar.model.EventAttendee().setEmail("ana@example.test").setSelf(true).setResponseStatus("needsAction"),
+                new com.google.api.services.calendar.model.EventAttendee().setEmail("bruno@example.test").setResponseStatus("tentative")));
+        service.aceitarConvite(evento, "ana@example.test", "token");
+        var body = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
+        verify(events).patch(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), body.capture());
+        org.assertj.core.api.Assertions.assertThat(body.getValue().getAttendees()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(body.getValue().getAttendees().getFirst().getResponseStatus()).isEqualTo("accepted");
+        assertTrue(body.getValue().getAttendeesOmitted());
+        org.assertj.core.api.Assertions.assertThat(body.getValue().getSummary()).isNull();
+        org.assertj.core.api.Assertions.assertThat(evento.getAttendees().getFirst().getResponseStatus()).isEqualTo("needsAction");
+    }
+
     @Test void criaEventoComTodosConvidadosEContatoObrigatorio() throws Exception {
         var calendar = mock(Calendar.class);
         var events = mock(Calendar.Events.class);

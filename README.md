@@ -175,6 +175,15 @@ Salas ocupadas não podem ser selecionadas e a API verifica novamente o local an
 de salvar uma reserva nova ou alterar seu período/local. Locais digitados livremente
 são comparados com os agendamentos locais pelo nome. Os usuários exibem indicadores
 de disponibilidade, preservando a possibilidade de convidar quem está ocupado.
+Para usuários, apenas o aceite individual (`attendees[].responseStatus: accepted`)
+ocupa o intervalo: convites pendentes, recusados ou respondidos como "talvez" não
+contam. O vínculo local como participante ou organizador não substitui o aceite.
+A consulta usa a agenda primária da conta Google vinculada ao usuário; quando não
+houver credencial própria, tenta ler a agenda compartilhada com a conta que está
+agendando. Se não for possível consultar a resposta, retorna "Não verificada".
+O aceite pelo sistema também ocupa o intervalo enquanto aguarda sincronização com
+o Google ou se a agenda estiver inacessível. Após sincronizar, a resposta atual da
+agenda volta a determinar a disponibilidade, incluindo uma eventual recusa posterior.
 Agendas sem permissão de consulta retornam `disponivel: null` ("Não verificada");
 uma sala só pode ser selecionada quando sua disponibilidade estiver confirmada.
 
@@ -185,6 +194,26 @@ na edição sem mudança de início ou usa uma hora de duração em novos agenda
 O término informado deve ser posterior ao início no mesmo dia. O Google Agenda,
 os detalhes, os cartões da agenda e os convites recebem o horário de término escolhido.
 Referência da consulta: [disponibilidade no Google Agenda](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query).
+Referência do aceite: [respostas individuais dos participantes](https://developers.google.com/workspace/calendar/api/v3/reference/events#attendees).
+
+O convidado pode aceitar pelo popup ou pelos detalhes da reunião. `POST /reunioes/{id}/aceitar`
+confirma somente a participação do usuário autenticado, mesmo que ele já tenha outro
+compromisso no horário. `minhaResposta` e `respondidoEm` são retornados nos detalhes;
+a resposta e o vínculo do participante são preservados nas edições da reunião.
+O sistema tenta atualizar o convite na agenda Google do próprio convidado e retoma
+as sincronizações pendentes a cada minuto. Uma falha do Google mantém o aceite local.
+O organizador já inicia com participação confirmada.
+
+`GET /reunioes/convites/pendentes` retorna apenas os convites pendentes do usuário
+autenticado, excluindo reuniões canceladas ou encerradas. Enquanto conectado, o
+frontend consulta essa lista a cada cinco segundos, inclusive com a aba em segundo
+plano, e exibe um popup por vez em qualquer tela. Os avisos dispensados não se repetem
+na mesma sessão do navegador; o convite continua disponível nos detalhes para aceitar
+depois. O popup independe da geração do link do Google Meet e não solicita permissão
+para notificações do navegador. O navegador pode limitar consultas em abas suspensas.
+
+Aplique `V76__aceite_convites_reuniao.sql` antes de iniciar esta versão. A migration
+adiciona a resposta individual, a data do aceite e o controle de sincronização com o Google.
 
 Referências: [catálogo de recursos do Workspace](https://developers.google.com/workspace/admin/directory/reference/rest/v1/resources.calendars/list)
 e [reserva de salas pelo Google Agenda](https://developers.google.com/workspace/calendar/api/concepts/domain).

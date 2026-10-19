@@ -19,9 +19,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ReuniaoDisponibilidadeServiceTest {
     @Mock ReuniaoRepository reunioes;
-    @Mock ParticipanteReuniaoRepository participantes;
     @Mock UsuarioRepository usuarios;
     @Mock GoogleDisponibilidadeService google;
+    @Mock GoogleParticipanteDisponibilidadeService disponibilidadeParticipantes;
+    @Mock ParticipanteReuniaoRepository participantes;
     @InjectMocks ReuniaoDisponibilidadeService service;
     static final LocalDate DATA = LocalDate.of(2026, 10, 20);
     static final String SALA = "sala@resource.calendar.google.com";
@@ -37,12 +38,26 @@ class ReuniaoDisponibilidadeServiceTest {
         assertThat(resultado.localDisponivel()).isEqualTo(livre);
     }
 
-    @Test void mostraParticipanteOcupadoMesmoEmReuniaoQueNaoEstaVisivelAoSolicitante() {
+    @Test void conviteLocalSemAceiteNaoOcupaParticipante() {
         var existente = reuniao("11:00", "12:30"); existente.setSalaEmail("outra@resource.calendar.google.com");
         preparar(List.of(existente));
-        var participante = new ParticipanteReuniao(); participante.setReuniao(existente); participante.setUsuario(usuario());
-        when(participantes.findByReuniaoIn(any())).thenReturn(List.of(participante));
+        assertThat(service.consultar(request(null), null, "token").participantes().getFirst().disponivel()).isTrue();
+    }
+
+    @Test void organizadorLocalTambemDependeDaConfirmacaoDaAgenda() {
+        var existente = reuniao("11:00", "12:30"); existente.setOrganizadorId(2L);
+        preparar(List.of(existente));
+        assertThat(service.consultar(request(null), null, "token").participantes().getFirst().disponivel()).isTrue();
+    }
+
+    @Test void aceiteNoSistemaOcupaHorarioEnquantoGoogleNaoSincroniza() {
+        var existente = reuniao("11:00", "12:30"); preparar(List.of(existente));
+        var convite = new ParticipanteReuniao(); convite.setUsuario(usuario()); convite.setReuniao(existente);
+        convite.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA);
+        when(participantes.findByReuniaoIn(any())).thenReturn(List.of(convite));
         assertThat(service.consultar(request(null), null, "token").participantes().getFirst().disponivel()).isFalse();
+        convite.setAceiteSincronizadoGoogle(true);
+        assertThat(service.consultar(request(null), null, "token").participantes().getFirst().disponivel()).isTrue();
     }
 
     @Test void ignoraPropriaReuniaoECanceladasNaEdicao() {
@@ -55,6 +70,7 @@ class ReuniaoDisponibilidadeServiceTest {
     @Test void indisponibilidadeGoogleTambemBloqueiaSalaEParticipante() {
         preparar(List.of());
         when(google.consultar(any(), any(), any(), any(), any())).thenReturn(Map.of(SALA, false, "ana@example.test", false));
+        when(disponibilidadeParticipantes.consultar(any(), any(), any(), any(), any())).thenReturn(Map.of(2L, false));
         var resultado = service.consultar(request(null), null, "token");
         assertThat(resultado.salas().getFirst().disponivel()).isFalse();
         assertThat(resultado.participantes().getFirst().disponivel()).isFalse();
@@ -63,7 +79,9 @@ class ReuniaoDisponibilidadeServiceTest {
     @Test void consultaNaoVerificadaNaoSignificaDisponivel() {
         preparar(List.of());
         when(google.consultar(any(), any(), any(), any(), any())).thenReturn(Map.of());
+        when(disponibilidadeParticipantes.consultar(any(), any(), any(), any(), any())).thenReturn(Map.of());
         assertThat(service.consultar(request(null), null, "token").salas().getFirst().disponivel()).isNull();
+        assertThat(service.consultar(request(null), null, "token").participantes().getFirst().disponivel()).isNull();
         var nova = reuniao("10:00", "12:00"); nova.setIdReuniao(null);
         assertThatThrownBy(() -> service.exigirLocalDisponivel(nova, "token"))
                 .isInstanceOf(ResponseStatusException.class).hasMessageContaining("verificar");
@@ -90,6 +108,7 @@ class ReuniaoDisponibilidadeServiceTest {
         when(reunioes.findByDataBetween(any(), any())).thenReturn(existentes);
         lenient().when(usuarios.findAllById(any())).thenReturn(List.of(usuario()));
         when(google.consultar(any(), any(), any(), any(), any())).thenReturn(Map.of(SALA, true, "ana@example.test", true));
+        when(disponibilidadeParticipantes.consultar(any(), any(), any(), any(), any())).thenReturn(Map.of(2L, true));
     }
 
     private ReuniaoDisponibilidadeRequestDTO request(Long id) {
