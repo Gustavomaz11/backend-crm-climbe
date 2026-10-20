@@ -12,7 +12,7 @@ class GoogleDriveMigrationTest {
             sql.execute("CREATE TABLE empresas(id_empresa BIGINT PRIMARY KEY)"); sql.execute("INSERT INTO empresas VALUES(1)");
             ScriptUtils.executeSqlScript(conn, new ClassPathResource("db/migration/V74__empresa_dados_cadastrais_comprovantes.sql"));
             sql.execute("INSERT INTO empresa_comprovantes(empresa_id,cnpj,tipo,status,atualizado_em) VALUES(1,'37335118000180','RFB','DISPONIVEL',CURRENT_TIMESTAMP)");
-            ScriptUtils.executeSqlScript(conn, new ClassPathResource("db/migration/V75__drive_empresas_servicos.sql"));
+            ScriptUtils.executeSqlScript(conn, new ClassPathResource("db/migration/V77__drive_empresas_servicos.sql"));
             sql.execute("INSERT INTO empresa_drive(empresa_id,tentar_em) VALUES(1,CURRENT_TIMESTAMP)");
             sql.execute("INSERT INTO empresa_drive_servicos(empresa_id,servico) VALUES(1,'BPO')");
             assertThatThrownBy(() -> sql.execute("INSERT INTO empresa_drive_servicos(empresa_id,servico) VALUES(1,'BPO')")).isInstanceOf(java.sql.SQLException.class);

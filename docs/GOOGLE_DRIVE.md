@@ -5,7 +5,7 @@ A pasta raiz padrão é `1Ea1yJuqRd7jfSAa_aC58qyl_Dsv9qmVB`. A integração usa 
 1. Ative a **Google Drive API** no mesmo projeto Google Cloud do cliente OAuth.
 2. A conta de `SPRING_MAIL_USERNAME` precisa estar cadastrada e ativa no Climbe e ter acesso de edição à pasta raiz.
 3. Entre no Climbe pelo Google com essa conta e conceda a permissão do Drive. Vínculos anteriores precisam renovar a autorização para incluir `https://www.googleapis.com/auth/drive`. A integração reutiliza o token de atualização armazenado de forma criptografada.
-4. Execute a migration V75 pelo fluxo Flyway do ambiente e reinicie a API para carregar a configuração. Nos ambientes que usam o container Flyway, execute `docker compose run --rm flyway`; quando a aplicação gerencia as migrations, elas são aplicadas na inicialização.
+4. Execute a migration `V77__drive_empresas_servicos.sql` pelo fluxo Flyway do ambiente e reinicie a API para carregar a configuração. Nos ambientes que usam o container Flyway, execute `docker compose run --rm flyway`; quando a aplicação gerencia as migrations, elas são aplicadas na inicialização.
 
 Para uma credencial independente do login, configure `GOOGLE_DRIVE_REFRESH_TOKEN`, `GOOGLE_DRIVE_CLIENT_ID` e `GOOGLE_DRIVE_CLIENT_SECRET`. O token precisa pertencer à conta com acesso à pasta e ter o escopo Drive. Os campos de cliente usam os valores de `GOOGLE_CALENDAR_CLIENT_ID` e `GOOGLE_CALENDAR_CLIENT_SECRET` por padrão. `GOOGLE_DRIVE_ACCOUNT_EMAIL` permite substituir a conta de `SPRING_MAIL_USERNAME`.
 
