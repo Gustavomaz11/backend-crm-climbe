@@ -55,7 +55,8 @@ public class GoogleOAuthService {
     private static final String GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token";
     private static final String GOOGLE_USERINFO_URI = "https://www.googleapis.com/oauth2/v3/userinfo";
     private static final String GOOGLE_SCOPE = "openid email profile https://www.googleapis.com/auth/calendar "
-            + "https://www.googleapis.com/auth/admin.directory.resource.calendar.readonly";
+            + "https://www.googleapis.com/auth/admin.directory.resource.calendar.readonly "
+            + "https://www.googleapis.com/auth/drive";
 
     private static final int EXCHANGE_CODE_EXPIRATION_SECONDS = 60;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();

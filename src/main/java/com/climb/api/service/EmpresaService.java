@@ -20,11 +20,13 @@ public class EmpresaService {
     private final EmpresaRepository repository;
     private final EmpresaMapper empresaMapper;
     private final EmpresaComprovanteService comprovantes;
+    private final DriveOrganizacaoService drive;
 
-    public EmpresaService(EmpresaRepository repository, EmpresaMapper empresaMapper, EmpresaComprovanteService comprovantes) {
+    public EmpresaService(EmpresaRepository repository, EmpresaMapper empresaMapper, EmpresaComprovanteService comprovantes, DriveOrganizacaoService drive) {
         this.repository = repository;
         this.empresaMapper = empresaMapper;
         this.comprovantes = comprovantes;
+        this.drive = drive;
     }
 
     public List<EmpresaResponseDTO> listar() {
@@ -51,6 +53,7 @@ public class EmpresaService {
         empresa.setDadosCadastrais(CnpjaDadosCadastrais.comDadosBasicos(empresa));
         empresa = repository.save(empresa);
         comprovantes.agendar(empresa);
+        drive.agendarEmpresa(empresa.getIdEmpresa());
         return empresaMapper.toResponseDto(empresa);
     }
 
@@ -87,6 +90,7 @@ public class EmpresaService {
 
         empresa = repository.save(empresa);
         comprovantes.agendar(empresa);
+        drive.agendarEmpresa(empresa.getIdEmpresa());
         return empresaMapper.toResponseDto(empresa);
     }
 

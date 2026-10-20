@@ -12,6 +12,7 @@ public interface EmpresaComprovanteRepository extends JpaRepository<EmpresaCompr
     Optional<EmpresaComprovante> findByEmpresaIdAndTipo(Long empresaId, String tipo);
     Optional<EmpresaComprovante> findByIdAndEmpresaId(Long id, Long empresaId);
     Optional<EmpresaComprovante> findFirstByStatusOrderByIdAsc(String status);
+    List<EmpresaComprovante> findByEmpresaIdAndStatusAndDriveArquivoIdIsNull(Long empresaId, String status);
 
     @Query("select new com.climb.api.model.dto.EmpresaComprovanteDTO(c.id,c.tipo,c.status,c.mensagem,c.geradoEm) from EmpresaComprovante c where c.empresaId=:empresaId order by c.id")
     List<EmpresaComprovanteDTO> listar(@Param("empresaId") Long empresaId);

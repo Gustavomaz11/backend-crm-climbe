@@ -13,9 +13,13 @@ import java.util.List;
 @Component
 class PipelineEmpresaCadastroService {
     private final EmpresaRepository empresaRepository;
+    private final DriveOrganizacaoService drive;
+    private final EmpresaComprovanteService comprovantes;
 
-    PipelineEmpresaCadastroService(EmpresaRepository empresaRepository) {
+    PipelineEmpresaCadastroService(EmpresaRepository empresaRepository, DriveOrganizacaoService drive, EmpresaComprovanteService comprovantes) {
         this.empresaRepository = empresaRepository;
+        this.drive = drive;
+        this.comprovantes = comprovantes;
     }
 
     Empresa cadastrar(PipelineNegocioRequestDTO dto) {
@@ -36,7 +40,10 @@ class PipelineEmpresaCadastroService {
         empresa.setRepresentanteContato(dto.telefone().trim());
 
         try {
-            return empresaRepository.saveAndFlush(empresa);
+            empresa = empresaRepository.saveAndFlush(empresa);
+            drive.agendarEmpresa(empresa.getIdEmpresa());
+            comprovantes.agendar(empresa);
+            return empresa;
         } catch (DataIntegrityViolationException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "CNPJ já cadastrado", exception);
         }

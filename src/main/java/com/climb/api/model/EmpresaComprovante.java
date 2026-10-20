@@ -18,6 +18,7 @@ public class EmpresaComprovante {
     @Column(length = 500) private String mensagem;
     @Column(name = "atualizado_em", nullable = false) private LocalDateTime atualizadoEm;
     @Column(name = "gerado_em") private LocalDateTime geradoEm;
+    @Column(name = "drive_arquivo_id", length = 150) private String driveArquivoId;
     @Lob @Basic(fetch = FetchType.LAZY) @Column(columnDefinition = "LONGBLOB") private byte[] conteudo;
     @Version private long versao;
 }

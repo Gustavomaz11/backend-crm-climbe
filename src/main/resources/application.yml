@@ -76,6 +76,13 @@ jwt:
   audience: ${JWT_AUDIENCE:climb-api}
 
 google:
+  drive:
+    enabled: ${GOOGLE_DRIVE_ENABLED:true}
+    root-folder-id: ${GOOGLE_DRIVE_ROOT_FOLDER_ID:1Ea1yJuqRd7jfSAa_aC58qyl_Dsv9qmVB}
+    account-email: ${GOOGLE_DRIVE_ACCOUNT_EMAIL:${SPRING_MAIL_USERNAME:}}
+    client-id: ${GOOGLE_DRIVE_CLIENT_ID:${GOOGLE_CALENDAR_CLIENT_ID:}}
+    client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET:${GOOGLE_CALENDAR_CLIENT_SECRET:}}
+    refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN:}
   calendar:
     client-id: ${GOOGLE_CALENDAR_CLIENT_ID:}
     client-secret: ${GOOGLE_CALENDAR_CLIENT_SECRET:}

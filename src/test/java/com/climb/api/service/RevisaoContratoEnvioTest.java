@@ -29,6 +29,7 @@ class RevisaoContratoEnvioTest {
     private final EmailService email = mock(EmailService.class);
     private final ContratoNotificacaoService notificacoes = mock(ContratoNotificacaoService.class);
     private final ZapSignClient zapSign = mock(ZapSignClient.class);
+    private final DriveOrganizacaoService drive = mock(DriveOrganizacaoService.class);
     private final CloudflareR2ArquivoStorageService storage = mock(CloudflareR2ArquivoStorageService.class);
     private final DocumentoPreviewService preview = mock(DocumentoPreviewService.class);
     private final UsuarioRepository usuarios = mock(UsuarioRepository.class);
@@ -43,7 +44,7 @@ class RevisaoContratoEnvioTest {
         service = new RevisaoDocumentoService(revisoes, versoes, mock(RevisaoDocumentoAnotacaoRepository.class),
                 mock(PropostaRepository.class), contratos, usuarios, storage, preview,
                 email, notificacoes, new ContratoParcelaCalculator(), rbac, zapSign,
-                properties, "http://app.test", 30);
+                properties, drive, "http://app.test", 30);
         contrato = new Contrato(); contrato.setIdContrato(10L);
         Empresa empresa = new Empresa(); empresa.setNomeFantasia("Empresa"); empresa.setEmail("cliente@example.test");
         contrato.setEmpresa(empresa);
@@ -156,11 +157,13 @@ class RevisaoContratoEnvioTest {
         assertThat(contrato.getStatus()).isEqualTo("APROVADO");
         assertThat(contrato.getEtapaPreparacao()).isEqualTo(com.climb.api.model.enums.ContratoPreparacaoEtapa.CONCLUIDO);
         assertThat(contrato.getParcelas()).hasSize(2);
+        verify(drive).agendarContrato(contrato);
         assertThat(contrato.getParcelas()).extracting(ContratoParcela::getValor)
                 .containsExactly(new java.math.BigDecimal("25000.00"), new java.math.BigDecimal("25000.00"));
         verify(email).enviarEmailComBotao(eq("tecnico@example.test"), anyString(), anyString(), anyString(),
                 eq("Abrir contrato"), eq("http://app.test/kanban?contrato=10"), anyString());
         service.processarWebhookZapSign("test-secret", new com.climb.api.model.dto.ZapSignWebhookRequestDTO("doc_signed", "document-token", "signed", null));
         assertThat(contrato.getParcelas()).hasSize(2);
+        verify(drive, times(1)).agendarContrato(contrato);
     }
 }

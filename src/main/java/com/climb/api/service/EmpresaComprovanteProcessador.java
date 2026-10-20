@@ -11,10 +11,12 @@ import java.time.LocalDateTime;
 public class EmpresaComprovanteProcessador {
     private final EmpresaComprovanteRepository repository;
     private final CnpjaService cnpja;
+    private final DriveOrganizacaoService drive;
 
-    public EmpresaComprovanteProcessador(EmpresaComprovanteRepository repository, CnpjaService cnpja) {
+    public EmpresaComprovanteProcessador(EmpresaComprovanteRepository repository, CnpjaService cnpja, DriveOrganizacaoService drive) {
         this.repository = repository;
         this.cnpja = cnpja;
+        this.drive = drive;
     }
 
     @Scheduled(fixedDelayString = "${app.cnpja.comprovantes-interval-ms:2000}", scheduler = "cnpjaComprovantesScheduler")
@@ -40,7 +42,10 @@ public class EmpresaComprovanteProcessador {
             registro.setMensagem("Não foi possível emitir o comprovante. Tente novamente.");
         }
         registro.setAtualizadoEm(LocalDateTime.now());
-        try { repository.saveAndFlush(registro); }
+        try {
+            repository.saveAndFlush(registro);
+            if ("DISPONIVEL".equals(registro.getStatus())) drive.agendarEmpresa(registro.getEmpresaId());
+        }
         catch (OptimisticLockingFailureException exception) { /* O cadastro mudou durante a emissão; mantém a versão mais recente. */ }
     }
 }

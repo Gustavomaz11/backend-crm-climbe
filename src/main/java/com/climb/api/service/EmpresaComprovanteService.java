@@ -79,6 +79,7 @@ public class EmpresaComprovanteService {
         registro.setStatus(status);
         registro.setMensagem(null);
         registro.setConteudo(null);
+        registro.setDriveArquivoId(null);
         registro.setGeradoEm(null);
         registro.setAtualizadoEm(LocalDateTime.now());
         comprovantes.save(registro);

@@ -24,7 +24,8 @@ class PipelineEmpresaCadastroServiceTest {
 
     @Test
     void deveCriarEmpresaComDadosDoNovoNegocio() {
-        PipelineEmpresaCadastroService service = new PipelineEmpresaCadastroService(empresaRepository);
+        PipelineEmpresaCadastroService service = new PipelineEmpresaCadastroService(empresaRepository,
+                org.mockito.Mockito.mock(DriveOrganizacaoService.class), org.mockito.Mockito.mock(EmpresaComprovanteService.class));
         PipelineNegocioRequestDTO request = new PipelineNegocioRequestDTO(
                 null, null, "Apex Ventures", "Maria Silva", "11999999999", "MARIA@APEX.COM",
                 1L, null, LocalDateTime.now(), "Indicação", "Ativa", "BPO",

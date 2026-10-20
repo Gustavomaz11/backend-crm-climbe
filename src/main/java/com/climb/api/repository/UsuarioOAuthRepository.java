@@ -16,6 +16,8 @@ public interface UsuarioOAuthRepository extends JpaRepository<UsuarioOAuth, Long
 
     Optional<UsuarioOAuth> findByUsuarioIdAndProvider(Long usuarioId, OAuthProvider provider);
 
+    Optional<UsuarioOAuth> findByProviderAndEmailProviderIgnoreCase(OAuthProvider provider, String emailProvider);
+
     @Query("""
             select oauth.usuario.id as usuarioId, oauth.avatarUrl as avatarUrl
             from UsuarioOAuth oauth

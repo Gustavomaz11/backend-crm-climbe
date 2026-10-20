@@ -55,6 +55,7 @@ public class RevisaoDocumentoService {
     private final RbacService rbacService;
     private final ZapSignClient zapSignClient;
     private final ZapSignProperties zapSignProperties;
+    private final DriveOrganizacaoService drive;
     private final String frontendUrl;
     private final int diasExpiracao;
 
@@ -72,6 +73,7 @@ public class RevisaoDocumentoService {
                                    RbacService rbacService,
                                    ZapSignClient zapSignClient,
                                    ZapSignProperties zapSignProperties,
+                                   DriveOrganizacaoService drive,
                                    @Value("${app.frontend-url:http://localhost:5173}") String frontendUrl,
                                    @Value("${app.document-review.expiration-days:30}") int diasExpiracao) {
         this.revisaoRepository = revisaoRepository;
@@ -88,6 +90,7 @@ public class RevisaoDocumentoService {
         this.rbacService = rbacService;
         this.zapSignClient = zapSignClient;
         this.zapSignProperties = zapSignProperties;
+        this.drive = drive;
         this.frontendUrl = frontendUrl;
         this.diasExpiracao = diasExpiracao;
     }
@@ -341,6 +344,7 @@ public class RevisaoDocumentoService {
                 parcelaCalculator.aplicarAoContrato(contrato);
             }
             contratoRepository.save(contrato);
+            if (status == RevisaoDocumentoStatus.APROVADO) drive.agendarContrato(contrato);
         }
     }
 

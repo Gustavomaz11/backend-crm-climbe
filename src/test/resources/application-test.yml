@@ -13,6 +13,8 @@ app:
     expiration-cron: "-"
 
 google:
+  drive:
+    enabled: false
   calendar:
     client-id:
     client-secret:
