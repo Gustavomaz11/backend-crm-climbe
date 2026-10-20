@@ -15,7 +15,8 @@ class KanbanPrazoAlertaServiceTest {
     private final ContratoKanbanTaskRepository contratos = mock(ContratoKanbanTaskRepository.class);
     private final UsuarioRepository usuarios = mock(UsuarioRepository.class);
     private final KanbanPrazoEnvioService envio = mock(KanbanPrazoEnvioService.class);
-    private final KanbanPrazoAlertaService service = new KanbanPrazoAlertaService(comerciais, contratos, usuarios, envio, "https://app.test/");
+    private final KanbanPrazoAvisoService avisosInternos = mock(KanbanPrazoAvisoService.class);
+    private final KanbanPrazoAlertaService service = new KanbanPrazoAlertaService(comerciais, contratos, usuarios, envio, avisosInternos, "https://app.test/");
     private final LocalDate hoje = LocalDate.of(2026, 11, 10);
 
     @Test void avisaTodosOsDiretoresESeparaContratoParaSeuLider() {
@@ -39,6 +40,28 @@ class KanbanPrazoAlertaServiceTest {
         verify(envio).enviar(eq(3L), argThat(a -> a.size() == 1 && a.getFirst().tipo() == TarefaTipo.CONTRATO
                 && a.getFirst().link().equals("https://app.test/contratos/kanban?contrato=30&tarefaId=40&servico=CONTABILIDADE")), eq(hoje));
         verify(envio, never()).enviar(eq(4L), anyList(), any());
+        verify(avisosInternos).notificar(eq(3L), argThat(a -> a.size() == 1 && a.getFirst().tipo() == TarefaTipo.CONTRATO), eq(hoje));
+        verify(avisosInternos).notificar(eq(4L), argThat(a -> a.size() == 6), eq(hoje));
+        verify(avisosInternos).notificar(eq(5L), argThat(a -> a.size() == 5), eq(hoje));
+        verifyNoMoreInteractions(avisosInternos);
+    }
+    @Test void vencimentoEAtrasoAvisamAtribuidosETecnicoDoServicoSemDuplicarPapeis() {
+        var contrato = new Contrato(); contrato.setIdContrato(30L); contrato.setResponsavel(usuario(1L));
+        contrato.getResponsaveisPorServico().put(ServicoComercial.CFO, usuario(2L));
+        contrato.getResponsaveisPorServico().put(ServicoComercial.CONTABILIDADE, usuario(3L));
+        var raia = new ContratoKanbanRaia(); raia.setServico(ServicoComercial.CFO);
+        var tarefa = new ContratoKanbanTask(); tarefa.setIdTask(40L); tarefa.setContrato(contrato); tarefa.setRaia(raia);
+        tarefa.setResponsaveis(List.of(usuario(2L), usuario(4L))); tarefa.setTitulo("Análise CFO");
+        when(contratos.buscarAbertasComPrazoAte(any())).thenReturn(List.of(tarefa));
+        for (LocalDate prazo : List.of(hoje, hoje.minusDays(1))) {
+            tarefa.setDataFim(prazo); service.processar(hoje);
+            for (Long id : List.of(2L, 4L)) {
+                verify(avisosInternos).notificar(eq(id), argThat(lista -> lista.size() == 1
+                        && lista.getFirst().prazo().equals(prazo) && lista.getFirst().link().endsWith("&servico=CFO")), eq(hoje));
+            }
+            verifyNoMoreInteractions(avisosInternos);
+            clearInvocations(avisosInternos);
+        }
     }
     @Test void preVendasTambemNotificaDiretorEUmErroNaoImpedeOutroDestinatario() {
         when(usuarios.buscarDiretoresComerciaisAtivos()).thenReturn(List.of(usuario(1L), usuario(2L)));

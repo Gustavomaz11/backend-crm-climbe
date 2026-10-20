@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class ReuniaoEmailService {
@@ -24,8 +25,9 @@ public class ReuniaoEmailService {
                 + (Boolean.TRUE.equals(reuniao.getPresencial()) ? "Local: " + reuniao.getLocal()
                 : "Google Meet: " + (reuniao.getLinkMeet() == null ? "Disponível no convite do Google Agenda" : reuniao.getLinkMeet()));
         String destino = "/agenda?reuniaoId=" + reuniao.getIdReuniao();
-        convidados.forEach(usuario -> entrega.notificar(usuario, "REUNIAO_AGENDADA", "Convite para reunião",
-                mensagem, destino));
+        // O organizador participa para acessar a agenda, mas não recebe convite para a própria reunião.
+        convidados.stream().filter(usuario -> !Objects.equals(usuario.getId(), reuniao.getOrganizadorId()))
+                .forEach(usuario -> entrega.notificar(usuario, "REUNIAO_AGENDADA", "Convite para reunião", mensagem, destino));
         if (convidados.stream().noneMatch(u -> GoogleCalendarService.EMAIL_OBRIGATORIO.equalsIgnoreCase(u.getEmail()))) {
             entrega.avisarPorEmail(GoogleCalendarService.EMAIL_OBRIGATORIO, "Convite para reunião", mensagem, destino);
         }

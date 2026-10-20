@@ -26,10 +26,14 @@ class ReuniaoConviteServiceTest {
         when(google.extrairLinkMeet(evento)).thenReturn(null, "https://meet.google.com/abc-defg-hij");
         Usuario convidado = new Usuario(); convidado.setId(3L); convidado.setEmail("ana@example.test");
         ParticipanteReuniao participante = new ParticipanteReuniao(); participante.setUsuario(convidado);
-        when(participantes.findByReuniao_IdReuniao(1L)).thenReturn(List.of(participante));
+        Usuario organizador = new Usuario(); organizador.setId(2L); organizador.setEmail("organizador@example.test");
+        ParticipanteReuniao participanteOrganizador = new ParticipanteReuniao(); participanteOrganizador.setUsuario(organizador);
+        when(participantes.findByReuniao_IdReuniao(1L)).thenReturn(List.of(participanteOrganizador, participante));
         service.processarPendentes(); assertFalse(reuniao.isConvitesNotificados()); verifyNoInteractions(entrega);
         service.processarPendentes(); assertTrue(reuniao.isConvitesNotificados()); assertEquals("https://meet.google.com/abc-defg-hij", reuniao.getLinkMeet());
         verify(entrega).notificar(eq(convidado), eq("REUNIAO_AGENDADA"), anyString(), contains("https://meet.google.com/abc-defg-hij"), eq("/agenda?reuniaoId=1"));
+        verify(entrega).avisarPorEmail(eq(GoogleCalendarService.EMAIL_OBRIGATORIO), anyString(), anyString(), anyString());
+        verifyNoMoreInteractions(entrega);
         clearInvocations(entrega); service.processarPendentes(); verifyNoInteractions(entrega);
     }
 }

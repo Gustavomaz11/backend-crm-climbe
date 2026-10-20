@@ -20,13 +20,14 @@ public class KanbanPrazoAlertaService {
     private final ContratoKanbanTaskRepository contratos;
     private final UsuarioRepository usuarios;
     private final KanbanPrazoEnvioService envio;
+    private final KanbanPrazoAvisoService avisos;
     private final String frontend;
 
     public KanbanPrazoAlertaService(PipelineVendasTarefaRepository comerciais, ContratoKanbanTaskRepository contratos,
-            UsuarioRepository usuarios, KanbanPrazoEnvioService envio,
+            UsuarioRepository usuarios, KanbanPrazoEnvioService envio, KanbanPrazoAvisoService avisos,
             @Value("${app.frontend-url:http://localhost:5173}") String frontend) {
         this.comerciais = comerciais; this.contratos = contratos; this.usuarios = usuarios;
-        this.envio = envio; this.frontend = frontend.replaceAll("/+$", "");
+        this.envio = envio; this.avisos = avisos; this.frontend = frontend.replaceAll("/+$", "");
     }
 
     @Scheduled(cron = "${app.kanban.prazos.cron:0 0 * * * *}", zone = "America/Sao_Paulo")
@@ -34,17 +35,29 @@ public class KanbanPrazoAlertaService {
 
     void processar(LocalDate hoje) {
         Map<Long, List<KanbanPrazoAtividade>> porDestinatario = new TreeMap<>();
+        Map<Long, List<KanbanPrazoAtividade>> avisosPorDestinatario = new TreeMap<>();
         var diretores = usuarios.buscarDiretoresComerciaisAtivos();
         comerciais.findAbertasComPrazoAte(hoje.plusDays(3)).forEach(t -> {
             Integer marco = marco(t.getPrazo(), hoje);
             if (marco == null) return;
             var atividade = comercial(t, marco);
             diretores.forEach(d -> adicionar(porDestinatario, d.getId(), atividade));
+            t.getResponsaveisEfetivos().stream().map(Usuario::getId).distinct()
+                    .forEach(id -> adicionar(avisosPorDestinatario, id, atividade));
         });
         contratos.buscarAbertasComPrazoAte(hoje.plusDays(3)).forEach(t -> {
             Integer marco = marco(t.getDataFim(), hoje);
-            Usuario lider = com.climb.api.model.ContratoServicos.responsavelDaTarefa(t);
-            if (marco != null && lider != null) adicionar(porDestinatario, lider.getId(), contrato(t, marco));
+            if (marco == null) return;
+            Usuario lider = ContratoServicos.responsavelDaTarefa(t);
+            var atividade = contrato(t, marco);
+            if (lider != null) adicionar(porDestinatario, lider.getId(), atividade);
+            Set<Long> destinatarios = t.getResponsaveisEfetivos().stream().map(Usuario::getId).collect(Collectors.toSet());
+            if (lider != null) destinatarios.add(lider.getId());
+            destinatarios.forEach(id -> adicionar(avisosPorDestinatario, id, atividade));
+        });
+        avisosPorDestinatario.forEach((id, lista) -> {
+            try { avisos.notificar(id, lista, hoje); }
+            catch (RuntimeException e) { log.error("Falha nos avisos internos de prazo do kanban para usuário {}", id, e); }
         });
         porDestinatario.forEach((id, lista) -> {
             try { envio.enviar(id, lista, hoje); }

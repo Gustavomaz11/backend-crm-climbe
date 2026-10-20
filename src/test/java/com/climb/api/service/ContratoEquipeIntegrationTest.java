@@ -181,12 +181,21 @@ class ContratoEquipeIntegrationTest {
         em.flush();
         assertThat(tarefasComerciais.findAbertasComPrazoAte(hoje.plusDays(3))).extracting(PipelineVendasTarefa::getIdTarefa).containsExactly(atividade.getIdTarefa());
         org.mockito.Mockito.when(email.enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
         alertas.processar(hoje); alertas.processar(hoje);
         assertThat(avisosPrazo.count()).isEqualTo(3);
-        org.mockito.Mockito.verify(email, org.mockito.Mockito.times(1)).enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.eq(lider.getEmail()),
+        org.mockito.Mockito.when(email.enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        alertas.processar(hoje); alertas.processar(hoje);
+        // Três envios de e-mail e três avisos internos, cada canal com sua própria deduplicação.
+        assertThat(avisosPrazo.count()).isEqualTo(6);
+        for (Usuario destinatario : List.of(lider, apoio)) {
+            assertThat(notificacoes.findByUsuario_Id(destinatario.getId()).stream().filter(n -> "TAREFA_ATRASADA".equals(n.getTipo())))
+                    .hasSize(1).allSatisfy(n -> assertThat(n.getDestino()).contains("tarefaId=" + tarefaId));
+        }
+        org.mockito.Mockito.verify(email, org.mockito.Mockito.times(3)).enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.eq(lider.getEmail()),
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.argThat(html -> org.springframework.web.util.HtmlUtils.htmlUnescape(html).contains("Entrega técnica")), org.mockito.ArgumentMatchers.anyString());
-        org.mockito.Mockito.verify(email, org.mockito.Mockito.times(1)).enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.eq(diretor.getEmail()),
+        org.mockito.Mockito.verify(email, org.mockito.Mockito.times(3)).enviarEmailComConteudoHtml(org.mockito.ArgumentMatchers.eq(diretor.getEmail()),
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.contains("Atividade comercial"), org.mockito.ArgumentMatchers.anyString());
         kanban.moverTask(id, tarefaId, apoio.getId(), new ContratoKanbanMoverTaskRequestDTO(concluido, "Documentos do cliente chegaram após o prazo."));
         assertThat(tarefas.buscarAbertasComPrazoAte(hoje.plusDays(3))).isEmpty();
