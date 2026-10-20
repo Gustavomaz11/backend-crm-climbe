@@ -12,4 +12,8 @@ public class EmpresaDriveServico {
     @Column(name = "empresa_id", nullable = false) private Long empresaId;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 50) private ServicoComercial servico;
     @Column(name = "pasta_id", length = 150) private String pastaId;
+    @Column(name = "permissoes_tentar_em", nullable = false)
+    private java.time.LocalDateTime permissoesTentarEm = java.time.LocalDateTime.now();
+    @Column(name = "permissoes_sincronizadas_em") private java.time.LocalDateTime permissoesSincronizadasEm;
+    @Column(name = "permissoes_erro", length = 1000) private String permissoesErro;
 }

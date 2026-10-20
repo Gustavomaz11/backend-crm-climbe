@@ -91,7 +91,7 @@ class ReuniaoAgendamentoTest {
         when(salas.listar("token")).thenReturn(List.of(new SalaReuniaoDTO(SALA, "Sala 1", 6)));
         when(repository.save(any())).thenAnswer(call -> { Reuniao r = call.getArgument(0); r.setIdReuniao(3L); return r; });
         when(usuarios.findAllById(any())).thenReturn(List.of(usuario(1L), usuario(2L)));
-        when(calendar.criarEvento(any(), eq("token"), any())).thenReturn(new Event().setId("evento"));
+        when(calendar.criarEvento(any(), eq("token"), any(), eq("1@example.test"))).thenReturn(new Event().setId("evento"));
 
         var reuniao = service.criar(request, 1L);
 
@@ -101,7 +101,14 @@ class ReuniaoAgendamentoTest {
         assertThat(reuniao.getGoogleEventId()).isEqualTo("evento");
         assertThat(reuniao.getDataHoraFim()).isEqualTo(request.getData().atTime(12, 30));
         verify(disponibilidade).exigirLocalDisponivel(eq(reuniao), eq("token"));
-        verify(calendar).criarEvento(eq(reuniao), eq("token"), eq(List.of("1@example.test", "2@example.test")));
+        verify(calendar).criarEvento(eq(reuniao), eq("token"), eq(List.of("1@example.test", "2@example.test")), eq("1@example.test"));
+        org.mockito.ArgumentCaptor<List<ParticipanteReuniao>> salvos = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(participantes).saveAll(salvos.capture());
+        var organizador = salvos.getValue().stream().filter(p -> p.getUsuario().getId().equals(1L)).findFirst().orElseThrow();
+        assertThat(organizador.getResposta()).isEqualTo(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA);
+        assertThat(organizador.getRespondidoEm()).isNotNull();
+        assertThat(salvos.getValue().stream().filter(p -> p.getUsuario().getId().equals(2L)).findFirst().orElseThrow().getResposta())
+                .isEqualTo(com.climb.api.model.enums.RespostaConviteReuniao.PENDENTE);
         verifyNoInteractions(empresas);
         verify(emails).notificarAgendamento(eq(reuniao), argThat(lista -> lista.size() == 2));
     }

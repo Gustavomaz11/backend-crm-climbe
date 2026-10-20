@@ -19,15 +19,25 @@ public interface ContratoRepository extends JpaRepository<Contrato, Long> {
                   where vinculo = contrato and key(encerrado) = coalesce(cast(servicoProposta.servico as string),
                       cast(contrato.servico as string), cast(proposta.servico as string), 'SEM_SERVICO')
               ) and (
-                :verTodas = true or contrato.responsavel.id = :usuarioId
+                :verTodas = true or (contrato.responsavel.id = :usuarioId
+                    and not exists (select vinculo.idContrato from Contrato vinculo join vinculo.responsaveisPorServico lider
+                        where vinculo = contrato and cast(key(lider) as string) = coalesce(cast(servicoProposta.servico as string),
+                            cast(contrato.servico as string), cast(proposta.servico as string), 'SEM_SERVICO')))
                 or exists (select vinculo.idContrato from Contrato vinculo join vinculo.responsaveisPorServico lider
-                           where vinculo = contrato and lider.id = :usuarioId)
+                           where vinculo = contrato and lider.id = :usuarioId
+                             and cast(key(lider) as string) = coalesce(cast(servicoProposta.servico as string),
+                                 cast(contrato.servico as string), cast(proposta.servico as string), 'SEM_SERVICO'))
                 or (contrato.equipeConfigurada = true and (
                     exists (select membro.id from ContratoEquipeMembro membro
-                            where membro.contrato = contrato and membro.usuario.id = :usuarioId)
+                            where membro.contrato = contrato and membro.usuario.id = :usuarioId
+                              and membro.servico = coalesce(cast(servicoProposta.servico as string), cast(contrato.servico as string),
+                                  cast(proposta.servico as string), 'SEM_SERVICO'))
                     or exists (select task.idTask from ContratoKanbanTask task join task.apoios apoio
                                where task.contrato = contrato and task.raia.concluiTarefas = false
                                  and apoio.id = :usuarioId
+                                 and coalesce(cast(task.raia.servico as string), cast(contrato.servico as string),
+                                     cast(proposta.servico as string), 'SEM_SERVICO') = coalesce(cast(servicoProposta.servico as string),
+                                         cast(contrato.servico as string), cast(proposta.servico as string), 'SEM_SERVICO')
                                  and (task.responsavel.id = :usuarioId or apoio member of task.responsaveis)
                                  and
             """ + ContratoKanbanTaskRepository.SERVICO_ATIVO + """

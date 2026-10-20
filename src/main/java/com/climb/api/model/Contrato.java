@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Entity
+@jakarta.persistence.EntityListeners(com.climb.api.model.listener.DrivePermissoesPersistenciaListener.class)
 @Table(name = "contratos")
 public class Contrato extends ItemArquivavelKanban {
 

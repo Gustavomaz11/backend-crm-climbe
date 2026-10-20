@@ -34,7 +34,8 @@ public interface ParticipanteReuniaoRepository extends JpaRepository<Participant
 
     @Query("""
             select p.id from ParticipanteReuniao p
-            where p.resposta = com.climb.api.model.enums.RespostaConviteReuniao.ACEITA and p.aceiteSincronizadoGoogle = false and p.reuniao.data >= :hoje
+            where p.resposta in (com.climb.api.model.enums.RespostaConviteReuniao.ACEITA, com.climb.api.model.enums.RespostaConviteReuniao.RECUSADA)
+              and p.aceiteSincronizadoGoogle = false and p.reuniao.data >= :hoje
               and (p.reuniao.status is null or p.reuniao.status not in ('CANCELADA', 'CANCELADO'))
             """)
     List<Long> findIdsAceitesPendentesGoogle(@Param("hoje") java.time.LocalDate hoje);

@@ -39,11 +39,15 @@ class DriveSincronizacaoIntegrationTest {
         contrato.setProposta(proposta);
         organizacao.agendarContrato(contrato); organizacao.agendarContrato(contrato);
         assertThat(servicos.findByEmpresaIdOrderByIdAsc(empresa.getIdEmpresa())).hasSize(2);
+        servicos.findByEmpresaIdOrderByIdAsc(empresa.getIdEmpresa()).forEach(pasta ->
+                pasta.setPermissoesTentarEm(LocalDateTime.now().plusHours(1)));
         when(drive.garantirPasta(anyString(), anyString(), anyString())).thenAnswer(i -> "pasta-" + i.getArgument(2));
         sincronizacao.sincronizar(empresa.getIdEmpresa());
         verify(drive).garantirPasta("1Ea1yJuqRd7jfSAa_aC58qyl_Dsv9qmVB", "Empresa-37.335.118/0001-80", "empresa-" + empresa.getIdEmpresa());
         verify(drive).garantirPasta("pasta-empresa-" + empresa.getIdEmpresa(), "Documentações", "documentacoes-" + empresa.getIdEmpresa());
         assertThat(servicos.findByEmpresaIdOrderByIdAsc(empresa.getIdEmpresa())).allMatch(pasta -> pasta.getPastaId() != null);
+        assertThat(servicos.findByEmpresaIdOrderByIdAsc(empresa.getIdEmpresa()))
+                .allMatch(pasta -> !pasta.getPermissoesTentarEm().isAfter(LocalDateTime.now()));
         assertThat(filas.findById(empresa.getIdEmpresa()).orElseThrow().isPendente()).isFalse();
         sincronizacao.sincronizar(empresa.getIdEmpresa());
         verify(drive, times(4)).garantirPasta(anyString(), anyString(), anyString());

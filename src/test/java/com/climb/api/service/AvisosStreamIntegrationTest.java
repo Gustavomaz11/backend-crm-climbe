@@ -23,7 +23,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.flyway.enabled=false", "spring.mail.host=localhost", "debug=false", "logging.level.root=WARN",
         "spring.datasource.url=jdbc:h2:mem:avisos_stream;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
         "app.avisos.intervalo-ms=86400000", "app.pipeline.cadencia.atraso-inicial-ms=86400000",
-        "app.notificacoes.email.enabled=false", "app.reunioes.convites.cron=-", "app.reunioes.aceites.cron=-"
+        "app.notificacoes.email.enabled=false", "app.reunioes.convites.cron=-", "app.reunioes.aceites.cron=-",
+        "app.reunioes.respostas-google.cron=-"
 })
 @ActiveProfiles("test")
 class AvisosStreamIntegrationTest {
@@ -33,17 +34,82 @@ class AvisosStreamIntegrationTest {
     @Autowired SessaoAutenticacaoService sessoes;
     @Autowired NotificacaoService notificacoes;
     @Autowired NotificacaoRepository repository;
+    @Autowired ReuniaoConviteRespostaService respostas;
     @Autowired EntityManager em;
     @Autowired PlatformTransactionManager manager;
     private MockMvc mvc;
     private TransactionTemplate transacao;
+    private final java.util.List<MvcResult> canaisAbertos = new java.util.ArrayList<>();
     private record Sessao(Usuario usuario, com.climb.api.model.dto.RefreshTokenResponseDTO tokens) {}
 
     @BeforeEach void configurar() {
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filtros).build();
         transacao = new TransactionTemplate(manager);
     }
-    @AfterEach void fechar() { stream.encerrar(); }
+    @AfterEach void fechar() throws Exception {
+        stream.encerrar();
+        // MockMvc não conclui automaticamente o ciclo assíncrono de um SseEmitter.
+        for (var canal : canaisAbertos) mvc.perform(asyncDispatch(canal));
+        canaisAbertos.clear();
+    }
+
+    @Test void aceiteERecusaPersistemENotificamApenasOrganizadorPeloCanalCorreto() throws Exception {
+        var organizador = sessao(); var convidado = sessao(); var terceiro = sessao();
+        Long id = agendar(organizador, convidado);
+        var origem = abrir(organizador); var destino = abrir(convidado); var outro = abrir(terceiro);
+        mvc.perform(post("/reunioes/{id}/aceitar", id).header("Authorization", bearer(convidado)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.minhaResposta").value("ACEITA"));
+        mvc.perform(post("/reunioes/{id}/aceitar", id).header("Authorization", bearer(convidado)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/reunioes/{id}/detalhes", id).header("Authorization", bearer(organizador)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.souOrganizador").value(true))
+                .andExpect(jsonPath("$.participantes[?(@.email == '" + convidado.usuario().getEmail() + "')].resposta").value("ACEITA"));
+        stream.processar();
+        assertThat(origem.getResponse().getContentAsString()).contains("event:notificacoes", "event:convites");
+        assertThat(destino.getResponse().getContentAsString()).contains("event:convites").doesNotContain("event:notificacoes");
+        assertThat(outro.getResponse().getContentAsString()).doesNotContain("event:notificacoes", "event:convites");
+
+        mvc.perform(post("/reunioes/{id}/rejeitar", id).header("Authorization", bearer(convidado)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.minhaResposta").value("RECUSADA"));
+        mvc.perform(post("/reunioes/{id}/rejeitar", id).header("Authorization", bearer(organizador)))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/reunioes/{id}/aceitar", id).header("Authorization", bearer(terceiro)))
+                .andExpect(status().isForbidden());
+        assertThat(repository.findByUsuario_IdOrderByDataCriacaoDescIdNotificacaoDesc(organizador.usuario().getId()))
+                .extracting(Notificacao::getTipo).containsExactly("REUNIAO_RECUSADA", "REUNIAO_ACEITA");
+        assertThat(repository.findByUsuario_IdOrderByDataCriacaoDescIdNotificacaoDesc(convidado.usuario().getId())).isEmpty();
+        assertThat(repository.findByUsuario_IdOrderByDataCriacaoDescIdNotificacaoDesc(terceiro.usuario().getId())).isEmpty();
+    }
+
+    @Test void rollbackDaRespostaNaoDeixaAvisoNemAceiteRegistrados() throws Exception {
+        var organizador = sessao(); var convidado = sessao(); Long id = agendar(organizador, convidado);
+        var origem = abrir(organizador);
+        transacao.executeWithoutResult(status -> {
+            respostas.aceitar(id, convidado.usuario().getId());
+            em.flush(); status.setRollbackOnly();
+        });
+        stream.processar();
+        assertThat(repository.findByUsuario_IdOrderByDataCriacaoDescIdNotificacaoDesc(organizador.usuario().getId())).isEmpty();
+        assertThat(origem.getResponse().getContentAsString()).doesNotContain("event:notificacoes", "event:convites");
+        mvc.perform(get("/reunioes/{id}/detalhes", id).header("Authorization", bearer(convidado)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.minhaResposta").value("PENDENTE"));
+    }
+
+    private Long agendar(Sessao organizador, Sessao convidado) {
+        return transacao.execute(status -> {
+            var reuniao = new Reuniao(); reuniao.setTitulo("Reunião RSVP"); reuniao.setOrganizadorId(organizador.usuario().getId());
+            reuniao.setData(java.time.LocalDate.now().plusDays(1)); reuniao.setHora(java.time.LocalTime.NOON);
+            reuniao.setStatus("AGENDADA"); em.persist(reuniao);
+            for (var pessoa : java.util.List.of(organizador, convidado)) {
+                var p = new ParticipanteReuniao(); p.setReuniao(reuniao); p.setUsuario(em.getReference(Usuario.class, pessoa.usuario().getId()));
+                if (pessoa == organizador) {
+                    p.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA); p.setAceiteSincronizadoGoogle(true);
+                }
+                em.persist(p);
+            }
+            return reuniao.getIdReuniao();
+        });
+    }
 
     @Test void publicaSomenteAposCommitParaOUsuarioCorretoESemDuplicarLote() throws Exception {
         var pessoa = sessao(); var outra = sessao();
@@ -155,8 +221,10 @@ class AvisosStreamIntegrationTest {
     }
 
     private MvcResult abrir(Sessao pessoa) throws Exception {
-        return mvc.perform(get("/avisos/stream").header("Authorization", bearer(pessoa)))
+        var canal = mvc.perform(get("/avisos/stream").header("Authorization", bearer(pessoa)))
                 .andExpect(status().isOk()).andExpect(request().asyncStarted()).andReturn();
+        canaisAbertos.add(canal);
+        return canal;
     }
     private String bearer(Sessao pessoa) { return "Bearer " + pessoa.tokens().accessToken(); }
     private Notificacao salvarAviso(Usuario usuario) {

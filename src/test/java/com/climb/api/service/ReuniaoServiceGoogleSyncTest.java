@@ -173,7 +173,7 @@ class ReuniaoServiceGoogleSyncTest {
         Event eventoGoogle = new Event()
                 .setId("google-event-11")
                 .setOrganizer(new Organizer().setEmail(criador.getEmail()));
-        when(googleCalendarService.criarEvento(any(Reuniao.class), eq("token-google-7"), any()))
+        when(googleCalendarService.criarEvento(any(Reuniao.class), eq("token-google-7"), any(), eq(criador.getEmail())))
                 .thenReturn(eventoGoogle);
         when(googleCalendarService.extrairLinkMeet(eventoGoogle)).thenReturn("https://meet.google.com/abc-defg-hij");
 

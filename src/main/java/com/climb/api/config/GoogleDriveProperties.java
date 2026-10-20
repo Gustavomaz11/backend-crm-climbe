@@ -15,4 +15,6 @@ public class GoogleDriveProperties {
     private String clientId;
     private String clientSecret;
     private String refreshToken;
+    private java.util.List<String> allowedDomains = java.util.List.of("climbe.com.br");
+    private String serviceRole = "writer";
 }

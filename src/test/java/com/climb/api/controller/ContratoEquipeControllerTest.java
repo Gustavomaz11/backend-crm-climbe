@@ -20,8 +20,8 @@ class ContratoEquipeControllerTest {
         var controller = new ContratoEquipeController(equipe, rateio);
         var auth = new UsernamePasswordAuthenticationToken("lider@example.test", null, List.of());
         auth.setDetails(42L); SecurityContextHolder.getContext().setAuthentication(auth);
-        controller.listar(); controller.temDisponiveis(); controller.listarResumos(); controller.buscar(12L);
-        controller.salvar(12L, new ContratoEquipeRequestDTO(List.of(7L, 8L)));
+        controller.listar(); controller.temDisponiveis(); controller.listarResumos(); controller.buscar(12L, null);
+        controller.salvar(12L, new ContratoEquipeRequestDTO(List.of(7L, 8L)), null);
         controller.consultarRateio(12L, "2026-10");
         verify(equipe).listarDisponiveis(42L);
         verify(equipe).temDisponiveis(42L);

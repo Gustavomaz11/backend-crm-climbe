@@ -3,8 +3,10 @@ package com.climb.api.service;
 import com.climb.api.model.*;
 import com.climb.api.model.enums.RespostaConviteReuniao;
 import com.climb.api.repository.ParticipanteReuniaoRepository;
+import com.climb.api.repository.UsuarioRepository;
 import com.google.api.services.calendar.model.Event;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,7 +24,64 @@ class ReuniaoConviteRespostaServiceTest {
     @Mock GoogleCredentialService credentials;
     @Mock GoogleCalendarService calendar;
     @Mock PlatformTransactionManager manager;
-    @InjectMocks ReuniaoConviteRespostaService service;
+    @Mock UsuarioRepository usuarios;
+    @Mock NotificacaoService notificacoes;
+    @Mock org.springframework.context.ApplicationEventPublisher eventos;
+    ReuniaoConviteRespostaService service;
+
+    @BeforeEach void configurar() {
+        service = new ReuniaoConviteRespostaService(participantes, credentials, calendar, manager,
+                new ReuniaoRespostaRegistroService(usuarios, notificacoes, eventos));
+    }
+
+    @Test void avisaSomenteOrganizadorUmaVezPorRespostaENaoRepeteNoReenvio() {
+        var convite = convite();
+        var organizador = new Usuario(); organizador.setId(1L);
+        when(usuarios.findById(1L)).thenReturn(Optional.of(organizador));
+        when(participantes.findConviteForUpdate(3L, 2L)).thenReturn(Optional.of(convite));
+        service.aceitar(3L, 2L);
+        service.aceitar(3L, 2L);
+        service.rejeitar(3L, 2L);
+        service.rejeitar(3L, 2L);
+        var avisos = ArgumentCaptor.forClass(Notificacao.class);
+        verify(notificacoes, times(2)).criar(avisos.capture());
+        assertThat(avisos.getAllValues()).allSatisfy(n -> {
+            assertThat(n.getUsuario().getId()).isEqualTo(1L);
+            assertThat(n.getDestino()).isEqualTo("/agenda?reuniaoId=3");
+        });
+        assertThat(avisos.getAllValues()).extracting(Notificacao::getTipo).containsExactly("REUNIAO_ACEITA", "REUNIAO_RECUSADA");
+        assertThat(avisos.getAllValues().get(0).getMensagem()).contains("ana@example.test confirmou presença", "Reunião da equipe");
+        assertThat(avisos.getAllValues().get(1).getMensagem()).contains("recusou o convite");
+        verify(eventos, times(2)).publishEvent(new AvisoAtualizado(null, 3L, AvisoAtualizado.Tipo.CONVITES));
+    }
+
+    @Test void recusaAtualizaApenasConviteAutenticadoESincronizaComGoogle() throws Exception {
+        var convite = convite(); var evento = new Event().setId("evento");
+        when(participantes.findConviteForUpdate(3L, 2L)).thenReturn(Optional.of(convite));
+        when(credentials.obterAccessToken(2L)).thenReturn(Optional.of("token"));
+        when(calendar.buscarEvento("evento", "token")).thenReturn(evento);
+        assertThat(service.rejeitar(3L, 2L).getMinhaResposta()).isEqualTo(RespostaConviteReuniao.RECUSADA);
+        assertThat(convite.getRespondidoEm()).isNotNull();
+        assertThat(convite.isAceiteSincronizadoGoogle()).isTrue();
+        verify(calendar).rejeitarConvite(evento, "ana@example.test", "token");
+    }
+
+    @Test void naoPermiteRecusarConviteAlheioNemOrganizadorRecusarPropriaReuniao() {
+        assertThatThrownBy(() -> service.rejeitar(3L, 99L)).isInstanceOf(ResponseStatusException.class).hasMessageContaining("403");
+        var convite = convite(); convite.getReuniao().setOrganizadorId(2L);
+        when(participantes.findConviteForUpdate(3L, 2L)).thenReturn(Optional.of(convite));
+        assertThatThrownBy(() -> service.rejeitar(3L, 2L)).isInstanceOf(ResponseStatusException.class).hasMessageContaining("organizador");
+        verifyNoInteractions(notificacoes, calendar, credentials);
+        verify(participantes, never()).save(any());
+    }
+
+    @Test void aceiteAutomaticoDoOrganizadorNaoGeraAvisoParaSiMesmo() {
+        var convite = convite(); convite.getReuniao().setOrganizadorId(2L);
+        when(participantes.findConviteForUpdate(3L, 2L)).thenReturn(Optional.of(convite));
+        assertThat(service.aceitar(3L, 2L).getSouOrganizador()).isTrue();
+        assertThat(convite.getResposta()).isEqualTo(RespostaConviteReuniao.ACEITA);
+        verifyNoInteractions(notificacoes, credentials, calendar);
+    }
 
     @Test void aceitaSomenteOConviteDoUsuarioAutenticado() {
         var convite = convite();
@@ -117,7 +176,7 @@ class ReuniaoConviteRespostaServiceTest {
 
     private ParticipanteReuniao convite() {
         var usuario = new Usuario(); usuario.setId(2L); usuario.setEmail("ana@example.test");
-        var reuniao = new Reuniao(); reuniao.setIdReuniao(3L); reuniao.setGoogleEventId("evento");
+        var reuniao = new Reuniao(); reuniao.setIdReuniao(3L); reuniao.setOrganizadorId(1L); reuniao.setGoogleEventId("evento");
         reuniao.setTitulo("Reunião da equipe"); reuniao.setData(LocalDate.now().plusDays(1)); reuniao.setHora(LocalTime.of(10, 0));
         var convite = new ParticipanteReuniao(); convite.setId(8L); convite.setUsuario(usuario); convite.setReuniao(reuniao); return convite;
     }

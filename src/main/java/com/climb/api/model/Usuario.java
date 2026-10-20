@@ -12,6 +12,7 @@ import java.util.Set;
 @Getter
 @Setter
 @Entity
+@jakarta.persistence.EntityListeners(com.climb.api.model.listener.DrivePermissoesPersistenciaListener.class)
 @Table(name = "usuarios")
 public class Usuario {
 

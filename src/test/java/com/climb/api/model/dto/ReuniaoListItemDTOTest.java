@@ -9,6 +9,28 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReuniaoListItemDTOTest {
+    @Test void expoeAceiteRecusaTentativaEPendenciaDoGoogleEConfirmaOrganizador() {
+        var evento = new Event().setId("evento-rsvp").setOrganizer(new Event.Organizer().setEmail("org@climbe.com.br"))
+                .setAttendees(List.of(new EventAttendee().setEmail("org@climbe.com.br").setResponseStatus("needsAction"),
+                        new EventAttendee().setEmail("ana@climbe.com.br").setResponseStatus("accepted"),
+                        new EventAttendee().setEmail("bia@climbe.com.br").setResponseStatus("declined"),
+                        new EventAttendee().setEmail("caio@climbe.com.br").setResponseStatus("tentative"),
+                        new EventAttendee().setEmail("davi@climbe.com.br").setResponseStatus("needsAction")));
+        assertThat(ReuniaoListItemDTO.fromGoogleEventExterno(evento).getParticipantes())
+                .extracting(p -> p.resposta().name()).containsExactly("ACEITA", "ACEITA", "RECUSADA", "TENTATIVA", "PENDENTE");
+    }
+
+    @Test void detalhesPreservamRespostaLocalPendenteDeEnvioMesmoSeGoogleDivergir() {
+        var usuario = new com.climb.api.model.Usuario(); usuario.setId(2L); usuario.setEmail("ana@climbe.com.br");
+        var reuniao = new com.climb.api.model.Reuniao(); reuniao.setOrganizadorId(1L);
+        var participante = new com.climb.api.model.ParticipanteReuniao(); participante.setUsuario(usuario); participante.setReuniao(reuniao);
+        participante.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.RECUSADA);
+        var evento = new Event().setAttendees(List.of(new EventAttendee().setEmail(usuario.getEmail()).setResponseStatus("accepted")));
+        assertThat(ParticipanteReuniaoResumoDTO.from(participante, evento).resposta().name()).isEqualTo("RECUSADA");
+        participante.setAceiteSincronizadoGoogle(true);
+        assertThat(ParticipanteReuniaoResumoDTO.from(participante, evento).resposta().name()).isEqualTo("ACEITA");
+    }
+
     @Test void localPreenchidoClassificaEventoComMeetComoPresencialSemRecursoDeSala() {
         String local = "Escritório Climbe Cont - Hermes Fontes-2-Sala de Reunião - Climbe Cont (6)";
         var evento = new Event().setId("evento-com-local").setLocation(local)

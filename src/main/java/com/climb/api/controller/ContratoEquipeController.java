@@ -27,11 +27,15 @@ public class ContratoEquipeController {
     public List<ContratoKanbanResumoDTO> listarResumos() { return service.listarResumos(usuarioId()); }
 
     @GetMapping("/{id}/equipe")
-    public ContratoEquipeResponseDTO buscar(@PathVariable Long id) { return service.buscarEquipe(id, usuarioId()); }
+    public ContratoEquipeResponseDTO buscar(@PathVariable Long id, @RequestParam(required = false) com.climb.api.model.enums.ServicoComercial servico) {
+        return servico == null ? service.buscarEquipe(id, usuarioId()) : service.buscarEquipe(id, usuarioId(), servico);
+    }
 
     @PutMapping("/{id}/equipe")
-    public ContratoEquipeResponseDTO salvar(@PathVariable Long id, @Valid @RequestBody ContratoEquipeRequestDTO dto) {
-        return service.salvarEquipe(id, usuarioId(), dto.usuarioIds());
+    public ContratoEquipeResponseDTO salvar(@PathVariable Long id, @Valid @RequestBody ContratoEquipeRequestDTO dto,
+            @RequestParam(required = false) com.climb.api.model.enums.ServicoComercial servico) {
+        return servico == null ? service.salvarEquipe(id, usuarioId(), dto.usuarioIds())
+                : service.salvarEquipe(id, usuarioId(), dto.usuarioIds(), servico);
     }
     @GetMapping("/{id}/rateio-tecnico")
     public ContratoRateioTecnicoResponseDTO consultarRateio(@PathVariable Long id, @RequestParam String competencia) {

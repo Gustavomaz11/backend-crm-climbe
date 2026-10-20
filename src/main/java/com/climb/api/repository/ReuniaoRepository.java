@@ -19,6 +19,13 @@ public interface ReuniaoRepository extends JpaRepository<Reuniao, Long> {
     @Query("select r.idReuniao from Reuniao r where r.convitesNotificados = false and r.organizadorId is not null and r.googleEventId is not null and r.presencial = false and r.status <> 'CANCELADA'")
     List<Long> findIdsConvitesPendentes();
 
+    @Query("""
+            select r.idReuniao from Reuniao r
+            where r.googleEventId is not null and r.organizadorId is not null and r.data >= :hoje
+              and (r.status is null or r.status not in ('CANCELADA', 'CANCELADO'))
+            """)
+    List<Long> findIdsRespostasGoogle(@Param("hoje") java.time.LocalDate hoje);
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Reuniao r where r.idReuniao = :id")
     java.util.Optional<Reuniao> findByIdForUpdate(@Param("id") Long id);

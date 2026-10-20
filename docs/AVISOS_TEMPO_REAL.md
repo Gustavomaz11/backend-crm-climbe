@@ -39,9 +39,23 @@ Os avisos são persistidos mesmo que o usuário esteja offline ou que o envio de
 
 Os IDs dos popups dispensados são mantidos no `sessionStorage`, separados por usuário, para evitar repetições ao navegar, recarregar ou reconectar durante a sessão da aba. Se o armazenamento estiver bloqueado, a deduplicação permanece em memória. Logout e troca de conta removem o popup e impedem que ações pendentes abram avisos da sessão anterior.
 
-Convites de reunião aparecem somente no aviso pequeno e no sininho; não abrem outro diálogo automaticamente. O convidado pode abrir os detalhes na Agenda e aceitar a reunião. Os sinais de convite atualizam a lista da agenda para que esse acesso funcione mesmo se ela já estiver aberta.
+Convites de reunião aparecem somente no aviso pequeno e no sininho; não abrem outro diálogo automaticamente. O convidado pode abrir os detalhes na Agenda e aceitar ou rejeitar a reunião. Os sinais de convite atualizam a lista da agenda e os detalhes abertos quando outro participante responde.
 
 O organizador continua participante da reunião para consultá-la e gerenciá-la, mas é excluído dos destinatários de `REUNIAO_AGENDADA`. A regra vale na criação, nas alterações e no envio adiado enquanto o Google Meet é gerado. As notificações anteriores já gravadas permanecem no histórico.
+
+## Respostas dos participantes
+
+Ao agendar pelo CRM, o organizador é incluído com resposta `ACEITA`, também enviada na criação do evento Google. Ele não precisa responder ao próprio convite e não pode recusá-lo. Convidados podem usar `POST /reunioes/{id}/aceitar` e `POST /reunioes/{id}/rejeitar` enquanto a reunião não terminou nem foi cancelada. Somente o participante autenticado altera sua resposta; ele pode mudar de decisão antes do término.
+
+Cada mudança para `ACEITA` ou `RECUSADA` cria uma notificação interna para **somente o organizador**, com nome do convidado, reunião, data e horário. Repetir a mesma resposta ou tentar novamente o envio ao Google não duplica o aviso. Resposta e notificação compartilham a transação, e o sinal SSE é distribuído após o commit. A notificação usa popup pequeno e sininho, inclusive no próximo acesso se o organizador estava offline.
+
+O backend consulta a agenda do organizador das reuniões cadastradas no CRM uma vez por minuto para importar respostas dadas no Google. O cron pode ser ajustado pela propriedade opcional `app.reunioes.respostas-google.cron` (padrão `40 * * * * *`; `-` desativa). O frontend continua usando SSE, sem consultas periódicas. A sincronização depende da autorização Google já existente de quem agendou.
+
+Se o Google estiver indisponível ou o convidado não tiver uma credencial Google disponível, a resposta permanece válida no CRM e aguarda sincronização. O processamento de tentativas existente, `app.reunioes.aceites.cron`, agora envia tanto aceite quanto recusa. Uma resposta local ainda não enviada não é substituída por um estado antigo do Google. Ausência de um participante na lista parcial do Google não é interpretada como recusa.
+
+Os detalhes mostram contorno verde e ícone de confirmação para `ACEITA`, vermelho e ícone de recusa para `RECUSADA`, cinza para `PENDENTE` e amarelo para `TENTATIVA` ("Talvez" no Google). A API informa `resposta` e `respondidoEm` em cada participante, além de `souOrganizador`. Eventos existentes apenas no Google também exibem as respostas retornadas por ele; a geração persistente dos avisos de resposta é feita para reuniões cadastradas no CRM.
+
+Esta mudança usa as colunas de resposta existentes e não exige nova migração ou novas variáveis de ambiente. Referência: [respostas de participantes na API Google Calendar](https://developers.google.com/workspace/calendar/api/v3/reference/events#attendees).
 
 ## Publicação
 

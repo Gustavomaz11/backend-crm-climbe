@@ -3,8 +3,9 @@ package com.climb.api.model;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "contrato_equipe", uniqueConstraints = @UniqueConstraint(
-        name = "uk_contrato_equipe", columnNames = {"contrato_id", "usuario_id"}))
+@jakarta.persistence.EntityListeners(com.climb.api.model.listener.DrivePermissoesPersistenciaListener.class)
+@Table(name = "contrato_equipe_servico", uniqueConstraints = @UniqueConstraint(
+        name = "uk_contrato_equipe_servico", columnNames = {"contrato_id", "usuario_id", "servico"}))
 public class ContratoEquipeMembro {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -12,6 +13,11 @@ public class ContratoEquipeMembro {
     private Contrato contrato;
     @ManyToOne(optional = false) @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
+    @Column(nullable = false, length = 50)
+    private String servico = "SEM_SERVICO";
+
+    public String getServico() { return servico; }
+    public void setServico(String servico) { this.servico = servico; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

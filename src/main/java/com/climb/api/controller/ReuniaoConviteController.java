@@ -25,6 +25,11 @@ public class ReuniaoConviteController {
         return service.aceitar(id, usuarioId(auth));
     }
 
+    @PostMapping("/{id}/rejeitar")
+    public ReuniaoListItemDTO rejeitar(@PathVariable Long id, Authentication auth) {
+        return service.rejeitar(id, usuarioId(auth));
+    }
+
     private Long usuarioId(Authentication auth) {
         if (auth != null && auth.getDetails() instanceof Number id) return id.longValue();
         if (auth != null && auth.getDetails() instanceof String id) return Long.parseLong(id);

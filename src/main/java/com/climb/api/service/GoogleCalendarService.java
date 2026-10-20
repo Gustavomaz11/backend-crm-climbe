@@ -34,8 +34,15 @@ public class GoogleCalendarService {
     }
 
     public Event criarEvento(Reuniao reuniao, String accessToken, List<String> convidados) throws Exception {
+        return criarEvento(reuniao, accessToken, convidados, null);
+    }
+
+    public Event criarEvento(Reuniao reuniao, String accessToken, List<String> convidados, String organizadorEmail) throws Exception {
+        Event evento = buildEvent(reuniao, convidados);
+        evento.getAttendees().stream().filter(a -> organizadorEmail != null && organizadorEmail.equalsIgnoreCase(a.getEmail()))
+                .forEach(a -> a.setResponseStatus("accepted"));
         return buildCalendar(accessToken).events()
-                .insert("primary", buildEvent(reuniao, convidados))
+                .insert("primary", evento)
                 .setConferenceDataVersion(1)
                 .setSendUpdates("all")
                 .execute();
@@ -106,11 +113,19 @@ public class GoogleCalendarService {
     }
 
     public void aceitarConvite(Event evento, String email, String accessToken) throws Exception {
+        responderConvite(evento, email, accessToken, "accepted");
+    }
+
+    public void rejeitarConvite(Event evento, String email, String accessToken) throws Exception {
+        responderConvite(evento, email, accessToken, "declined");
+    }
+
+    private void responderConvite(Event evento, String email, String accessToken, String status) throws Exception {
         var convidados = evento.getAttendees() == null ? List.<EventAttendee>of() : evento.getAttendees();
         var resposta = convidados.stream().filter(a -> Boolean.TRUE.equals(a.getSelf())).findFirst()
                 .orElseGet(() -> convidados.stream().filter(a -> email != null && email.equalsIgnoreCase(a.getEmail())).findFirst().orElse(null));
         if (resposta == null) throw new IllegalStateException("Usuário não consta no convite do Google");
-        var patch = new Event().setAttendees(List.of(resposta.clone().setResponseStatus("accepted"))).setAttendeesOmitted(true);
+        var patch = new Event().setAttendees(List.of(resposta.clone().setResponseStatus(status))).setAttendeesOmitted(true);
         buildCalendar(accessToken).events().patch("primary", evento.getId(), patch).setSendUpdates("all").execute();
     }
 

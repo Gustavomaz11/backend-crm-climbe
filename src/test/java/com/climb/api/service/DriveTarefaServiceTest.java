@@ -17,7 +17,7 @@ class DriveTarefaServiceTest {
     private final GoogleDriveClient drive = mock(GoogleDriveClient.class);
     private final DriveOrganizacaoService organizacao = new DriveOrganizacaoService(null, null, null);
     private final DriveTarefaService service = new DriveTarefaService(tarefas, pastas, mock(EmpresaDriveRepository.class),
-            organizacao, drive, mock(ArquivoValidationService.class));
+            organizacao, drive, mock(ArquivoValidationService.class), mock(DriveAcessoService.class));
 
     @BeforeEach void preparar() {
         var empresa = new Empresa(); empresa.setIdEmpresa(1L);

@@ -28,13 +28,16 @@ public class ReuniaoConviteRespostaService {
     private final GoogleCredentialService credentials;
     private final GoogleCalendarService calendar;
     private final TransactionTemplate transaction;
+    private final ReuniaoRespostaRegistroService registro;
 
     public ReuniaoConviteRespostaService(ParticipanteReuniaoRepository participantes, GoogleCredentialService credentials,
-                                        GoogleCalendarService calendar, PlatformTransactionManager manager) {
+                                        GoogleCalendarService calendar, PlatformTransactionManager manager,
+                                        ReuniaoRespostaRegistroService registro) {
         this.participantes = participantes;
         this.credentials = credentials;
         this.calendar = calendar;
         this.transaction = new TransactionTemplate(manager);
+        this.registro = registro;
     }
 
     @Transactional(readOnly = true)
@@ -47,18 +50,28 @@ public class ReuniaoConviteRespostaService {
 
     @Transactional
     public ReuniaoListItemDTO aceitar(Long reuniaoId, Long usuarioId) {
+        return responder(reuniaoId, usuarioId, RespostaConviteReuniao.ACEITA);
+    }
+
+    @Transactional
+    public ReuniaoListItemDTO rejeitar(Long reuniaoId, Long usuarioId) {
+        return responder(reuniaoId, usuarioId, RespostaConviteReuniao.RECUSADA);
+    }
+
+    private ReuniaoListItemDTO responder(Long reuniaoId, Long usuarioId, RespostaConviteReuniao resposta) {
         var convite = participantes.findConviteForUpdate(reuniaoId, usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Você não foi convidado para esta reunião."));
+        if (resposta == RespostaConviteReuniao.RECUSADA && usuarioId.equals(convite.getReuniao().getOrganizadorId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "O organizador já está confirmado nesta reunião.");
+        }
         if ("CANCELADA".equals(convite.getReuniao().getStatus()) || "CANCELADO".equals(convite.getReuniao().getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta reunião foi cancelada.");
         }
-        if (convite.getResposta() != RespostaConviteReuniao.ACEITA) {
+        if (convite.getResposta() != resposta) {
             if (convite.getReuniao().getDataHoraFim() == null || !convite.getReuniao().getDataHoraFim().isAfter(LocalDateTime.now(ZONE))) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta reunião já terminou.");
             }
-            convite.setResposta(RespostaConviteReuniao.ACEITA);
-            convite.setRespondidoEm(LocalDateTime.now(ZONE));
-            convite.setAceiteSincronizadoGoogle(false);
+            registro.registrar(convite, resposta, false);
         }
         sincronizar(convite);
         participantes.save(convite);
@@ -70,12 +83,12 @@ public class ReuniaoConviteRespostaService {
         participantes.findIdsAceitesPendentesGoogle(LocalDateTime.now(ZONE).toLocalDate()).forEach(id -> {
             try {
                 transaction.executeWithoutResult(status -> participantes.findByIdForUpdate(id).ifPresent(p -> {
-                    if (p.getResposta() != RespostaConviteReuniao.ACEITA || p.isAceiteSincronizadoGoogle()) return;
+                    if (!p.getResposta().definitiva() || p.isAceiteSincronizadoGoogle()) return;
                     sincronizar(p);
                     participantes.save(p);
                 }));
             } catch (Exception e) {
-                log.warn("Aceite da reunião aguardando sincronização: {}", e.getClass().getSimpleName());
+                log.warn("Resposta da reunião aguardando sincronização: {}", e.getClass().getSimpleName());
             }
         });
     }
@@ -87,10 +100,14 @@ public class ReuniaoConviteRespostaService {
             String token = credentials.obterAccessToken(convite.getUsuario().getId()).orElse(null);
             if (token == null || token.isBlank()) return;
             Event evento = eventoNaAgenda(convite.getReuniao(), token);
-            calendar.aceitarConvite(evento, convite.getUsuario().getEmail(), token);
+            if (convite.getResposta() == RespostaConviteReuniao.ACEITA) {
+                calendar.aceitarConvite(evento, convite.getUsuario().getEmail(), token);
+            } else {
+                calendar.rejeitarConvite(evento, convite.getUsuario().getEmail(), token);
+            }
             convite.setAceiteSincronizadoGoogle(true);
         } catch (Exception e) {
-            log.warn("Aceite registrado no sistema, aguardando Google Agenda: {}", e.getClass().getSimpleName());
+            log.warn("Resposta registrada no sistema, aguardando Google Agenda: {}", e.getClass().getSimpleName());
         }
     }
 
@@ -110,6 +127,7 @@ public class ReuniaoConviteRespostaService {
         dto.setMinhaResposta(convite.getResposta());
         dto.setConviteId(convite.getId());
         dto.setRespondidoEm(convite.getRespondidoEm());
+        dto.setSouOrganizador(convite.getUsuario().getId().equals(convite.getReuniao().getOrganizadorId()));
         return dto;
     }
 }

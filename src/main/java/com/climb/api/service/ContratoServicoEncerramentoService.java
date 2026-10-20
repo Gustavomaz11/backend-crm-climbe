@@ -53,6 +53,7 @@ public class ContratoServicoEncerramentoService {
                     .filter(tarefa -> Objects.equals(ContratoServicos.daTarefa(tarefa), servico))
                     .forEach(tarefa -> { atuacoes.encerrar(tarefa); rateio.registrarAtuacao(tarefa); });
             contratos.save(contrato);
+            eventos.publishEvent(new DrivePermissoesAlteradas(contrato.getEmpresa().getIdEmpresa()));
             eventos.publishEvent(new AvisoAtualizado(null, null, AvisoAtualizado.Tipo.KANBAN));
         }
         return new ContratoServicoEncerramentoResponseDTO(contratoId, servico,

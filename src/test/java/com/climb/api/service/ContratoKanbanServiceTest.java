@@ -43,6 +43,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ContratoKanbanServiceTest {
+    @Mock private org.springframework.context.ApplicationEventPublisher eventos;
 
     private static final Long CONTRATO_ID = 10L;
     private static final Long GESTOR_ID = 1L;
@@ -85,8 +86,8 @@ class ContratoKanbanServiceTest {
         contrato.setUrlPdf("contrato.pdf");
         contrato.setStatus("APROVADO");
         contrato.setEquipeConfigurada(true);
-        org.mockito.Mockito.lenient().when(equipeService.podeEditar(any(), any())).thenReturn(true);
-        org.mockito.Mockito.lenient().when(equipeService.membrosAtuais(any())).thenReturn(List.of(gestor));
+        org.mockito.Mockito.lenient().when(equipeService.podeEditar(any(), any(), org.mockito.ArgumentMatchers.nullable(com.climb.api.model.enums.ServicoComercial.class))).thenReturn(true);
+        org.mockito.Mockito.lenient().when(equipeService.membrosAtuais(any(), org.mockito.ArgumentMatchers.nullable(com.climb.api.model.enums.ServicoComercial.class))).thenReturn(List.of(gestor));
 
         raia = new ContratoKanbanRaia();
         raia.setIdRaia(20L);
@@ -248,12 +249,12 @@ class ContratoKanbanServiceTest {
         Usuario analista = usuario(2L, "Analista", "ATIVO");
         ContratoKanbanTask tarefaDoGestor = tarefa(30L, gestor);
         when(contratoRepository.findById(CONTRATO_ID)).thenReturn(Optional.of(contrato));
-        when(equipeService.membrosAtuais(contrato)).thenReturn(List.of(gestor, analista));
+        when(equipeService.membrosAtuais(contrato, null)).thenReturn(List.of(gestor, analista));
         prepararConsultasDoBoard(List.of(tarefaDoGestor), List.of(), List.of(gestor, analista));
         ContratoKanbanBoardResponseDTO board = service.buscarBoard(CONTRATO_ID, 2L);
         assertEquals(1, board.raias().getFirst().tasks().size());
         assertTrue(board.podeEditar());
-        verify(equipeService).exigirAcesso(contrato, 2L, false);
+        verify(equipeService).exigirAcesso(contrato, 2L, false, null);
         verify(taskRepository).findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(CONTRATO_ID);
     }
 

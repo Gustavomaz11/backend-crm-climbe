@@ -150,21 +150,31 @@ public class ReuniaoService {
     public ReuniaoListItemDTO buscarDetalhes(Long id, Long usuarioId) {
         Reuniao reuniao = buscarPorId(id, usuarioId);
         var detalhes = ReuniaoListItemDTO.fromEntity(reuniao);
+        Event eventoGoogle = null;
         if (StringUtils.hasText(reuniao.getGoogleEventId())) {
-            googleCredentialService.obterAccessToken(usuarioId).ifPresent(token -> {
+            String token = googleCredentialService.obterAccessToken(usuarioId).orElse(null);
+            if (StringUtils.hasText(token)) {
                 try {
-                    detalhes.aplicarSalaFisicaGoogle(googleCalendarService.buscarEvento(reuniao.getGoogleEventId(), token));
+                    eventoGoogle = googleCalendarService.buscarEvento(reuniao.getGoogleEventId(), token);
+                    detalhes.aplicarSalaFisicaGoogle(eventoGoogle);
                 } catch (Exception e) {
                     log.warn("Não foi possível consultar a sala física da reunião {} no Google Agenda", id);
                 }
-            });
+            }
         }
+        final Event evento = eventoGoogle;
         var participantes = participanteReuniaoRepository.findByReuniao_IdReuniao(id);
         participantes.stream().filter(p -> p.getUsuario() != null && usuarioId.equals(p.getUsuario().getId())).findFirst()
                 .ifPresent(p -> { detalhes.setMinhaResposta(p.getResposta()); detalhes.setRespondidoEm(p.getRespondidoEm()); detalhes.setConviteId(p.getId()); });
         detalhes.setParticipantes(participantes.stream()
-                .map(ParticipanteReuniao::getUsuario).filter(java.util.Objects::nonNull)
-                .map(usuario -> new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())).toList());
+                .filter(p -> p.getUsuario() != null)
+                .map(p -> com.climb.api.model.dto.ParticipanteReuniaoResumoDTO.from(p, evento)).toList());
+        detalhes.getParticipantes().stream().filter(p -> usuarioId.equals(p.id())).findFirst()
+                .ifPresent(p -> detalhes.setMinhaResposta(p.resposta()));
+        detalhes.setSouOrganizador(usuarioId.equals(reuniao.getOrganizadorId()));
+        if (Boolean.TRUE.equals(detalhes.getSouOrganizador())) {
+            detalhes.setMinhaResposta(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA);
+        }
         if (reuniao.getOrganizadorId() != null) {
             usuarioRepository.findById(reuniao.getOrganizadorId()).ifPresent(usuario -> detalhes.setOrganizador(
                     new UsuarioResumoDTO(usuario.getId(), usuario.getNomeCompleto(), usuario.getEmail())));
@@ -205,7 +215,8 @@ public class ReuniaoService {
         List<Usuario> convidados = salvarParticipantes(salva, incluirUsuarioAutenticado(request.getParticipanteIds(), usuarioId));
 
         try {
-            Event createdEvent = googleCalendarService.criarEvento(salva, accessToken, emailsConvidados(convidados));
+            Event createdEvent = googleCalendarService.criarEvento(salva, accessToken, emailsConvidados(convidados),
+                    emailOrganizador(salva, convidados));
             salva.setGoogleEventId(createdEvent.getId());
             salva.setLinkMeet(googleCalendarService.extrairLinkMeet(createdEvent));
             salva = repository.save(salva);
@@ -241,7 +252,7 @@ public class ReuniaoService {
 
         try {
             Event evento = salva.getGoogleEventId() == null
-                    ? googleCalendarService.criarEvento(salva, accessToken, emailsConvidados(convidados))
+                    ? googleCalendarService.criarEvento(salva, accessToken, emailsConvidados(convidados), emailOrganizador(salva, convidados))
                     : googleCalendarService.atualizarEvento(salva, accessToken, emailsConvidados(convidados));
             salva.setGoogleEventId(evento.getId());
             salva.setLinkMeet(googleCalendarService.extrairLinkMeet(evento));
@@ -351,11 +362,17 @@ public class ReuniaoService {
             participante.setUsuario(usuario);
             if (usuario.getId().equals(reuniao.getOrganizadorId())) {
                 participante.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA);
+                if (participante.getRespondidoEm() == null) participante.setRespondidoEm(LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo")));
                 participante.setAceiteSincronizadoGoogle(true);
             }
             return participante;
         }).toList());
         return usuarios;
+    }
+
+    private String emailOrganizador(Reuniao reuniao, List<Usuario> convidados) {
+        return convidados.stream().filter(u -> u.getId().equals(reuniao.getOrganizadorId()))
+                .map(Usuario::getEmail).findFirst().orElse(null);
     }
 
     private List<Long> incluirUsuarioAutenticado(List<Long> participanteIds, Long usuarioId) {

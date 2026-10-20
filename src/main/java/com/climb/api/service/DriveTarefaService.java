@@ -22,6 +22,7 @@ public class DriveTarefaService {
     private final DriveOrganizacaoService organizacao;
     private final GoogleDriveClient drive;
     private final ArquivoValidationService validation;
+    private final DriveAcessoService acesso;
 
     public record Servico(ServicoComercial servico, String nome, String pastaId) {}
     public record Pastas(List<Servico> servicos, String mensagem) {}
@@ -29,9 +30,10 @@ public class DriveTarefaService {
 
     public DriveTarefaService(ContratoKanbanService tarefas, EmpresaDriveServicoRepository pastas,
             EmpresaDriveRepository empresas, DriveOrganizacaoService organizacao, GoogleDriveClient drive,
-            ArquivoValidationService validation) {
+            ArquivoValidationService validation, DriveAcessoService acesso) {
         this.tarefas = tarefas; this.pastas = pastas; this.empresas = empresas;
         this.organizacao = organizacao; this.drive = drive; this.validation = validation;
+        this.acesso = acesso;
     }
 
     @Transactional(readOnly = true)
@@ -40,10 +42,14 @@ public class DriveTarefaService {
         Contrato contrato = tarefa.getContrato();
         Long empresaId = contrato.getEmpresa().getIdEmpresa();
         var servicoDaTarefa = ContratoServicos.daTarefa(tarefa);
+        acesso.exigir(contrato, servicoDaTarefa, usuarioId);
         var lista = (servicoDaTarefa == null ? List.<ServicoComercial>of() : List.of(servicoDaTarefa)).stream()
                 .map(servico -> new Servico(servico, organizacao.nomeServico(servico),
                 pastas.findByEmpresaIdAndServico(empresaId, servico).map(EmpresaDriveServico::getPastaId).orElse(null))).toList();
         String mensagem = empresas.findById(empresaId).map(fila -> fila.getErro()).orElse(null);
+        var erroPermissoes = pastas.findByEmpresaIdAndServico(empresaId, servicoDaTarefa)
+                .map(EmpresaDriveServico::getPermissoesErro).orElse(null);
+        if (erroPermissoes != null) mensagem = "A sincronização de acesso ao Drive está pendente: " + erroPermissoes;
         return new Pastas(lista, mensagem);
     }
 
@@ -87,6 +93,7 @@ public class DriveTarefaService {
         ContratoKanbanTask tarefa = tarefas.exigirTaskVisivel(tarefaId, usuarioId);
         Contrato contrato = tarefa.getContrato();
         if (!Objects.equals(ContratoServicos.daTarefa(tarefa), servico) || !organizacao.servicos(contrato).contains(servico)) throw naoEncontrado();
+        acesso.exigir(contrato, servico, usuarioId);
         return pastas.findByEmpresaIdAndServico(contrato.getEmpresa().getIdEmpresa(), servico)
                 .map(EmpresaDriveServico::getPastaId).orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "A pasta do serviço está aguardando sincronização após a assinatura do contrato."));

@@ -36,6 +36,7 @@ public class DriveSincronizacaoService {
             fila.setDocumentacoesId(documentos);
             for (var pasta : servicos.findByEmpresaIdOrderByIdAsc(empresaId)) {
                 pasta.setPastaId(drive.garantirPasta(raiz, nomes.nomeServico(pasta.getServico()), "servico-" + empresaId + "-" + pasta.getServico()));
+                pasta.setPermissoesTentarEm(LocalDateTime.now());
                 servicos.save(pasta);
             }
             for (var comprovante : comprovantes.findByEmpresaIdAndStatusAndDriveArquivoIdIsNull(empresaId, "DISPONIVEL")) {

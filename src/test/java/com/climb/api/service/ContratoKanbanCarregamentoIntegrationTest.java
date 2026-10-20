@@ -42,7 +42,8 @@ class ContratoKanbanCarregamentoIntegrationTest {
     void encerraApenasServicoSelecionadoMantemHistoricoEInterrompeApoioEAlertas() {
         Usuario contabil = usuario("contabil_encerrar"), cfo = usuario("cfo_encerrar"), apoio = usuario("apoio_encerrar");
         Contrato contrato = contratoComDoisServicos(contabil, cfo);
-        Long id = contrato.getIdContrato(); equipes.salvarEquipe(id, cfo.getId(), List.of(contabil.getId()));
+        Long id = contrato.getIdContrato(); equipes.salvarEquipe(id, cfo.getId(), List.of(cfo.getId()), ServicoComercial.CFO);
+        equipes.salvarEquipe(id, contabil.getId(), List.of(contabil.getId()), ServicoComercial.CONTABILIDADE);
         var quadro = kanban.criarRaia(id, cfo.getId(), new com.climb.api.model.dto.ContratoKanbanRaiaRequestDTO(
                 "A fazer", 0, false, ServicoComercial.CFO));
         Long raiaId = quadro.raias().getFirst().id();
@@ -64,8 +65,7 @@ class ContratoKanbanCarregamentoIntegrationTest {
         assertThat(tarefas.buscarAbertasComPrazoAte(TarefaPrazoPolicy.hoje().plusDays(3))).isEmpty();
         assertThat(tarefas.buscarApoiosPendentes(id)).isEmpty();
         assertThat(equipes.temDisponiveis(apoio.getId())).isFalse();
-        assertThat(equipes.listarResumos(cfo.getId()).getFirst().servicos())
-                .extracting(ContratoKanbanResumoDTO.ServicoResumo::servico).containsExactly(ServicoComercial.CONTABILIDADE);
+        assertThat(equipes.listarResumos(cfo.getId())).isEmpty();
         assertThat(kanban.buscarBoard(id, contabil.getId()).servico()).isEqualTo(ServicoComercial.CONTABILIDADE);
         assertThat(kanban.buscarBoard(id, contabil.getId(), ServicoComercial.CONTABILIDADE).raias()).isEmpty();
         assertThatThrownBy(() -> kanban.buscarBoard(id, cfo.getId(), ServicoComercial.CFO)).hasMessageContaining("encerrado");
@@ -86,7 +86,7 @@ class ContratoKanbanCarregamentoIntegrationTest {
         Contrato contrato = contratoComDoisServicos(contabil, cfo); contrato.setEquipeConfigurada(false);
         Long id = contrato.getIdContrato();
         assertThat(kanban.buscarAbertura(id, cfo.getId(), ServicoComercial.CFO).podeEncerrar()).isTrue();
-        assertThat(kanban.buscarAbertura(id, contabil.getId(), ServicoComercial.CFO).podeEncerrar()).isFalse();
+        assertThatThrownBy(() -> kanban.buscarAbertura(id, contabil.getId(), ServicoComercial.CFO)).isInstanceOf(ResponseStatusException.class);
         for (Usuario usuario : List.of(contabil, leitor)) {
             assertThatThrownBy(() -> encerramentos.encerrar(id, ServicoComercial.CFO, usuario.getId()))
                     .isInstanceOfSatisfying(ResponseStatusException.class, erro -> assertThat(erro.getStatusCode().value()).isEqualTo(403));
@@ -112,7 +112,7 @@ class ContratoKanbanCarregamentoIntegrationTest {
     void notificaCadaNovoResponsavelSemRepetirAoEditarEIncluiServicoNoDestino() {
         Usuario contabil = usuario("contabil_avisos"), cfo = usuario("cfo_avisos"), ana = usuario("ana_avisos"), bia = usuario("bia_avisos");
         Contrato contrato = contratoComDoisServicos(contabil, cfo); Long id = contrato.getIdContrato();
-        equipes.salvarEquipe(id, cfo.getId(), List.of(ana.getId(), bia.getId()));
+        equipes.salvarEquipe(id, cfo.getId(), List.of(ana.getId(), bia.getId()), ServicoComercial.CFO);
         var quadro = kanban.criarRaia(id, cfo.getId(), new com.climb.api.model.dto.ContratoKanbanRaiaRequestDTO("A fazer", 0, false, ServicoComercial.CFO));
         Long raiaId = quadro.raias().getFirst().id();
         kanban.criarTask(id, cfo.getId(), pedido(raiaId, "Nova análise", List.of(ana.getId())));
@@ -176,16 +176,15 @@ class ContratoKanbanCarregamentoIntegrationTest {
         assertThat(contrato.getParticipantes()).extracting(Usuario::getId).contains(contabilId, cfoId);
         assertThat(equipes.listarResumos(cfoId)).extracting(ContratoKanbanResumoDTO::id).containsExactly(contratoId);
         assertThat(equipes.temDisponiveis(cfoId)).isTrue();
-        assertThat(equipes.buscarEquipe(contratoId, cfoId).lider()).isTrue();
-        var equipe = equipes.salvarEquipe(contratoId, cfoId, List.of(cfoId));
-        assertThat(equipe.membros()).extracting(u -> u.id()).contains(contabilId, cfoId);
+        assertThat(equipes.buscarEquipe(contratoId, cfoId, ServicoComercial.CFO).lider()).isTrue();
+        var equipe = equipes.salvarEquipe(contratoId, cfoId, List.of(cfoId), ServicoComercial.CFO);
+        assertThat(equipe.membros()).extracting(u -> u.id()).containsExactly(cfoId);
 
         var quadro = kanban.buscarBoard(contratoId, cfoId, ServicoComercial.CFO);
         assertThat(quadro.gestor()).isTrue();
         assertThat(quadro.responsavel().id()).isEqualTo(cfoId);
-        var outro = kanban.buscarBoard(contratoId, cfoId, ServicoComercial.CONTABILIDADE);
-        assertThat(outro.gestor()).isFalse();
-        assertThat(outro.responsavel().id()).isEqualTo(contabilId);
+        assertThatThrownBy(() -> kanban.buscarBoard(contratoId, cfoId, ServicoComercial.CONTABILIDADE))
+                .isInstanceOf(ResponseStatusException.class);
 
         var raia = new ContratoKanbanRaia(); raia.setContrato(contrato); raia.setServico(ServicoComercial.CFO);
         raia.setTitulo("A fazer CFO"); em.persist(raia);
@@ -194,7 +193,7 @@ class ContratoKanbanCarregamentoIntegrationTest {
         var alteracao = new com.climb.api.model.dto.ContratoKanbanTaskRequestDTO(raia.getIdRaia(), "Planejamento", null,
                 com.climb.api.model.enums.ContratoKanbanPrioridade.MEDIA, cfoId, null, TarefaPrazoPolicy.hoje().plusDays(4), 0);
         assertThatThrownBy(() -> kanban.atualizarTask(contratoId, tarefa.getIdTask(), contabilId, alteracao))
-                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("responsável técnico do serviço");
+                .isInstanceOf(ResponseStatusException.class);
         kanban.atualizarTask(contratoId, tarefa.getIdTask(), cfoId, alteracao);
         assertThat(tarefa.getDataFim()).isEqualTo(alteracao.dataFim());
     }
@@ -220,6 +219,8 @@ class ContratoKanbanCarregamentoIntegrationTest {
                 new PropostaServico(ServicoComercial.CONTABILIDADE, BigDecimal.TEN, BigDecimal.ZERO, BigDecimal.ZERO),
                 new PropostaServico(ServicoComercial.CFO, BigDecimal.TEN, BigDecimal.ZERO, BigDecimal.ZERO)));
         em.persist(proposta); contrato.setProposta(proposta);
+        equipes.salvarEquipe(contrato.getIdContrato(), lider.getId(), List.of(lider.getId()), ServicoComercial.CONTABILIDADE);
+        equipes.salvarEquipe(contrato.getIdContrato(), lider.getId(), List.of(lider.getId()), ServicoComercial.CFO);
         var contabil = new ContratoKanbanRaia(); contabil.setContrato(contrato); contabil.setTitulo("Contabilidade antiga");
         em.persist(contabil); // Coluna anterior à separação: pertence ao primeiro serviço.
         var cfo = new ContratoKanbanRaia(); cfo.setContrato(contrato); cfo.setServico(ServicoComercial.CFO); cfo.setTitulo("CFO");

@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Entity
+@jakarta.persistence.EntityListeners(com.climb.api.model.listener.DrivePermissoesPersistenciaListener.class)
 @Table(name = "contrato_kanban_tasks")
 public class ContratoKanbanTask extends ItemArquivavelKanban {
 

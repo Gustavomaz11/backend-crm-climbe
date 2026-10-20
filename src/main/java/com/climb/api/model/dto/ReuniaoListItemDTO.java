@@ -33,7 +33,8 @@ public class ReuniaoListItemDTO {
     private String dataHoraFim;
     private String googleEventUrl;
     private UsuarioResumoDTO organizador;
-    private List<UsuarioResumoDTO> participantes;
+    private List<ParticipanteReuniaoResumoDTO> participantes;
+    private Boolean souOrganizador;
     private Boolean participantesOmitidos;
     private com.climb.api.model.enums.RespostaConviteReuniao minhaResposta;
     private Long conviteId;
@@ -93,7 +94,7 @@ public class ReuniaoListItemDTO {
         }
         d.setParticipantes(event.getAttendees() == null ? List.of() : event.getAttendees().stream()
                 .filter(convidado -> !SalaReuniaoDTO.isResource(convidado))
-                .map(convidado -> new UsuarioResumoDTO(null, convidado.getDisplayName(), convidado.getEmail())).toList());
+                .map(convidado -> ParticipanteReuniaoResumoDTO.fromGoogle(event, convidado)).toList());
         d.setParticipantesOmitidos(Boolean.TRUE.equals(event.getAttendeesOmitted()));
         boolean diaInteiro =
                 event.getStart() != null

@@ -50,10 +50,17 @@ public class ContratoNotificacaoService {
     public void notificarContratoAprovado(Contrato contrato, Integer versao) { avisosFluxo.contratoAprovado(contrato, versao); }
 
     public void notificarParticipacaoEquipe(Contrato contrato, Usuario usuario, boolean temporaria) {
+        notificarParticipacaoEquipe(contrato, usuario, temporaria, null);
+    }
+
+    public void notificarParticipacaoEquipe(Contrato contrato, Usuario usuario, boolean temporaria,
+            com.climb.api.model.enums.ServicoComercial servico) {
         String empresa = contrato.getEmpresa() == null ? "Contrato #" + contrato.getIdContrato() : contrato.getEmpresa().getNomeFantasia();
         String periodo = temporaria ? "equipe de apoio, até concluir as tarefas atribuídas" : "equipe fixa";
         String mensagem = "Você foi selecionado para a " + periodo + " do contrato de " + empresa
-                + ". Acesse /contratos/kanban?contrato=" + contrato.getIdContrato() + " para trabalhar nas tarefas.";
+                + (servico == null ? "" : ", no serviço " + servico.name().replace('_', ' '))
+                + ". Acesse /contratos/kanban?contrato=" + contrato.getIdContrato()
+                + (servico == null ? "" : "&servico=" + servico.name()) + " para trabalhar nas tarefas.";
         registrarNotificacao(usuario, mensagem, TIPO_CONTRATO);
     }
 

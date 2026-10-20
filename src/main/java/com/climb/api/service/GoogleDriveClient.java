@@ -63,6 +63,7 @@ public class GoogleDriveClient {
         var dados = new HashMap<String, Object>();
         dados.put("name", nome); dados.put("mimeType", PASTA); dados.put("parents", List.of(pai));
         if (chave != null) dados.put("appProperties", Map.of("climbe", chave));
+        if (chave != null && chave.startsWith("servico-")) dados.put("inheritedPermissionsDisabled", true);
         return arquivo(json("POST", url(API).set("fields", CAMPOS), metadata(dados)));
     }
 
@@ -115,14 +116,14 @@ public class GoogleDriveClient {
         return itens;
     }
 
-    private JsonObject json(String metodo, GenericUrl endereco, HttpContent corpo) {
+    JsonObject json(String metodo, GenericUrl endereco, HttpContent corpo) {
         HttpResponse resposta = executar(metodo, endereco, corpo);
         try { return JsonParser.parseString(resposta.parseAsString()).getAsJsonObject(); }
         catch (IOException exception) { throw falha(); }
         finally { desconectar(resposta); }
     }
 
-    private HttpResponse executar(String metodo, GenericUrl endereco, HttpContent corpo) {
+    HttpResponse executar(String metodo, GenericUrl endereco, HttpContent corpo) {
         String token = credentials.obterAccessToken();
         try {
             return transport.createRequestFactory(request -> {
@@ -144,10 +145,10 @@ public class GoogleDriveClient {
                 dados.has("size") ? dados.get("size").getAsLong() : 0, pais,
                 dados.has("trashed") && dados.get("trashed").getAsBoolean(), valor(dados, "webViewLink"));
     }
-    private GenericUrl url(String endereco) { return new GenericUrl(endereco).set("supportsAllDrives", true); }
-    private JsonHttpContent metadata(Map<String, ?> dados) { return new JsonHttpContent(GsonFactory.getDefaultInstance(), dados); }
+    GenericUrl url(String endereco) { return new GenericUrl(endereco).set("supportsAllDrives", true); }
+    JsonHttpContent metadata(Map<String, ?> dados) { return new JsonHttpContent(GsonFactory.getDefaultInstance(), dados); }
     private String valor(JsonObject dados, String chave) { return dados.has(chave) && !dados.get(chave).isJsonNull() ? dados.get(chave).getAsString() : null; }
     private String escapar(String valor) { return valor.replace("\\", "\\\\").replace("'", "\\'"); }
-    private void desconectar(HttpResponse resposta) { try { resposta.disconnect(); } catch (IOException ignored) { } }
+    void desconectar(HttpResponse resposta) { try { resposta.disconnect(); } catch (IOException ignored) { } }
     private ResponseStatusException falha() { return new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Não foi possível acessar o Drive. Verifique a autorização e o acesso à pasta."); }
 }

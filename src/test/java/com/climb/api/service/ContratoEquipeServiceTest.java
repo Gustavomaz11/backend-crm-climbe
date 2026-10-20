@@ -54,8 +54,8 @@ class ContratoEquipeServiceTest {
         assertThat(equipe.membros()).extracting(m -> m.id()).containsExactlyInAnyOrder(1L, 2L, 3L);
         assertThat(service.listarDisponiveis(2L)).containsExactly(contrato);
         assertThatCode(() -> service.exigirAcesso(contrato, 3L, true)).doesNotThrowAnyException();
-        verify(notificacoes).notificarParticipacaoEquipe(contrato, ana, false);
-        verify(notificacoes).notificarParticipacaoEquipe(contrato, bia, false);
+        verify(notificacoes).notificarParticipacaoEquipe(contrato, ana, false, null);
+        verify(notificacoes).notificarParticipacaoEquipe(contrato, bia, false, null);
     }
 
     @Test
@@ -87,7 +87,7 @@ class ContratoEquipeServiceTest {
         service.atribuirResponsaveis(primeira, 1L, Set.of()); criadas.add(primeira);
         var segunda = tarefa(21L, bia); service.atribuirResponsaveis(segunda, 1L, Set.of()); criadas.add(segunda);
         assertThat(service.podeEditar(contrato, 3L)).isTrue();
-        verify(notificacoes, times(1)).notificarParticipacaoEquipe(contrato, bia, true);
+        verify(notificacoes, times(1)).notificarParticipacaoEquipe(contrato, bia, true, null);
         primeira.getRaia().setConcluiTarefas(true);
         assertThat(service.podeEditar(contrato, 3L)).isTrue();
         segunda.getRaia().setConcluiTarefas(true);
@@ -118,6 +118,29 @@ class ContratoEquipeServiceTest {
     private ContratoKanbanTask tarefa(Long id, Usuario usuario) {
         var t = new ContratoKanbanTask(); t.setIdTask(id); t.setContrato(contrato); t.setTitulo("Tarefa " + id);
         t.setResponsaveis(List.of(usuario)); t.setRaia(new ContratoKanbanRaia()); return t;
+    }
+
+    @Test
+    void equipesELiderancasSaoIndependentesPorServico() {
+        var proposta = new Proposta();
+        proposta.setServicos(List.of(
+                new PropostaServico(com.climb.api.model.enums.ServicoComercial.CFO, java.math.BigDecimal.ONE, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO),
+                new PropostaServico(com.climb.api.model.enums.ServicoComercial.CONTABILIDADE, java.math.BigDecimal.ONE, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO)));
+        contrato.setProposta(proposta);
+        var cfo = com.climb.api.model.enums.ServicoComercial.CFO;
+        var contabilidade = com.climb.api.model.enums.ServicoComercial.CONTABILIDADE;
+        contrato.getResponsaveisPorServico().put(cfo, lider);
+        contrato.getResponsaveisPorServico().put(contabilidade, bia);
+        service.salvarEquipe(10L, 1L, List.of(1L, 2L), cfo);
+        service.salvarEquipe(10L, 3L, List.of(3L), contabilidade);
+        assertThat(service.podeEditar(contrato, 2L, cfo)).isTrue();
+        assertThat(service.podeEditar(contrato, 2L, contabilidade)).isFalse();
+        assertThat(service.podeEditar(contrato, 1L, contabilidade)).isFalse();
+        assertThatThrownBy(() -> service.salvarEquipe(10L, 3L, List.of(2L), cfo)).hasMessageContaining("líder técnico");
+        service.salvarEquipe(10L, 1L, List.of(1L), cfo);
+        assertThat(service.podeEditar(contrato, 2L, cfo)).isFalse();
+        assertThat(service.podeEditar(contrato, 3L, contabilidade)).isTrue();
+        assertThat(service.buscarEquipe(contrato, 3L, contabilidade).membros()).extracting(m -> m.id()).containsExactly(3L);
     }
     private Usuario usuario(Long id) { var u = new Usuario(); u.setId(id); u.setNomeCompleto("Pessoa " + id); u.setSituacao("ATIVO"); return u; }
 }

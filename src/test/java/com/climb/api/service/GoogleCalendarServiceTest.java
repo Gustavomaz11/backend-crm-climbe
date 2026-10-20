@@ -77,7 +77,9 @@ class GoogleCalendarServiceTest {
         assertThrows(GoogleJsonResponseException.class, () -> service.eventoExiste("evento", "token"));
     }
 
-    @Test void aceiteAtualizaSomenteRespostaDoConvidadoSemAlterarEvento() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"accepted", "declined"})
+    void respostaAtualizaSomenteConvidadoSemAlterarEvento(String status) throws Exception {
         var calendar = mock(Calendar.class); var events = mock(Calendar.Events.class);
         var patch = mock(Calendar.Events.Patch.class, Answers.RETURNS_SELF);
         when(calendar.events()).thenReturn(events);
@@ -86,11 +88,12 @@ class GoogleCalendarServiceTest {
         var evento = new com.google.api.services.calendar.model.Event().setId("evento").setAttendees(List.of(
                 new com.google.api.services.calendar.model.EventAttendee().setEmail("ana@example.test").setSelf(true).setResponseStatus("needsAction"),
                 new com.google.api.services.calendar.model.EventAttendee().setEmail("bruno@example.test").setResponseStatus("tentative")));
-        service.aceitarConvite(evento, "ana@example.test", "token");
+        if ("accepted".equals(status)) service.aceitarConvite(evento, "ana@example.test", "token");
+        else service.rejeitarConvite(evento, "ana@example.test", "token");
         var body = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
         verify(events).patch(org.mockito.ArgumentMatchers.eq("primary"), org.mockito.ArgumentMatchers.eq("evento"), body.capture());
         org.assertj.core.api.Assertions.assertThat(body.getValue().getAttendees()).hasSize(1);
-        org.assertj.core.api.Assertions.assertThat(body.getValue().getAttendees().getFirst().getResponseStatus()).isEqualTo("accepted");
+        org.assertj.core.api.Assertions.assertThat(body.getValue().getAttendees().getFirst().getResponseStatus()).isEqualTo(status);
         assertTrue(body.getValue().getAttendeesOmitted());
         org.assertj.core.api.Assertions.assertThat(body.getValue().getSummary()).isNull();
         org.assertj.core.api.Assertions.assertThat(evento.getAttendees().getFirst().getResponseStatus()).isEqualTo("needsAction");
@@ -108,12 +111,16 @@ class GoogleCalendarServiceTest {
         reuniao.setData(java.time.LocalDate.of(2026,11,15)); reuniao.setHora(java.time.LocalTime.of(14,30)); reuniao.setLocal("Sala 2");
         reuniao.setSalaEmail("sala@resource.calendar.google.com");
         reuniao.setDataHoraFim(java.time.LocalDate.of(2026, 11, 15).atTime(17, 0));
-        service.criarEvento(reuniao, "token-teste", List.of("ana@example.test", "bia@example.test", "CONTATO@CLIMBE.COM.BR", "ana@example.test"));
+        service.criarEvento(reuniao, "token-teste", List.of("ana@example.test", "bia@example.test", "CONTATO@CLIMBE.COM.BR", "ana@example.test"), "ana@example.test");
         var evento = org.mockito.ArgumentCaptor.forClass(com.google.api.services.calendar.model.Event.class);
         verify(events).insert(org.mockito.ArgumentMatchers.eq("primary"), evento.capture());
         org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees()).extracting(com.google.api.services.calendar.model.EventAttendee::getEmail)
                 .containsExactly("contato@climbe.com.br", "ana@example.test", "bia@example.test", "sala@resource.calendar.google.com");
         assertTrue(evento.getValue().getAttendees().getLast().getResource());
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees().stream().filter(a -> "ana@example.test".equals(a.getEmail()))
+                .findFirst().orElseThrow().getResponseStatus()).isEqualTo("accepted");
+        org.assertj.core.api.Assertions.assertThat(evento.getValue().getAttendees().stream().filter(a -> !"ana@example.test".equals(a.getEmail())))
+                .allSatisfy(a -> org.assertj.core.api.Assertions.assertThat(a.getResponseStatus()).isNull());
         org.assertj.core.api.Assertions.assertThat(evento.getValue().getLocation()).isEqualTo("Sala 2");
         org.assertj.core.api.Assertions.assertThat(evento.getValue().getEnd().getDateTime().getValue()
                 - evento.getValue().getStart().getDateTime().getValue()).isEqualTo(150L * 60 * 1000);

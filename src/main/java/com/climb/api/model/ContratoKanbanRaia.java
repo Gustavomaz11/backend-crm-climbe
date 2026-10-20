@@ -5,6 +5,7 @@ import com.climb.api.model.enums.ServicoComercial;
 import java.time.LocalDateTime;
 
 @Entity
+@jakarta.persistence.EntityListeners(com.climb.api.model.listener.DrivePermissoesPersistenciaListener.class)
 @Table(name = "contrato_kanban_raias")
 public class ContratoKanbanRaia {
 

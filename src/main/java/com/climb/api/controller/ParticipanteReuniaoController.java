@@ -15,9 +15,11 @@ import java.util.List;
 public class ParticipanteReuniaoController {
 
     private final ParticipanteReuniaoRepository repository;
+    private final com.climb.api.repository.ReuniaoRepository reunioes;
 
-    public ParticipanteReuniaoController(ParticipanteReuniaoRepository repository) {
+    public ParticipanteReuniaoController(ParticipanteReuniaoRepository repository, com.climb.api.repository.ReuniaoRepository reunioes) {
         this.repository = repository;
+        this.reunioes = reunioes;
     }
 
     @GetMapping
@@ -36,6 +38,7 @@ public class ParticipanteReuniaoController {
     public ParticipanteReuniao criar(@RequestBody ParticipanteReuniao participante) {
         Long reuniaoId = participante.getReuniao() != null ? participante.getReuniao().getIdReuniao() : null;
         exigirReuniaoVisivel(reuniaoId);
+        confirmarOrganizador(participante);
         return repository.save(participante);
     }
 
@@ -57,8 +60,20 @@ public class ParticipanteReuniaoController {
 
         participante.setReuniao(atualizado.getReuniao());
         participante.setUsuario(atualizado.getUsuario());
+        confirmarOrganizador(participante);
 
         return repository.save(participante);
+    }
+
+    private void confirmarOrganizador(ParticipanteReuniao participante) {
+        var reuniao = reunioes.findById(participante.getReuniao().getIdReuniao()).orElseThrow();
+        participante.setReuniao(reuniao);
+        if (participante.getUsuario() != null && participante.getUsuario().getId() != null
+                && participante.getUsuario().getId().equals(reuniao.getOrganizadorId())) {
+            participante.setResposta(com.climb.api.model.enums.RespostaConviteReuniao.ACEITA);
+            if (participante.getRespondidoEm() == null) participante.setRespondidoEm(java.time.LocalDateTime.now(java.time.ZoneId.of("America/Sao_Paulo")));
+            participante.setAceiteSincronizadoGoogle(true);
+        }
     }
 
     @DeleteMapping("/{id}")
