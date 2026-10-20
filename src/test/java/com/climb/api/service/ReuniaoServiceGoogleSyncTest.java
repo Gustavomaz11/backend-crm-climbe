@@ -73,6 +73,46 @@ class ReuniaoServiceGoogleSyncTest {
         org.mockito.Mockito.verify(reuniaoRepository, org.mockito.Mockito.never()).delete(any());
     }
 
+    @Test
+    void eventoExcluidoPeloOrganizadorRemoveReuniaoEConvitesDoCrm() throws Exception {
+        var reuniao = new Reuniao();
+        reuniao.setIdReuniao(11L);
+        reuniao.setOrganizadorId(7L);
+        reuniao.setGoogleEventId("evento");
+        var participantes = List.of(participante(usuario(8L, "Convidado", "convidado@climbe.com.br")));
+        when(googleCredentialService.obterAccessToken(7L)).thenReturn(Optional.of("token-organizador"));
+        when(reuniaoRepository.findVisiveisParaUsuario(7L)).thenReturn(List.of(reuniao));
+        when(googleCalendarService.eventoExiste("evento", "token-organizador")).thenReturn(false);
+        when(participanteRepository.findByReuniao_IdReuniao(11L)).thenReturn(participantes);
+        var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService, disponibilidade);
+
+        assertEquals(0, service.listar(7L).size());
+
+        var ordem = org.mockito.Mockito.inOrder(participanteRepository, reuniaoRepository);
+        ordem.verify(participanteRepository).deleteAll(participantes);
+        ordem.verify(reuniaoRepository).delete(reuniao);
+    }
+
+    @Test
+    void falhaTemporariaNaConsultaGooglePreservaReuniaoEConvites() throws Exception {
+        var reuniao = new Reuniao();
+        reuniao.setIdReuniao(11L);
+        reuniao.setOrganizadorId(7L);
+        reuniao.setGoogleEventId("evento");
+        when(googleCredentialService.obterAccessToken(7L)).thenReturn(Optional.of("token-organizador"));
+        when(reuniaoRepository.findVisiveisParaUsuario(7L)).thenReturn(List.of(reuniao));
+        when(googleCalendarService.eventoExiste("evento", "token-organizador"))
+                .thenThrow(new java.io.IOException("Google indisponível"));
+        var service = new ReuniaoService(reuniaoRepository, empresaRepository, googleCalendarService,
+                participanteRepository, usuarioRepository, reuniaoEmailService, googleCredentialService, googleSalaService, disponibilidade);
+
+        assertEquals(1, service.listar(7L).size());
+
+        org.mockito.Mockito.verify(reuniaoRepository, org.mockito.Mockito.never()).delete(any());
+        org.mockito.Mockito.verifyNoInteractions(participanteRepository);
+    }
+
     @Mock private ReuniaoRepository reuniaoRepository;
     @Mock private EmpresaRepository empresaRepository;
     @Mock private GoogleCalendarService googleCalendarService;

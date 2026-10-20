@@ -75,8 +75,9 @@ public class GoogleCalendarService {
         }
 
         try {
-            buildCalendar(accessToken).events().get("primary", googleEventId).execute();
-            return true;
+            Event evento = buildCalendar(accessToken).events().get("primary", googleEventId).execute();
+            // O Google também retorna HTTP 200 para eventos excluídos, com status cancelled.
+            return !"cancelled".equals(evento.getStatus());
         } catch (GoogleJsonResponseException e) {
             if (e.getStatusCode() == 404 || e.getStatusCode() == 410) {
                 return false;

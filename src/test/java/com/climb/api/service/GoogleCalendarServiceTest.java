@@ -2,14 +2,24 @@ package com.climb.api.service;
 
 import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.model.CalendarList;
+import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.Events;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
+import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpResponseException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 
 import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -18,6 +28,54 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class GoogleCalendarServiceTest {
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"confirmed", "tentative", "cancelled"})
+    void consultaReconheceEventoExcluidoMesmoQuandoGoogleRetornaSucesso(String status) throws Exception {
+        var calendar = mock(Calendar.class);
+        var events = mock(Calendar.Events.class);
+        var get = mock(Calendar.Events.Get.class);
+        when(calendar.events()).thenReturn(events);
+        when(events.get("primary", "evento")).thenReturn(get);
+        when(get.execute()).thenReturn(new Event().setId("evento").setStatus(status));
+        var service = spy(new GoogleCalendarService());
+        doReturn(calendar).when(service).buildCalendar("token");
+
+        assertEquals(!"cancelled".equals(status), service.eventoExiste("evento", "token"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {404, 410})
+    void consultaReconheceEventoRemovidoDefinitivamente(int status) throws Exception {
+        var calendar = mock(Calendar.class);
+        var events = mock(Calendar.Events.class);
+        var get = mock(Calendar.Events.Get.class);
+        when(calendar.events()).thenReturn(events);
+        when(events.get("primary", "evento")).thenReturn(get);
+        when(get.execute()).thenThrow(new GoogleJsonResponseException(
+                new HttpResponseException.Builder(status, "Google Calendar", new HttpHeaders()), null));
+        var service = spy(new GoogleCalendarService());
+        doReturn(calendar).when(service).buildCalendar("token");
+
+        assertFalse(service.eventoExiste("evento", "token"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {401, 403, 429, 500})
+    void falhaDeAutorizacaoOuIndisponibilidadeNaoSignificaExclusao(int status) throws Exception {
+        var calendar = mock(Calendar.class);
+        var events = mock(Calendar.Events.class);
+        var get = mock(Calendar.Events.Get.class);
+        when(calendar.events()).thenReturn(events);
+        when(events.get("primary", "evento")).thenReturn(get);
+        when(get.execute()).thenThrow(new GoogleJsonResponseException(
+                new HttpResponseException.Builder(status, "Google Calendar", new HttpHeaders()), null));
+        var service = spy(new GoogleCalendarService());
+        doReturn(calendar).when(service).buildCalendar("token");
+
+        assertThrows(GoogleJsonResponseException.class, () -> service.eventoExiste("evento", "token"));
+    }
 
     @Test void aceiteAtualizaSomenteRespostaDoConvidadoSemAlterarEvento() throws Exception {
         var calendar = mock(Calendar.class); var events = mock(Calendar.Events.class);
