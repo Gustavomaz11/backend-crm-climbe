@@ -117,6 +117,11 @@ class ContratoKanbanCarregamentoIntegrationTest {
         Long raiaId = quadro.raias().getFirst().id();
         kanban.criarTask(id, cfo.getId(), pedido(raiaId, "Nova análise", List.of(ana.getId())));
         Long tarefaId = tarefas.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(id).getFirst().getIdTask();
+        for (Usuario gestor : List.of(contabil, cfo)) {
+            assertThat(notificacoes.findByUsuario_Id(gestor.getId()).stream().filter(n -> n.getTipo().startsWith("TAREFA_")))
+                    .as("Criar uma tarefa para outra pessoa não deve notificar o gestor/autor")
+                    .isEmpty();
+        }
         kanban.atualizarTask(id, tarefaId, cfo.getId(), pedido(raiaId, "Nova análise", List.of(ana.getId(), bia.getId())));
         kanban.atualizarTask(id, tarefaId, cfo.getId(), pedido(raiaId, "Título atualizado", List.of(ana.getId(), bia.getId())));
         kanban.atualizarTask(id, tarefaId, cfo.getId(), pedido(raiaId, "Título atualizado", List.of(bia.getId())));
@@ -127,7 +132,11 @@ class ContratoKanbanCarregamentoIntegrationTest {
                         assertThat(n.getDestino()).contains("contrato=" + id, "tarefaId=" + tarefaId, "servico=CFO");
                     });
         }
-        assertThat(notificacoes.findByUsuario_Id(contabil.getId()).stream().filter(n -> "TAREFA_ATRIBUIDA".equals(n.getTipo()))).isEmpty();
+        for (Usuario gestor : List.of(contabil, cfo)) {
+            assertThat(notificacoes.findByUsuario_Id(gestor.getId()).stream().filter(n -> n.getTipo().startsWith("TAREFA_")))
+                    .as("Atribuir ou editar a tarefa não deve enviar avisos aos gestores não selecionados")
+                    .isEmpty();
+        }
     }
 
     private com.climb.api.model.dto.ContratoKanbanTaskRequestDTO pedido(Long raia, String titulo, List<Long> responsaveis) {

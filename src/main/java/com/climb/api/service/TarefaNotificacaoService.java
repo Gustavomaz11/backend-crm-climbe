@@ -24,13 +24,6 @@ public class TarefaNotificacaoService {
         return titulo.equals("a fazer") ? "A_FAZER" : "EM_ANDAMENTO";
     }
 
-    public void contratoCriada(ContratoKanbanTask tarefa) {
-        notificarLider(tarefa, "TAREFA_CRIADA", "Tarefa criada", "foi criada");
-        if ("CONCLUIDA".equals(estado(tarefa.getRaia()))) {
-            notificarLider(tarefa, "TAREFA_CONCLUIDA", "Tarefa concluída", "foi concluída");
-        }
-    }
-
     public void contratoMovida(ContratoKanbanTask tarefa, String estadoAnterior) {
         String atual = estado(tarefa.getRaia());
         if (atual.equals(estadoAnterior)) return;

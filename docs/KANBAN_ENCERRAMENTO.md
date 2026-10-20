@@ -12,4 +12,6 @@ Os períodos abertos de apoio desse serviço são encerrados, preservando a part
 
 Ao criar uma tarefa ou adicionar responsáveis, cada novo responsável recebe uma notificação persistida com link para a tarefa e o serviço correspondente. Editar a tarefa mantendo as mesmas pessoas não duplica os avisos. O sinal SSE atualiza o sininho e o acesso ao Kanban do destinatário; quem estiver offline verá os avisos no próximo acesso.
 
+A criação não envia um aviso extra de tarefa criada ao gestor ou a quem atribuiu a tarefa. O aviso de atribuição só é enviado às pessoas selecionadas como responsáveis; o gestor também o recebe se estiver entre elas. Esta regra vale para novas atribuições e preserva o histórico de notificações já gravadas.
+
 Para publicar, suba primeiro o backend com as migrações e depois o frontend. Esta alteração não exige novas variáveis no `.env`.

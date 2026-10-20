@@ -19,9 +19,12 @@ class TarefaNotificacaoServiceTest {
         tarefa = new ContratoKanbanTask(); tarefa.setIdTask(20L); tarefa.setContrato(contrato); tarefa.setTitulo("Conferir documento");
         tarefa.setResponsaveis(List.of(ana, bia)); tarefa.setRaia(raia("À fazer", false));
     }
-    @Test void criacaoNotificaLiderEAbreTarefaCorreta() {
-        service.contratoCriada(tarefa);
-        verify(entrega).notificar(eq(lider), eq("TAREFA_CRIADA"), anyString(), contains("Conferir documento"), eq("/contratos/kanban?contrato=10&tarefaId=20"));
+    @Test void criacaoNotificaCadaAtribuidoUmaVezSemEnviarAoGestor() {
+        service.atribuicoes(tarefa, Set.of());
+        for (Usuario usuario : List.of(ana, bia)) {
+            verify(entrega).notificar(eq(usuario), eq("TAREFA_ATRIBUIDA"), anyString(), contains("Conferir documento"),
+                    eq("/contratos/kanban?contrato=10&tarefaId=20"));
+        }
         verifyNoMoreInteractions(entrega);
     }
     @Test void atribuicaoAvisaSomenteNovosResponsaveis() {
@@ -31,10 +34,24 @@ class TarefaNotificacaoServiceTest {
     }
     @Test void notificacaoDirecionaAoServicoDaTarefa() {
         tarefa.getRaia().setServico(com.climb.api.model.enums.ServicoComercial.CFO);
-        tarefa.getContrato().getResponsaveisPorServico().put(com.climb.api.model.enums.ServicoComercial.CFO, bia);
-        service.contratoCriada(tarefa);
-        verify(entrega).notificar(eq(bia), eq("TAREFA_CRIADA"), anyString(), anyString(),
-                eq("/contratos/kanban?contrato=10&tarefaId=20&servico=CFO"));
+        tarefa.getContrato().getResponsaveisPorServico().put(com.climb.api.model.enums.ServicoComercial.CFO, lider);
+        service.atribuicoes(tarefa, Set.of());
+        for (Usuario usuario : List.of(ana, bia)) {
+            verify(entrega).notificar(eq(usuario), eq("TAREFA_ATRIBUIDA"), anyString(), anyString(),
+                    eq("/contratos/kanban?contrato=10&tarefaId=20&servico=CFO"));
+        }
+        verifyNoMoreInteractions(entrega);
+    }
+    @Test void gestorRecebeAtribuicaoQuandoTambemForResponsavelSelecionado() {
+        tarefa.setResponsaveis(List.of(lider));
+        service.atribuicoes(tarefa, Set.of());
+        verify(entrega).notificar(eq(lider), eq("TAREFA_ATRIBUIDA"), anyString(), anyString(), anyString());
+        verifyNoMoreInteractions(entrega);
+    }
+    @Test void responsavelUnicoLegadoRecebeAvisoSemEnviarAoGestor() {
+        tarefa.setResponsaveis(List.of()); tarefa.setResponsavel(ana);
+        service.atribuicoes(tarefa, Set.of());
+        verify(entrega).notificar(eq(ana), eq("TAREFA_ATRIBUIDA"), anyString(), anyString(), anyString());
         verifyNoMoreInteractions(entrega);
     }
     @Test void voltarParaAFazerEConcluirNotificaLiderUmaVezPorTransicao() {
@@ -50,11 +67,13 @@ class TarefaNotificacaoServiceTest {
     @Test void novaAtribuicaoEmPreVendasDirecionaAoMenuPreVendas() {
         PipelineVendasFunil funil = new PipelineVendasFunil(); funil.setIdFunil(4L); funil.setTipo("PRE_VENDAS");
         PipelineVendasNegocio negocio = new PipelineVendasNegocio(); negocio.setIdNegocio(5L); negocio.setFunil(funil); negocio.setNomeEmpresa("Cliente");
-        PipelineVendasTarefa atividade = new PipelineVendasTarefa(); atividade.setIdTarefa(6L); atividade.setNegocio(negocio); atividade.setTitulo("Contato"); atividade.setResponsaveis(List.of(ana));
+        PipelineVendasTarefa atividade = new PipelineVendasTarefa(); atividade.setIdTarefa(6L); atividade.setNegocio(negocio); atividade.setTitulo("Contato"); atividade.setCriadoPor(lider); atividade.setResponsaveis(List.of(ana));
         service.atribuicoes(atividade, Set.of());
         verify(entrega).notificar(eq(ana), eq("TAREFA_ATRIBUIDA"), anyString(), anyString(), eq("/pipeline-pre-vendas?funilId=4&negocioId=5&tarefaId=6"));
+        verifyNoMoreInteractions(entrega);
         clearInvocations(entrega); funil.setTipo("VENDAS"); service.atribuicoes(atividade, Set.of());
         verify(entrega).notificar(eq(ana), eq("TAREFA_ATRIBUIDA"), anyString(), anyString(), eq("/pipeline-vendas?funilId=4&negocioId=5&tarefaId=6"));
+        verifyNoMoreInteractions(entrega);
     }
     private Usuario usuario(Long id) { Usuario u = new Usuario(); u.setId(id); u.setNomeCompleto("Pessoa " + id); return u; }
     private ContratoKanbanRaia raia(String titulo, boolean concluida) { ContratoKanbanRaia r = new ContratoKanbanRaia(); r.setTitulo(titulo); r.setConcluiTarefas(concluida); return r; }

@@ -204,7 +204,6 @@ public class ContratoKanbanService {
         justificarConclusao(task, raia, true, dto.justificativaAtraso(), usuarioId);
         equipeService.atribuirResponsaveis(task, usuarioId, Set.of());
         taskRepository.save(task);
-        notificacoes.contratoCriada(task);
         notificacoes.atribuicoes(task, Set.of());
         atuacaoService.sincronizar(task);
         rateioService.registrarAtuacao(task);

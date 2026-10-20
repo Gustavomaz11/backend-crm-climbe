@@ -75,7 +75,7 @@ class ContratoEquipeIntegrationTest {
         kanban.criarTask(id, lider.getId(), tarefa(pendente, "Segunda tarefa", apoio.getId()));
         var tarefasDoApoio = tarefas.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(id);
         Long primeira = tarefasDoApoio.get(0).getIdTask(), segunda = tarefasDoApoio.get(1).getIdTask();
-        assertThat(notificacoes.findByUsuario_Id(lider.getId()).stream().filter(n -> "TAREFA_CRIADA".equals(n.getTipo()))).hasSize(2);
+        assertThat(notificacoes.findByUsuario_Id(lider.getId()).stream().filter(n -> n.getTipo().startsWith("TAREFA_"))).isEmpty();
         assertThat(notificacoes.findByUsuario_Id(apoio.getId()).stream().filter(n -> "TAREFA_ATRIBUIDA".equals(n.getTipo())))
                 .hasSize(2).allSatisfy(n -> assertThat(n.getDestino()).contains("/contratos/kanban?contrato=" + id + "&tarefaId="));
         assertThat(notificacoes.findByUsuario_Id(apoio.getId()).stream().filter(n -> "CONTRATO".equals(n.getTipo()))).hasSize(1);
