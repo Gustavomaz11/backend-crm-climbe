@@ -29,6 +29,14 @@ class TarefaNotificacaoServiceTest {
         verify(entrega).notificar(eq(bia), eq("TAREFA_ATRIBUIDA"), anyString(), anyString(), eq("/contratos/kanban?contrato=10&tarefaId=20"));
         verifyNoMoreInteractions(entrega);
     }
+    @Test void notificacaoDirecionaAoServicoDaTarefa() {
+        tarefa.getRaia().setServico(com.climb.api.model.enums.ServicoComercial.CFO);
+        tarefa.getContrato().getResponsaveisPorServico().put(com.climb.api.model.enums.ServicoComercial.CFO, bia);
+        service.contratoCriada(tarefa);
+        verify(entrega).notificar(eq(bia), eq("TAREFA_CRIADA"), anyString(), anyString(),
+                eq("/contratos/kanban?contrato=10&tarefaId=20&servico=CFO"));
+        verifyNoMoreInteractions(entrega);
+    }
     @Test void voltarParaAFazerEConcluirNotificaLiderUmaVezPorTransicao() {
         service.contratoMovida(tarefa, "EM_ANDAMENTO");
         verify(entrega).notificar(eq(lider), eq("TAREFA_A_FAZER"), anyString(), anyString(), anyString());

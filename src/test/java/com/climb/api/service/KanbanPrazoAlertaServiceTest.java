@@ -37,7 +37,7 @@ class KanbanPrazoAlertaServiceTest {
         assertThat(avisos.getFirst().responsaveis()).isEqualTo("Pessoa 4, Pessoa 5");
         verify(envio).enviar(eq(2L), eq(avisos), eq(hoje));
         verify(envio).enviar(eq(3L), argThat(a -> a.size() == 1 && a.getFirst().tipo() == TarefaTipo.CONTRATO
-                && a.getFirst().link().equals("https://app.test/contratos/kanban?contrato=30&tarefaId=40")), eq(hoje));
+                && a.getFirst().link().equals("https://app.test/contratos/kanban?contrato=30&tarefaId=40&servico=CONTABILIDADE")), eq(hoje));
         verify(envio, never()).enviar(eq(4L), anyList(), any());
     }
     @Test void preVendasTambemNotificaDiretorEUmErroNaoImpedeOutroDestinatario() {
@@ -48,7 +48,7 @@ class KanbanPrazoAlertaServiceTest {
         service.processar(hoje);
         verify(envio).enviar(eq(2L), argThat(a -> a.getFirst().link().contains("pipeline-pre-vendas?funilId=10")), eq(hoje));
     }
-    @Test void mostraTodosOsServicosDaPropostaERecuperaServicoDePropostaLegada() {
+    @Test void mostraServicoDaTarefaERecuperaServicoDePropostaLegada() {
         when(usuarios.buscarDiretoresComerciaisAtivos()).thenReturn(List.of());
         when(comerciais.findAbertasComPrazoAte(any())).thenReturn(List.of());
         var proposta = new Proposta(); proposta.setServico(ServicoComercial.VALUATION);
@@ -61,7 +61,13 @@ class KanbanPrazoAlertaServiceTest {
         var contabilidade = new PropostaServico(ServicoComercial.CONTABILIDADE, java.math.BigDecimal.TEN, java.math.BigDecimal.TEN, java.math.BigDecimal.TEN);
         var software = new PropostaServico(ServicoComercial.DESENVOLVIMENTO_SOFTWARE, java.math.BigDecimal.TEN, java.math.BigDecimal.TEN, java.math.BigDecimal.TEN);
         proposta.setServicos(List.of(contabilidade, software)); service.processar(hoje);
-        verify(envio).enviar(eq(3L), argThat(a -> "CONTABILIDADE, DESENVOLVIMENTO SOFTWARE".equals(a.getFirst().servicos())), eq(hoje));
+        verify(envio).enviar(eq(3L), argThat(a -> "CONTABILIDADE".equals(a.getFirst().servicos())), eq(hoje));
+        clearInvocations(envio);
+        var raia = new ContratoKanbanRaia(); raia.setServico(ServicoComercial.DESENVOLVIMENTO_SOFTWARE); tarefa.setRaia(raia);
+        contrato.getResponsaveisPorServico().put(ServicoComercial.DESENVOLVIMENTO_SOFTWARE, usuario(6L));
+        service.processar(hoje);
+        verify(envio).enviar(eq(6L), argThat(a -> "DESENVOLVIMENTO SOFTWARE".equals(a.getFirst().servicos())
+                && a.getFirst().link().contains("&servico=DESENVOLVIMENTO_SOFTWARE")), eq(hoje));
     }
 
     private PipelineVendasTarefa comercial(Long id, int dias, boolean preVendas) {

@@ -77,7 +77,7 @@ public class ContratoEquipeService {
         if (!isLider(contrato, usuarioId)) throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                 "Somente o líder técnico pode selecionar a equipe do contrato.");
         Set<Usuario> selecionados = new TarefaResponsaveisService(usuarios).resolver(ids, null, true);
-        selecionados.add(contrato.getResponsavel());
+        selecionados.addAll(ContratoServicos.responsaveis(contrato));
         List<ContratoEquipeMembro> anteriores = membros.findByContrato_IdContrato(contratoId);
         Set<Long> idsAnteriores = new HashSet<>();
         anteriores.forEach(m -> idsAnteriores.add(m.getUsuario().getId()));
@@ -97,8 +97,8 @@ public class ContratoEquipeService {
     }
 
     public boolean isLider(Contrato contrato, Long usuarioId) {
-        return usuarioId != null && contrato.getResponsavel() != null
-                && Objects.equals(contrato.getResponsavel().getId(), usuarioId);
+        return usuarioId != null && ContratoServicos.responsaveis(contrato).stream()
+                .anyMatch(lider -> Objects.equals(lider.getId(), usuarioId));
     }
 
     public boolean membroFixo(Contrato contrato, Long usuarioId) {
@@ -123,7 +123,7 @@ public class ContratoEquipeService {
         membros.findByContrato_IdContrato(contrato.getIdContrato()).forEach(m -> equipe.put(m.getUsuario().getId(), m.getUsuario()));
         tarefas.buscarApoiosPendentes(contrato.getIdContrato()).forEach(t -> apoiosAtribuidos(t)
                 .forEach(u -> equipe.put(u.getId(), u)));
-        if (contrato.getResponsavel() != null) equipe.put(contrato.getResponsavel().getId(), contrato.getResponsavel());
+        ContratoServicos.responsaveis(contrato).forEach(lider -> equipe.put(lider.getId(), lider));
         return equipe.values().stream().sorted(Comparator.comparing(Usuario::getNomeCompleto,
                 Comparator.nullsLast(String::compareToIgnoreCase))).toList();
     }

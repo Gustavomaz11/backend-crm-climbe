@@ -51,6 +51,7 @@ public class RevisaoDocumentoService {
     private final DocumentoPreviewService previewService;
     private final EmailService emailService;
     private final ContratoNotificacaoService contratoNotificacaoService;
+    private final DocumentoFluxoNotificacaoService avisosFluxo;
     private final ContratoParcelaCalculator parcelaCalculator;
     private final RbacService rbacService;
     private final ZapSignClient zapSignClient;
@@ -69,6 +70,7 @@ public class RevisaoDocumentoService {
                                    DocumentoPreviewService previewService,
                                    EmailService emailService,
                                    ContratoNotificacaoService contratoNotificacaoService,
+                                   DocumentoFluxoNotificacaoService avisosFluxo,
                                    ContratoParcelaCalculator parcelaCalculator,
                                    RbacService rbacService,
                                    ZapSignClient zapSignClient,
@@ -86,6 +88,7 @@ public class RevisaoDocumentoService {
         this.previewService = previewService;
         this.emailService = emailService;
         this.contratoNotificacaoService = contratoNotificacaoService;
+        this.avisosFluxo = avisosFluxo;
         this.parcelaCalculator = parcelaCalculator;
         this.rbacService = rbacService;
         this.zapSignClient = zapSignClient;
@@ -182,7 +185,7 @@ public class RevisaoDocumentoService {
 
         concluirResposta(revisao, versao, RevisaoDocumentoStatus.AJUSTES_SOLICITADOS,
                 request.comentarioGeral(), null);
-        atualizarStatusDominio(revisao, RevisaoDocumentoStatus.AJUSTES_SOLICITADOS);
+        atualizarStatusDominio(revisao, RevisaoDocumentoStatus.AJUSTES_SOLICITADOS, request.comentarioGeral());
         notificarEquipe(revisao, "Cliente solicitou ajustes",
                 "O cliente marcou trechos e enviou comentários na versão " + revisao.getVersaoAtual() + ".");
         return toResponse(revisao);
@@ -229,7 +232,7 @@ public class RevisaoDocumentoService {
         garantirAssinaturaNaoIniciada(revisao, versao);
         String justificativa = request.justificativa().trim();
         concluirResposta(revisao, versao, RevisaoDocumentoStatus.REPROVADO, null, justificativa);
-        atualizarStatusDominio(revisao, RevisaoDocumentoStatus.REPROVADO);
+        atualizarStatusDominio(revisao, RevisaoDocumentoStatus.REPROVADO, justificativa);
         notificarEquipe(revisao, documentoNome(revisao) + " reprovado pelo cliente",
                 "Justificativa do cliente: " + justificativa);
         return toResponse(revisao);
@@ -323,12 +326,18 @@ public class RevisaoDocumentoService {
     }
 
     private void atualizarStatusDominio(RevisaoDocumento revisao, RevisaoDocumentoStatus status) {
+        atualizarStatusDominio(revisao, status, null);
+    }
+
+    private void atualizarStatusDominio(RevisaoDocumento revisao, RevisaoDocumentoStatus status, String comentario) {
         if (revisao.getTipo() == RevisaoDocumentoTipo.PROPOSTA) {
             Proposta proposta = propostaRepository.findById(revisao.getReferenciaId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposta não encontrada"));
             proposta.setStatus(status == RevisaoDocumentoStatus.APROVADO ? PropostaStatus.APROVADA
                     : status == RevisaoDocumentoStatus.REPROVADO ? PropostaStatus.REJEITADA : PropostaStatus.PENDENTE);
             propostaRepository.save(proposta);
+            if (status == RevisaoDocumentoStatus.APROVADO) avisosFluxo.propostaAceita(proposta, revisao.getVersaoAtual());
+            else avisosFluxo.propostaRespondidaPeloCliente(proposta, status, revisao.getVersaoAtual(), comentario);
         } else {
             Contrato contrato = contratoRepository.findById(revisao.getReferenciaId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
@@ -344,7 +353,10 @@ public class RevisaoDocumentoService {
                 parcelaCalculator.aplicarAoContrato(contrato);
             }
             contratoRepository.save(contrato);
-            if (status == RevisaoDocumentoStatus.APROVADO) drive.agendarContrato(contrato);
+            if (status == RevisaoDocumentoStatus.APROVADO) {
+                drive.agendarContrato(contrato);
+                contratoNotificacaoService.notificarContratoAprovado(contrato, revisao.getVersaoAtual());
+            } else avisosFluxo.contratoRespondidoPeloCliente(contrato, status, revisao.getVersaoAtual(), comentario);
         }
     }
 
@@ -502,12 +514,16 @@ public class RevisaoDocumentoService {
             Contrato contrato = contratoRepository.findById(revisao.getReferenciaId()).orElse(null);
             destinatario = contrato == null ? null : (contrato.getResponsavelComercial() != null
                     ? contrato.getResponsavelComercial() : contrato.getResponsavel() != null ? contrato.getResponsavel() : contrato.getUsuario());
-            if (contrato != null && revisao.getStatus() == RevisaoDocumentoStatus.APROVADO
-                    && contrato.getResponsavel() != null && (destinatario == null
-                    || !Objects.equals(contrato.getResponsavel().getId(), destinatario.getId()))) {
-                emailService.enviarEmailComBotao(contrato.getResponsavel().getEmail(), titulo, titulo, mensagem,
-                        "Abrir contrato", frontendUrl.replaceAll("/+$", "") + "/kanban?contrato=" + contrato.getIdContrato(),
-                        "Você é o responsável técnico por este contrato.");
+            if (contrato != null && revisao.getStatus() == RevisaoDocumentoStatus.APROVADO) {
+                for (Usuario lider : ContratoServicos.responsaveis(contrato)) {
+                    if (destinatario != null && Objects.equals(lider.getId(), destinatario.getId())) continue;
+                    String servico = contrato.getResponsaveisPorServico().entrySet().stream()
+                            .filter(item -> Objects.equals(item.getValue().getId(), lider.getId()))
+                            .map(item -> "&servico=" + item.getKey().name()).findFirst().orElse("");
+                    emailService.enviarEmailComBotao(lider.getEmail(), titulo, titulo, mensagem,
+                            "Abrir contrato", frontendUrl.replaceAll("/+$", "") + "/contratos/kanban?contrato=" + contrato.getIdContrato() + servico,
+                            "Você é responsável técnico por um serviço deste contrato.");
+                }
             }
         }
         if (destinatario != null && StringUtils.hasText(destinatario.getEmail())) {

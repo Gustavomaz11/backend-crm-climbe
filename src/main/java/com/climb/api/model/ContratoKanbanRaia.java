@@ -1,6 +1,7 @@
 package com.climb.api.model;
 
 import jakarta.persistence.*;
+import com.climb.api.model.enums.ServicoComercial;
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,6 +16,10 @@ public class ContratoKanbanRaia {
     @ManyToOne
     @JoinColumn(name = "contrato_id", nullable = false)
     private Contrato contrato;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private ServicoComercial servico;
 
     @Column(nullable = false, length = 120)
     private String titulo;
@@ -47,6 +52,9 @@ public class ContratoKanbanRaia {
 
     public Contrato getContrato() { return contrato; }
     public void setContrato(Contrato contrato) { this.contrato = contrato; }
+
+    public ServicoComercial getServico() { return servico; }
+    public void setServico(ServicoComercial servico) { this.servico = servico; }
 
     public String getTitulo() { return titulo; }
     public void setTitulo(String titulo) { this.titulo = titulo; }

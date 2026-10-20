@@ -48,12 +48,13 @@ class PropostaServiceTest {
     @Mock private RbacService rbacService;
     @Mock private CloudflareR2ArquivoStorageService storageService;
     @Mock private RevisaoDocumentoService revisaoDocumentoService;
+    @Mock private DocumentoFluxoNotificacaoService avisosFluxo;
     private PropostaService service;
 
     @BeforeEach
     void setUp() {
         service = new PropostaService(repository, empresaRepository, usuarioRepository, negocioRepository,
-                historicoRepository, revisaoDocumentoRepository, rbacService, storageService, revisaoDocumentoService);
+                historicoRepository, revisaoDocumentoRepository, rbacService, storageService, revisaoDocumentoService, avisosFluxo);
     }
 
     @Test

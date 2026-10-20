@@ -4,6 +4,7 @@ import com.climb.api.model.*;
 import com.climb.api.model.dto.*;
 import com.climb.api.model.enums.PipelineHistoricoTipo;
 import com.climb.api.model.enums.PipelineVendasResultado;
+import com.climb.api.model.enums.ServicoComercial;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.PipelineVendasEtapaRepository;
 import com.climb.api.repository.PipelineVendasFunilRepository;
@@ -19,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -172,6 +174,13 @@ public class PipelineVendasService {
     @Transactional
     public PipelineNegocioResponseDTO mover(Long negocioId, Long usuarioId, Long etapaId, Long motivoPerdaId,
             String observacaoPerda, Long responsavelTecnicoId, Long propostaId) {
+        return mover(negocioId, usuarioId, etapaId, motivoPerdaId, observacaoPerda, responsavelTecnicoId, propostaId, null);
+    }
+
+    @Transactional
+    public PipelineNegocioResponseDTO mover(Long negocioId, Long usuarioId, Long etapaId, Long motivoPerdaId,
+            String observacaoPerda, Long responsavelTecnicoId, Long propostaId,
+            List<PipelineResponsavelServicoRequestDTO> responsaveisPorServico) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_MOVIMENTAR);
         PipelineVendasNegocio negocio = buscarNegocio(negocioId);
         if (negocio.getFunil().isPreVendas() && negocio.getResultado() != PipelineVendasResultado.ABERTO) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reative o lead antes de movimentar");
@@ -184,7 +193,7 @@ public class PipelineVendasService {
         PipelineVendasResultado resultadoAnterior = negocio.getResultado();
         LocalDateTime momento = LocalDateTime.now();
         if (novaEtapa.getResultado() == PipelineVendasResultado.GANHO && !negocio.getFunil().isPreVendas()) {
-            prepararContratoGanho(negocio, usuarioId, responsavelTecnicoId, propostaId);
+            prepararContratoGanho(negocio, usuarioId, responsavelTecnicoId, propostaId, responsaveisPorServico);
         }
         prepararResultado(negocio, novaEtapa.getResultado(), motivoPerdaId, observacaoPerda, momento);
         aplicarEtapa(negocio, novaEtapa, momento);
@@ -208,6 +217,13 @@ public class PipelineVendasService {
     @Transactional
     public PipelineNegocioResponseDTO marcarResultado(Long negocioId, Long usuarioId, PipelineVendasResultado resultado,
             Long motivoPerdaId, String observacaoPerda, Long responsavelTecnicoId, Long propostaId) {
+        return marcarResultado(negocioId, usuarioId, resultado, motivoPerdaId, observacaoPerda, responsavelTecnicoId, propostaId, null);
+    }
+
+    @Transactional
+    public PipelineNegocioResponseDTO marcarResultado(Long negocioId, Long usuarioId, PipelineVendasResultado resultado,
+            Long motivoPerdaId, String observacaoPerda, Long responsavelTecnicoId, Long propostaId,
+            List<PipelineResponsavelServicoRequestDTO> responsaveisPorServico) {
         exigirPermissao(usuarioId, PermissaoCodigo.COMERCIAL_CONCLUIR);
         if (resultado == PipelineVendasResultado.ABERTO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe se o negócio foi ganho ou perdido");
@@ -223,7 +239,7 @@ public class PipelineVendasService {
         PipelineVendasEtapa etapaAnterior = negocio.getEtapa();
         PipelineVendasResultado resultadoAnterior = negocio.getResultado();
         LocalDateTime momento = LocalDateTime.now();
-        if (resultado == PipelineVendasResultado.GANHO) prepararContratoGanho(negocio, usuarioId, responsavelTecnicoId, propostaId);
+        if (resultado == PipelineVendasResultado.GANHO) prepararContratoGanho(negocio, usuarioId, responsavelTecnicoId, propostaId, responsaveisPorServico);
         prepararResultado(negocio, resultado, motivoPerdaId, observacaoPerda, momento);
         aplicarEtapa(negocio, etapaFinal, momento);
         PipelineVendasNegocio salvo = negocioRepository.save(negocio);
@@ -274,9 +290,9 @@ public class PipelineVendasService {
                 "Selecione a proposta aprovada e o responsável técnico na ação Marcar ganho para criar o contrato");
     }
 
-    private void prepararContratoGanho(PipelineVendasNegocio negocio, Long usuarioId, Long tecnicoId, Long propostaId) {
+    private void prepararContratoGanho(PipelineVendasNegocio negocio, Long usuarioId, Long tecnicoId, Long propostaId,
+            List<PipelineResponsavelServicoRequestDTO> responsaveisPorServico) {
         if (negocio.getContrato() != null) return;
-        if (tecnicoId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione quem será responsável técnico pelo contrato");
         if (propostaId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione a proposta aprovada pelo cliente");
         Proposta proposta = propostaRepository.findById(propostaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proposta não encontrada"));
@@ -289,19 +305,56 @@ public class PipelineVendasService {
                 && revisaoDocumentoRepository.findByTipoAndReferenciaId(com.climb.api.model.enums.RevisaoDocumentoTipo.PROPOSTA, propostaId)
                 .map(revisao -> revisao.getStatus() == com.climb.api.model.enums.RevisaoDocumentoStatus.APROVADO).orElse(true);
         if (!aprovada) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A proposta precisa estar aprovada pelo cliente antes de concluir a venda");
-        Usuario tecnico = buscarUsuario(tecnicoId, "Responsável técnico não encontrado");
-        if (tecnico.getSituacao() != null && !"ATIVO".equalsIgnoreCase(tecnico.getSituacao())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um responsável técnico ativo");
-        }
+        var responsaveis = resolverResponsaveis(proposta, tecnicoId, responsaveisPorServico);
+        Usuario tecnico = responsaveis.values().stream().findFirst().orElseGet(() -> buscarTecnico(tecnicoId));
         if (proposta.getNegocio() == null) {
             proposta.setNegocio(negocio);
             propostaRepository.save(proposta);
         }
-        Contrato contrato = contratoService.criarPreparacaoDoPipeline(proposta, buscarUsuario(usuarioId, "Usuário não encontrado"),
-                negocio.getResponsavel(), tecnico);
+        Usuario criadoPor = buscarUsuario(usuarioId, "Usuário não encontrado");
+        Contrato contrato = responsaveis.size() > 1
+                ? contratoService.criarPreparacaoDoPipeline(proposta, criadoPor, negocio.getResponsavel(), tecnico, responsaveis)
+                : contratoService.criarPreparacaoDoPipeline(proposta, criadoPor, negocio.getResponsavel(), tecnico);
         negocio.setContrato(contrato);
         historicoService.registrar(negocio, usuarioId, PipelineHistoricoTipo.CONVERSAO_CONTRATO,
                 "Criação de contrato adicionada em À fazer: CT-" + contrato.getIdContrato());
+    }
+
+    private Map<ServicoComercial, Usuario> resolverResponsaveis(Proposta proposta,
+            Long tecnicoId, List<PipelineResponsavelServicoRequestDTO> informados) {
+        var servicos = ContratoServicos.listar(proposta);
+        var ids = new LinkedHashMap<ServicoComercial, Long>();
+        if (informados == null || informados.isEmpty()) {
+            if (servicos.size() > 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Selecione um responsável técnico para cada serviço da proposta");
+            Usuario tecnico = buscarTecnico(tecnicoId);
+            var resultado = new LinkedHashMap<ServicoComercial, Usuario>();
+            servicos.forEach(servico -> resultado.put(servico, tecnico));
+            return resultado;
+        }
+        for (var item : informados) {
+            if (item == null || item.servico() == null || item.responsavelTecnicoId() == null
+                    || !servicos.contains(item.servico()) || ids.containsKey(item.servico())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Informe um único responsável técnico para cada serviço da proposta");
+            }
+            ids.put(item.servico(), item.responsavelTecnicoId());
+        }
+        if (ids.size() != servicos.size()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Selecione um responsável técnico para cada serviço da proposta");
+        var resultado = new LinkedHashMap<ServicoComercial, Usuario>();
+        servicos.forEach(servico -> resultado.put(servico, buscarTecnico(ids.get(servico))));
+        return resultado;
+    }
+
+    private Usuario buscarTecnico(Long tecnicoId) {
+        if (tecnicoId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Selecione quem será responsável técnico pelo contrato");
+        Usuario tecnico = buscarUsuario(tecnicoId, "Responsável técnico não encontrado");
+        if (tecnico.getSituacao() != null && !"ATIVO".equalsIgnoreCase(tecnico.getSituacao())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um responsável técnico ativo");
+        }
+        return tecnico;
     }
 
     @Transactional

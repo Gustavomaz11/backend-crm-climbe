@@ -6,6 +6,7 @@ import com.climb.api.model.enums.RespostaConviteReuniao;
 import java.time.LocalDateTime;
 
 @Entity
+@EntityListeners(com.climb.api.model.listener.AvisosPersistenciaListener.class)
 @Table(name = "participantes_reuniao")
 public class ParticipanteReuniao {
 

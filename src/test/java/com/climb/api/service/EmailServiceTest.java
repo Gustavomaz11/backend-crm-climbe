@@ -1,17 +1,21 @@
 package com.climb.api.service;
 
 import jakarta.mail.Session;
+import jakarta.mail.Multipart;
+import jakarta.mail.Part;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.core.io.ClassPathResource;
 
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -30,7 +34,19 @@ class EmailServiceTest {
                 "Olá! Sua proposta está disponível para revisão.", "Revisar documento", "https://www.crmclimbe.com.br/revisao/token-teste", "Climbe"));
 
         assertEquals("cliente@hotmail.com", ((InternetAddress) mensagem.getAllRecipients()[0]).getAddress());
-        assertTrue(mensagem.getContent().toString().contains("https://www.crmclimbe.com.br/revisao/token-teste"));
+        mensagem.saveChanges();
+        assertTrue(mensagem.isMimeType("multipart/related"));
+        Multipart conteudo = (Multipart) mensagem.getContent();
+        String html = conteudo.getBodyPart(0).getContent().toString();
+        assertTrue(html.contains("https://www.crmclimbe.com.br/revisao/token-teste"));
+        assertTrue(html.contains("src=\"cid:climbe-logo\""));
+        assertTrue(conteudo.getBodyPart(1).isMimeType("image/png"));
+        assertEquals(Part.INLINE, conteudo.getBodyPart(1).getDisposition());
+        assertEquals("<climbe-logo>", conteudo.getBodyPart(1).getHeader("Content-ID")[0]);
+        try (var logo = new ClassPathResource("mail/assets/climbe-logo.png").getInputStream();
+             var incorporada = conteudo.getBodyPart(1).getInputStream()) {
+            assertArrayEquals(logo.readAllBytes(), incorporada.readAllBytes());
+        }
         verify(mailSender).send(mensagem);
     }
 

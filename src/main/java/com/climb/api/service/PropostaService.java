@@ -57,6 +57,7 @@ public class PropostaService {
     private final RbacService rbacService;
     private final CloudflareR2ArquivoStorageService arquivoStorageService;
     private final RevisaoDocumentoService revisaoDocumentoService;
+    private final DocumentoFluxoNotificacaoService avisosFluxo;
 
     public PropostaService(PropostaRepository repository,
                            EmpresaRepository empresaRepository,
@@ -66,7 +67,8 @@ public class PropostaService {
                            RevisaoDocumentoRepository revisaoDocumentoRepository,
                            RbacService rbacService,
                            CloudflareR2ArquivoStorageService arquivoStorageService,
-                           RevisaoDocumentoService revisaoDocumentoService) {
+                           RevisaoDocumentoService revisaoDocumentoService,
+                           DocumentoFluxoNotificacaoService avisosFluxo) {
         this.repository = repository;
         this.empresaRepository = empresaRepository;
         this.usuarioRepository = usuarioRepository;
@@ -76,6 +78,7 @@ public class PropostaService {
         this.rbacService = rbacService;
         this.arquivoStorageService = arquivoStorageService;
         this.revisaoDocumentoService = revisaoDocumentoService;
+        this.avisosFluxo = avisosFluxo;
     }
 
     public List<HistoricoAprovacaoPropostaResponseDTO> listarHistorico(Long propostaId) {
@@ -371,6 +374,8 @@ public class PropostaService {
         historico.setStatusNovo(dto.status().name());
         historico.setDataAlteracao(LocalDateTime.now());
         historicoRepository.save(historico);
+
+        if (dto.status() == PropostaStatus.APROVADA) avisosFluxo.propostaAceita(propostaAtualizada, null);
 
         return toResponseDTO(propostaAtualizada);
     }

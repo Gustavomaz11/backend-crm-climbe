@@ -4,6 +4,7 @@ import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import com.climb.api.security.ContratoPermissoes;
 import com.climb.api.model.Contrato;
 import com.climb.api.model.ContratoParcela;
+import com.climb.api.model.ContratoServicos;
 import com.climb.api.model.Empresa;
 import com.climb.api.model.HistoricoAprovacaoContrato;
 import com.climb.api.model.PermissaoCodigo;
@@ -13,6 +14,7 @@ import com.climb.api.model.dto.HistoricoAprovacaoContratoResponseDTO;
 import com.climb.api.model.dto.ArquivoUploadResponseDTO;
 import com.climb.api.model.enums.PropostaStatus;
 import com.climb.api.model.enums.ContratoPreparacaoEtapa;
+import com.climb.api.model.enums.ServicoComercial;
 import com.climb.api.model.dto.RevisaoDocumentoResponseDTO;
 import com.climb.api.repository.ContratoRepository;
 import com.climb.api.repository.ContratoKanbanTaskRepository;
@@ -40,6 +42,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -132,6 +135,7 @@ public class ContratoService {
         return criar(contrato);
     }
 
+    @Transactional
     public Contrato criar(Contrato contrato) {
         Long propostaId = obterPropostaId(contrato);
         validarPropostaDisponivelParaNovoContrato(propostaId);
@@ -166,6 +170,14 @@ public class ContratoService {
 
     @Transactional
     public Contrato criarPreparacaoDoPipeline(Proposta proposta, Usuario criadoPor, Usuario comercial, Usuario tecnico) {
+        var responsaveis = new LinkedHashMap<ServicoComercial, Usuario>();
+        ContratoServicos.listar(proposta).forEach(servico -> responsaveis.put(servico, tecnico));
+        return criarPreparacaoDoPipeline(proposta, criadoPor, comercial, tecnico, responsaveis);
+    }
+
+    @Transactional
+    public Contrato criarPreparacaoDoPipeline(Proposta proposta, Usuario criadoPor, Usuario comercial, Usuario tecnico,
+            Map<ServicoComercial, Usuario> responsaveisPorServico) {
         validarPropostaDisponivelParaNovoContrato(proposta.getIdProposta());
         Contrato contrato = new Contrato();
         contrato.setProposta(proposta);
@@ -173,10 +185,14 @@ public class ContratoService {
         contrato.setUsuario(criadoPor);
         contrato.setResponsavelComercial(comercial);
         contrato.setResponsavel(tecnico);
+        contrato.getResponsaveisPorServico().putAll(responsaveisPorServico);
+        contrato.getParticipantes().addAll(responsaveisPorServico.values());
         contrato.getParticipantes().add(tecnico);
         contrato.setStatus(STATUS_PENDENTE);
         contrato.setEtapaPreparacao(ContratoPreparacaoEtapa.A_FAZER);
-        return repository.save(contrato);
+        Contrato salvo = repository.save(contrato);
+        contratoNotificacaoService.notificarPreparacaoCriada(salvo);
+        return salvo;
     }
 
     @Transactional
@@ -304,6 +320,7 @@ public class ContratoService {
         return contrato.getParticipantes().stream().map(Usuario::getId).collect(Collectors.toSet());
     }
 
+    @Transactional
     public Contrato atualizar(Long id, Contrato atualizado) {
         Contrato contrato = buscarPorId(id);
         Contrato anterior = snapshot(contrato);
@@ -319,6 +336,9 @@ public class ContratoService {
         }
         Contrato salvo = repository.save(contrato);
         contratoNotificacaoService.notificarContratoAtualizado(anterior, salvo);
+        if (!STATUS_APROVADO.equals(anterior.getStatus()) && STATUS_APROVADO.equals(salvo.getStatus())) {
+            contratoNotificacaoService.notificarContratoAprovado(salvo);
+        }
         return salvo;
     }
 
@@ -417,6 +437,8 @@ public class ContratoService {
         historico.setStatusNovo(statusNormalizado);
         historico.setDataAlteracao(LocalDateTime.now());
         historicoRepository.save(historico);
+
+        if (STATUS_APROVADO.equals(statusNormalizado)) contratoNotificacaoService.notificarContratoAprovado(salvo);
 
         return salvo;
     }
@@ -701,6 +723,12 @@ public class ContratoService {
             participantes.add(contrato.getUsuario());
         }
         participantes.add(responsavel);
+
+        if (!contrato.getResponsaveisPorServico().isEmpty()) {
+            var primeiroServico = ContratoServicos.primeiro(contrato);
+            contrato.getResponsaveisPorServico().put(primeiroServico, responsavel);
+            participantes.addAll(contrato.getResponsaveisPorServico().values());
+        }
 
         validarParticipantesRemovidosSemTasks(contrato, participantes);
 

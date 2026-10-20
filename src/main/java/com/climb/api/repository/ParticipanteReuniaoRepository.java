@@ -9,6 +9,9 @@ import java.util.List;
 
 public interface ParticipanteReuniaoRepository extends JpaRepository<ParticipanteReuniao, Long> {
 
+    @Query("select distinct p.usuario.id from ParticipanteReuniao p where p.reuniao.idReuniao in :ids")
+    List<Long> buscarUsuarioIdsDasReunioes(@Param("ids") java.util.Collection<Long> ids);
+
     List<ParticipanteReuniao> findByReuniao_IdReuniao(Long reuniaoId);
 
     List<ParticipanteReuniao> findByReuniaoIn(List<com.climb.api.model.Reuniao> reunioes);

@@ -3,6 +3,8 @@ package com.climb.api.service;
 import com.climb.api.model.*;
 import com.climb.api.model.dto.PipelineNegocioRequestDTO;
 import com.climb.api.model.dto.PipelineNegocioResponseDTO;
+import com.climb.api.model.dto.PipelineResponsavelServicoRequestDTO;
+import com.climb.api.model.enums.ServicoComercial;
 import com.climb.api.model.enums.PipelineVendasResultado;
 import com.climb.api.repository.EmpresaRepository;
 import com.climb.api.repository.PipelineVendasEtapaRepository;
@@ -188,12 +190,18 @@ class PipelineVendasServiceTest {
         when(negocioRepository.save(negocio)).thenReturn(negocio);
 
         Proposta proposta = propostaAprovada(negocio);
+        proposta.setServicos(List.of(itemServico(ServicoComercial.CONTABILIDADE), itemServico(ServicoComercial.CFO)));
         Usuario tecnico = usuario(2L, "Tecnico");
+        Usuario cfo = usuario(3L, "CFO");
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
         when(usuarioRepository.findById(2L)).thenReturn(Optional.of(tecnico));
+        when(usuarioRepository.findById(3L)).thenReturn(Optional.of(cfo));
         Contrato contrato = new Contrato(); contrato.setIdContrato(50L);
-        when(contratoService.criarPreparacaoDoPipeline(proposta, usuario, usuario, tecnico)).thenReturn(contrato);
-        service.mover(100L, 1L, 20L, null, null, 2L, 40L);
+        var responsaveis = java.util.Map.of(ServicoComercial.CONTABILIDADE, tecnico, ServicoComercial.CFO, cfo);
+        when(contratoService.criarPreparacaoDoPipeline(proposta, usuario, usuario, tecnico, responsaveis)).thenReturn(contrato);
+        service.mover(100L, 1L, 20L, null, null, null, 40L, List.of(
+                new PipelineResponsavelServicoRequestDTO(ServicoComercial.CFO, 3L),
+                new PipelineResponsavelServicoRequestDTO(ServicoComercial.CONTABILIDADE, 2L)));
         assertEquals(contrato, negocio.getContrato());
         assertEquals(fechado, negocio.getEtapa());
         assertEquals(PipelineVendasResultado.GANHO, negocio.getResultado());
@@ -218,6 +226,69 @@ class PipelineVendasServiceTest {
         assertEquals(PipelineVendasResultado.ABERTO, negocio.getResultado());
         verify(negocioRepository, never()).save(any());
         verifyNoInteractions(contratoService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void deveCriarContratoComResponsaveisPorServicoMesmoQuandoSaoAMesmaPessoa(boolean mesmoTecnico) {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        proposta.setServicos(List.of(itemServico(ServicoComercial.CONTABILIDADE), itemServico(ServicoComercial.CFO)));
+        Usuario tecnico = usuario(2L, "Contabilidade");
+        Usuario cfo = mesmoTecnico ? tecnico : usuario(3L, "CFO");
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(tecnico));
+        if (!mesmoTecnico) when(usuarioRepository.findById(3L)).thenReturn(Optional.of(cfo));
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(negocio.getResponsavel()));
+        Contrato contrato = new Contrato(); contrato.setIdContrato(50L);
+        var esperados = java.util.Map.of(ServicoComercial.CONTABILIDADE, tecnico, ServicoComercial.CFO, cfo);
+        when(contratoService.criarPreparacaoDoPipeline(proposta, negocio.getResponsavel(), negocio.getResponsavel(), tecnico, esperados))
+                .thenReturn(contrato);
+        when(negocioRepository.save(negocio)).thenReturn(negocio);
+        var response = service.marcarResultado(100L, 1L, PipelineVendasResultado.GANHO, null, null, null, 40L, List.of(
+                new PipelineResponsavelServicoRequestDTO(ServicoComercial.CONTABILIDADE, 2L),
+                new PipelineResponsavelServicoRequestDTO(ServicoComercial.CFO, cfo.getId())));
+        assertEquals(50L, response.contratoId());
+        assertEquals(PipelineVendasResultado.GANHO, negocio.getResultado());
+    }
+
+    @Test
+    void deveRecusarResponsaveisAusentesDuplicadosOuDeOutroServicoSemConcluirVenda() {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        proposta.setServicos(List.of(itemServico(ServicoComercial.CONTABILIDADE), itemServico(ServicoComercial.CFO)));
+        var contabil = new PipelineResponsavelServicoRequestDTO(ServicoComercial.CONTABILIDADE, 2L);
+        var cfo = new PipelineResponsavelServicoRequestDTO(ServicoComercial.CFO, 3L);
+        var tentativas = List.of(List.<PipelineResponsavelServicoRequestDTO>of(), List.of(contabil), List.of(contabil, contabil),
+                List.of(contabil, cfo, new PipelineResponsavelServicoRequestDTO(ServicoComercial.BPO, 2L)),
+                List.of(contabil, new PipelineResponsavelServicoRequestDTO(ServicoComercial.CFO, null)));
+        for (var tentativa : tentativas) {
+            var erro = assertThrows(ResponseStatusException.class, () -> service.marcarResultado(
+                    100L, 1L, PipelineVendasResultado.GANHO, null, null, 2L, 40L, tentativa));
+            assertEquals(400, erro.getStatusCode().value());
+        }
+        assertEquals(PipelineVendasResultado.ABERTO, negocio.getResultado());
+        verify(negocioRepository, never()).save(any());
+        verifyNoInteractions(contratoService);
+    }
+
+    @Test
+    void deveRecusarTecnicoInativoDeQualquerServico() {
+        var negocio = prepararGanho();
+        Proposta proposta = propostaAprovada(negocio);
+        proposta.setServicos(List.of(itemServico(ServicoComercial.CONTABILIDADE), itemServico(ServicoComercial.CFO)));
+        Usuario tecnico = usuario(2L, "Contabilidade"); Usuario inativo = usuario(3L, "CFO"); inativo.setSituacao("INATIVO");
+        when(usuarioRepository.findById(2L)).thenReturn(Optional.of(tecnico));
+        when(usuarioRepository.findById(3L)).thenReturn(Optional.of(inativo));
+        var erro = assertThrows(ResponseStatusException.class, () -> service.marcarResultado(
+                100L, 1L, PipelineVendasResultado.GANHO, null, null, null, 40L, List.of(
+                        new PipelineResponsavelServicoRequestDTO(ServicoComercial.CONTABILIDADE, 2L),
+                        new PipelineResponsavelServicoRequestDTO(ServicoComercial.CFO, 3L))));
+        assertTrue(erro.getReason().contains("ativo"));
+        verifyNoInteractions(contratoService);
+    }
+
+    private PropostaServico itemServico(ServicoComercial servico) {
+        return new PropostaServico(servico, BigDecimal.TEN, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     @Test

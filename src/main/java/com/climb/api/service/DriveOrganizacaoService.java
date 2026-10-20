@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
-import java.util.LinkedHashSet;
 import java.util.List;
 
 @Service
@@ -44,13 +43,7 @@ public class DriveOrganizacaoService {
     }
 
     public List<ServicoComercial> servicos(Contrato contrato) {
-        var servicos = new LinkedHashSet<ServicoComercial>();
-        if (contrato.getProposta() != null) {
-            contrato.getProposta().getServicos().forEach(item -> servicos.add(item.getServico()));
-            if (servicos.isEmpty() && contrato.getProposta().getServico() != null) servicos.add(contrato.getProposta().getServico());
-        }
-        if (servicos.isEmpty() && contrato.getServico() != null) servicos.add(contrato.getServico());
-        return List.copyOf(servicos);
+        return ContratoServicos.listar(contrato);
     }
 
     public String nomeServico(ServicoComercial servico) {

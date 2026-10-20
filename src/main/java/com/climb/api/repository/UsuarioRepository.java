@@ -27,6 +27,14 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     List<Usuario> buscarDiretoresComerciaisAtivos();
 
+    @Query("""
+            select usuario from Usuario usuario join fetch usuario.cargo cargo
+            where usuario.situacao = 'ATIVO' and cargo.ativo = true
+              and (lower(cargo.nome) like '%jurídic%' or lower(cargo.nome) like '%juridic%')
+            order by usuario.id
+            """)
+    List<Usuario> buscarJuridicoAtivo();
+
     Optional<Usuario> findByCpf(String cpf);
 
     boolean existsByIdAndSituacao(Long id, String situacao);

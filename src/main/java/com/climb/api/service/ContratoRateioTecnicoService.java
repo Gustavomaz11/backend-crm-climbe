@@ -117,7 +117,7 @@ public class ContratoRateioTecnicoService {
     private Map<Long, Usuario> fixos(Contrato contrato) {
         Map<Long, Usuario> fixos = new TreeMap<>();
         equipe.findByContrato_IdContrato(contrato.getIdContrato()).forEach(m -> fixos.put(m.getUsuario().getId(), m.getUsuario()));
-        if (contrato.getResponsavel() != null) fixos.put(contrato.getResponsavel().getId(), contrato.getResponsavel());
+        com.climb.api.model.ContratoServicos.responsaveis(contrato).forEach(lider -> fixos.put(lider.getId(), lider));
         return fixos;
     }
     private List<ContratoRateioTecnicoResponseDTO.Participante> dividir(BigDecimal total, Collection<Usuario> usuarios) {

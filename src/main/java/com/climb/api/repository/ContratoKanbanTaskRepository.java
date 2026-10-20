@@ -10,6 +10,17 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanbanTask, Long> {
+    String SERVICO_ATIVO = """
+            not exists (
+                select encerramento.encerradoEm
+                from Contrato fechado join fechado.encerramentosPorServico encerramento
+                left join fechado.proposta propostaFechada
+                left join propostaFechada.servicos primeiroServico on index(primeiroServico) = 0
+                where fechado = task.contrato and key(encerramento) = coalesce(
+                    cast(task.raia.servico as string), cast(primeiroServico.servico as string),
+                    cast(fechado.servico as string), cast(propostaFechada.servico as string), 'SEM_SERVICO')
+            )
+            """;
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("update ContratoKanbanTask item set item.arquivadoEm = :agora " +
             "where item.arquivadoEm is null and item.arquivarApos <= :agora and item.raia.concluiTarefas = true")
@@ -22,8 +33,8 @@ public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanb
             select distinct task from ContratoKanbanTask task
             where task.dataFim is not null and task.dataFim <= :limite
               and task.raia.concluiTarefas = false and task.contrato.status = 'APROVADO'
-            order by task.dataFim, task.idTask
-            """)
+            and
+            """ + SERVICO_ATIVO + " order by task.dataFim, task.idTask")
     List<ContratoKanbanTask> buscarAbertasComPrazoAte(@Param("limite") java.time.LocalDate limite);
 
     @Query("""
@@ -31,13 +42,15 @@ public interface ContratoKanbanTaskRepository extends JpaRepository<ContratoKanb
             where task.contrato.idContrato = :contratoId and task.raia.concluiTarefas = false
               and apoio.id = :usuarioId
               and (task.responsavel.id = :usuarioId or apoio member of task.responsaveis)
-            """)
+              and
+            """ + SERVICO_ATIVO)
     boolean existeApoioPendente(@Param("contratoId") Long contratoId, @Param("usuarioId") Long usuarioId);
 
     @Query("""
             select distinct task from ContratoKanbanTask task join fetch task.apoios
             where task.contrato.idContrato = :contratoId and task.raia.concluiTarefas = false
-            """)
+              and
+            """ + SERVICO_ATIVO)
     List<ContratoKanbanTask> buscarApoiosPendentes(@Param("contratoId") Long contratoId);
 
     List<ContratoKanbanTask> findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(Long contratoId);

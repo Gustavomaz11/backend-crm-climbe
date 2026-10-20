@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, exception) ->
                                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Nao autenticado")))
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
                         .requestMatchers(
                                 "/", "/auth/**",
                                 "/hello", "/healthz", "/error", "/actuator/health", "/actuator/info"

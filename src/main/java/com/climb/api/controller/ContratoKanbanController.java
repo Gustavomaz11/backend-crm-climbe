@@ -13,6 +13,7 @@ import com.climb.api.model.dto.ContratoKanbanSubtarefaConclusaoRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanSubtarefaRequestDTO;
 import com.climb.api.model.dto.ContratoKanbanTaskRequestDTO;
 import com.climb.api.service.ContratoKanbanService;
+import com.climb.api.model.enums.ServicoComercial;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,13 +30,15 @@ public class ContratoKanbanController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ContratoKanbanBoardResponseDTO>> buscarBoard(@PathVariable Long contratoId) {
-        return ResponseEntity.ok(ApiResponse.ok(service.buscarBoard(contratoId, getAuthenticatedUserId())));
+    public ResponseEntity<ApiResponse<ContratoKanbanBoardResponseDTO>> buscarBoard(@PathVariable Long contratoId,
+            @RequestParam(required = false) ServicoComercial servico) {
+        return ResponseEntity.ok(ApiResponse.ok(service.buscarBoard(contratoId, getAuthenticatedUserId(), servico)));
     }
 
     @GetMapping("/abertura")
-    public ResponseEntity<ApiResponse<ContratoKanbanAberturaResponseDTO>> buscarAbertura(@PathVariable Long contratoId) {
-        return ResponseEntity.ok(ApiResponse.ok(service.buscarAbertura(contratoId, getAuthenticatedUserId())));
+    public ResponseEntity<ApiResponse<ContratoKanbanAberturaResponseDTO>> buscarAbertura(@PathVariable Long contratoId,
+            @RequestParam(required = false) ServicoComercial servico) {
+        return ResponseEntity.ok(ApiResponse.ok(service.buscarAbertura(contratoId, getAuthenticatedUserId(), servico)));
     }
 
     @PostMapping("/raias")
@@ -139,8 +142,9 @@ public class ContratoKanbanController {
     }
 
     @GetMapping("/arquivados")
-    public List<KanbanItemArquivadoDTO> listarArquivados(@PathVariable Long contratoId) {
-        return service.listarArquivados(contratoId, getAuthenticatedUserId());
+    public List<KanbanItemArquivadoDTO> listarArquivados(@PathVariable Long contratoId,
+            @RequestParam(required = false) ServicoComercial servico) {
+        return service.listarArquivados(contratoId, getAuthenticatedUserId(), servico);
     }
 
     @PatchMapping("/tasks/{taskId}/arquivamento")

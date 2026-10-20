@@ -1,6 +1,7 @@
 package com.climb.api.model.dto;
 
 import java.util.List;
+import com.climb.api.model.enums.ServicoComercial;
 
 public record ContratoKanbanBoardResponseDTO(
         Long contratoId,
@@ -10,5 +11,6 @@ public record ContratoKanbanBoardResponseDTO(
         UsuarioResumoDTO responsavel,
         List<UsuarioResumoDTO> participantes,
         List<UsuarioResumoDTO> usuariosDisponiveis,
-        List<ContratoKanbanRaiaResponseDTO> raias
+        List<ContratoKanbanRaiaResponseDTO> raias,
+        ServicoComercial servico
 ) {}

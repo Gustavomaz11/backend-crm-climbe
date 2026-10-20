@@ -3,6 +3,8 @@ package com.climb.api.service;
 import java.time.LocalDateTime;
 import com.climb.api.model.dto.KanbanItemArquivadoDTO;
 import com.climb.api.model.Contrato;
+import com.climb.api.model.ContratoServicos;
+import com.climb.api.model.enums.ServicoComercial;
 import com.climb.api.model.ContratoKanbanRaia;
 import com.climb.api.model.ContratoKanbanSubtarefa;
 import com.climb.api.model.ContratoKanbanTask;
@@ -74,24 +76,43 @@ public class ContratoKanbanService {
 
     @Transactional(readOnly = true)
     public ContratoKanbanBoardResponseDTO buscarBoard(Long contratoId, Long usuarioId) {
+        return buscarBoard(contratoId, usuarioId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public ContratoKanbanBoardResponseDTO buscarBoard(Long contratoId, Long usuarioId, ServicoComercial servico) {
         Contrato contrato = buscarContrato(contratoId);
         equipeService.exigirAcesso(contrato, usuarioId, false);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, resolverServico(contrato, servico));
     }
 
     @Transactional(readOnly = true)
     public ContratoKanbanAberturaResponseDTO buscarAbertura(Long contratoId, Long usuarioId) {
+        return buscarAbertura(contratoId, usuarioId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public ContratoKanbanAberturaResponseDTO buscarAbertura(Long contratoId, Long usuarioId, ServicoComercial servico) {
         Contrato contrato = buscarContrato(contratoId);
         var equipe = equipeService.buscarEquipe(contrato, usuarioId);
+        var selecionado = resolverServico(contrato, servico);
         return new ContratoKanbanAberturaResponseDTO(equipe,
-                equipe.configurada() ? toBoardResponse(contrato, usuarioId) : null);
+                equipe.configurada() ? toBoardResponse(contrato, usuarioId, selecionado) : null,
+                isGestor(contrato, usuarioId, selecionado));
     }
 
     @Transactional(readOnly = true)
     public List<KanbanItemArquivadoDTO> listarArquivados(Long contratoId, Long usuarioId) {
+        return listarArquivados(contratoId, usuarioId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<KanbanItemArquivadoDTO> listarArquivados(Long contratoId, Long usuarioId, ServicoComercial servico) {
         Contrato contrato = buscarContrato(contratoId);
         equipeService.exigirAcesso(contrato, usuarioId, false);
+        var selecionado = resolverServico(contrato, servico);
         return taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId).stream()
+                .filter(task -> Objects.equals(ContratoServicos.daTarefa(task), selecionado))
                 .filter(ContratoKanbanTask::estaArquivado)
                 .map(task -> new KanbanItemArquivadoDTO(task.getIdTask(), task.getTitulo(),
                         task.getRaia().getTitulo(), task.getResponsaveisEfetivos().stream().map(Usuario::getNomeCompleto)
@@ -113,11 +134,12 @@ public class ContratoKanbanService {
         Contrato contrato = exigirEdicaoContrato(contratoId, usuarioId);
         ContratoKanbanRaia raia = new ContratoKanbanRaia();
         raia.setContrato(contrato);
+        raia.setServico(resolverServico(contrato, dto.servico()));
         raia.setTitulo(normalizarTitulo(dto.titulo(), "Título da raia é obrigatório"));
         raia.setConcluiTarefas(dto.concluiTarefas() != null ? dto.concluiTarefas() : tituloDeConclusao(raia.getTitulo()));
-        raia.setPosicao(dto.posicao() != null ? dto.posicao() : proximaPosicaoRaia(contratoId));
+        raia.setPosicao(dto.posicao() != null ? dto.posicao() : proximaPosicaoRaia(contratoId, raia.getServico()));
         raiaRepository.save(raia);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daRaia(raia));
     }
 
     @Transactional
@@ -143,7 +165,7 @@ public class ContratoKanbanService {
                     atuacaoService.sincronizar(t); rateioService.registrarAtuacao(t); taskRepository.save(t);
                     notificacoes.contratoMovida(t, estadoAnterior);
                 });
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daRaia(raia));
     }
 
     @Transactional
@@ -158,7 +180,7 @@ public class ContratoKanbanService {
         taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contratoId).stream()
                 .filter(t -> Objects.equals(t.getRaia().getIdRaia(), raiaId)).forEach(this::encerrarAtuacao);
         raiaRepository.delete(raia);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daRaia(raia));
     }
 
     @Transactional
@@ -186,7 +208,7 @@ public class ContratoKanbanService {
         notificacoes.atribuicoes(task, Set.of());
         atuacaoService.sincronizar(task);
         rateioService.registrarAtuacao(task);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
     @Transactional
@@ -197,14 +219,15 @@ public class ContratoKanbanService {
         String estadoAnterior = TarefaNotificacaoService.estado(task.getRaia());
 
         if (!Objects.equals(task.getDataFim(), dto.dataFim())
-                && (contrato.getResponsavel() == null || !Objects.equals(contrato.getResponsavel().getId(), usuarioId))) {
+                && !isGestor(contrato, usuarioId, ContratoServicos.daTarefa(task))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Somente o responsável técnico do contrato pode alterar o prazo da tarefa.");
+                    "Somente o responsável técnico do serviço pode alterar o prazo da tarefa.");
         }
         if (task.getDataFim() != null && dto.dataFim() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "O prazo da tarefa precisa continuar preenchido.");
         ContratoKanbanRaia destino = dto.raiaId() == null || Objects.equals(dto.raiaId(), task.getRaia().getIdRaia())
                 ? task.getRaia() : buscarRaia(contratoId, dto.raiaId());
+        exigirMesmoServico(task, destino);
         justificarConclusao(task, destino, !task.getRaia().isConcluiTarefas(), dto.justificativaAtraso(), usuarioId);
 
         if (dto.raiaId() != null && !Objects.equals(task.getRaia().getIdRaia(), dto.raiaId())) {
@@ -237,7 +260,7 @@ public class ContratoKanbanService {
         notificacoes.contratoMovida(task, estadoAnterior);
         atuacaoService.sincronizar(task);
         rateioService.registrarAtuacao(task);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
     @Transactional
@@ -246,6 +269,7 @@ public class ContratoKanbanService {
         ContratoKanbanTask task = buscarTask(contratoId, taskId);
 
         ContratoKanbanRaia raia = buscarRaia(contratoId, dto != null ? dto.raiaId() : null);
+        exigirMesmoServico(task, raia);
         String estadoAnterior = TarefaNotificacaoService.estado(task.getRaia());
         justificarConclusao(task, raia, !task.getRaia().isConcluiTarefas(), dto.justificativaAtraso(), usuarioId);
         task.setRaia(raia);
@@ -253,7 +277,7 @@ public class ContratoKanbanService {
         notificacoes.contratoMovida(task, estadoAnterior);
         atuacaoService.sincronizar(task);
         rateioService.registrarAtuacao(task);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
     @Transactional
@@ -262,7 +286,7 @@ public class ContratoKanbanService {
         ContratoKanbanTask task = buscarTask(contratoId, taskId);
         encerrarAtuacao(task);
         taskRepository.delete(task);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
     private void encerrarAtuacao(ContratoKanbanTask task) {
@@ -294,7 +318,7 @@ public class ContratoKanbanService {
         subtarefa.setConcluida(Boolean.TRUE.equals(dto.concluida()));
         subtarefa.setPosicao(dto.posicao() != null ? dto.posicao() : proximaPosicaoSubtarefa(taskId));
         subtarefaRepository.save(subtarefa);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
     @Transactional
@@ -319,7 +343,7 @@ public class ContratoKanbanService {
             subtarefa.setPosicao(dto.posicao());
         }
         subtarefaRepository.save(subtarefa);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
     @Transactional
@@ -337,7 +361,7 @@ public class ContratoKanbanService {
         ContratoKanbanSubtarefa subtarefa = buscarSubtarefa(contratoId, taskId, subtarefaId);
         subtarefa.setConcluida(dto.concluida());
         subtarefaRepository.save(subtarefa);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
     @Transactional
@@ -346,16 +370,17 @@ public class ContratoKanbanService {
                                                            Long subtarefaId,
                                                            Long usuarioId) {
         Contrato contrato = exigirEdicaoContrato(contratoId, usuarioId);
-        buscarTask(contratoId, taskId);
+        ContratoKanbanTask task = buscarTask(contratoId, taskId);
         ContratoKanbanSubtarefa subtarefa = buscarSubtarefa(contratoId, taskId, subtarefaId);
         subtarefaRepository.delete(subtarefa);
-        return toBoardResponse(contrato, usuarioId);
+        return toBoardResponse(contrato, usuarioId, ContratoServicos.daTarefa(task));
     }
 
-    private ContratoKanbanBoardResponseDTO toBoardResponse(Contrato contrato, Long usuarioId) {
-        List<ContratoKanbanRaia> raias = raiaRepository.findByContrato_IdContratoOrderByPosicaoAscIdRaiaAsc(contrato.getIdContrato());
+    private ContratoKanbanBoardResponseDTO toBoardResponse(Contrato contrato, Long usuarioId, ServicoComercial servico) {
+        List<ContratoKanbanRaia> raias = raiaRepository.findByContrato_IdContratoOrderByPosicaoAscIdRaiaAsc(contrato.getIdContrato())
+                .stream().filter(raia -> Objects.equals(ContratoServicos.daRaia(raia), servico)).toList();
         List<ContratoKanbanTask> tasks = taskRepository.findByContrato_IdContratoOrderByRaia_PosicaoAscPosicaoAscIdTaskAsc(contrato.getIdContrato())
-                .stream().filter(task -> !task.estaArquivado()).toList();
+                .stream().filter(task -> !task.estaArquivado() && Objects.equals(ContratoServicos.daTarefa(task), servico)).toList();
         Set<Long> taskIds = tasks.stream().map(ContratoKanbanTask::getIdTask).collect(Collectors.toSet());
         List<ContratoKanbanSubtarefa> subtarefas = taskIds.isEmpty()
                 ? List.of()
@@ -378,7 +403,7 @@ public class ContratoKanbanService {
                 .sorted(Comparator.comparing(Usuario::getNomeCompleto, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(this::toUsuarioResumo)
                 .toList();
-        List<UsuarioResumoDTO> usuariosDisponiveis = (isGestor(contrato, usuarioId)
+        List<UsuarioResumoDTO> usuariosDisponiveis = (isGestor(contrato, usuarioId, servico)
                 ? usuarioRepository.findAllBySituacaoOrderByNomeCompletoAsc("ATIVO") : equipe).stream()
                 .map(this::toUsuarioResumo)
                 .toList();
@@ -386,12 +411,13 @@ public class ContratoKanbanService {
         return new ContratoKanbanBoardResponseDTO(
                 contrato.getIdContrato(),
                 contrato.getUrlPdf(),
-                isGestor(contrato, usuarioId),
+                isGestor(contrato, usuarioId, servico),
                 equipeService.podeEditar(contrato, usuarioId),
-                toUsuarioResumo(contrato.getResponsavel()),
+                toUsuarioResumo(ContratoServicos.responsavel(contrato, servico)),
                 participantes,
                 usuariosDisponiveis,
-                raiasDto
+                raiasDto,
+                servico
         );
     }
 
@@ -454,7 +480,9 @@ public class ContratoKanbanService {
     }
 
     private Contrato exigirEdicaoContrato(Long contratoId, Long usuarioId) {
-        Contrato contrato = buscarContrato(contratoId);
+        Contrato contrato = contratoRepository.findByIdForUpdate(contratoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
+        exigirContratoAprovado(contrato);
         equipeService.exigirAcesso(contrato, usuarioId, true);
         return contrato;
     }
@@ -463,10 +491,9 @@ public class ContratoKanbanService {
         return semAcentos.trim().toLowerCase(java.util.Locale.ROOT).matches("concluid[oa]s?");
     }
 
-    private boolean isGestor(Contrato contrato, Long usuarioId) {
-        return contrato.getResponsavel() != null
-                && contrato.getResponsavel().getId() != null
-                && Objects.equals(contrato.getResponsavel().getId(), usuarioId);
+    private boolean isGestor(Contrato contrato, Long usuarioId, ServicoComercial servico) {
+        Usuario lider = ContratoServicos.responsavel(contrato, servico);
+        return usuarioId != null && lider != null && Objects.equals(lider.getId(), usuarioId);
     }
 
     @Transactional(readOnly = true)
@@ -474,29 +501,38 @@ public class ContratoKanbanService {
         ContratoKanbanTask task = taskRepository.findById(taskId).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Tarefa não encontrada."));
         equipeService.exigirAcesso(task.getContrato(), usuarioId, false);
+        exigirServicoAtivo(task.getContrato(), ContratoServicos.daTarefa(task));
         return task;
     }
 
     private Contrato buscarContrato(Long contratoId) {
         Contrato contrato = contratoRepository.findById(contratoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrato não encontrado"));
+        exigirContratoAprovado(contrato);
+        return contrato;
+    }
+
+    private void exigirContratoAprovado(Contrato contrato) {
         if (contrato.getEtapaPreparacao() != null && !ContratoService.STATUS_APROVADO.equals(contrato.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este contrato ainda está em preparação na aba Contratos");
         }
-        return contrato;
     }
 
     private ContratoKanbanRaia buscarRaia(Long contratoId, Long raiaId) {
         if (raiaId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Raia é obrigatória");
         }
-        return raiaRepository.findByIdRaiaAndContrato_IdContrato(raiaId, contratoId)
+        var raia = raiaRepository.findByIdRaiaAndContrato_IdContrato(raiaId, contratoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Raia não encontrada"));
+        exigirServicoAtivo(raia.getContrato(), ContratoServicos.daRaia(raia));
+        return raia;
     }
 
     private ContratoKanbanTask buscarTask(Long contratoId, Long taskId) {
-        return taskRepository.findByIdTaskAndContrato_IdContrato(taskId, contratoId)
+        var task = taskRepository.findByIdTaskAndContrato_IdContrato(taskId, contratoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tarefa não encontrada"));
+        exigirServicoAtivo(task.getContrato(), ContratoServicos.daTarefa(task));
+        return task;
     }
 
     private ContratoKanbanSubtarefa buscarSubtarefa(Long contratoId, Long taskId, Long subtarefaId) {
@@ -531,9 +567,33 @@ public class ContratoKanbanService {
         return texto.trim();
     }
 
-    private int proximaPosicaoRaia(Long contratoId) {
+    private ServicoComercial resolverServico(Contrato contrato, ServicoComercial servico) {
+        var servicos = ContratoServicos.listar(contrato);
+        if (servico != null && !servicos.contains(servico)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Este serviço não pertence ao contrato.");
+        if (servico == null && !servicos.isEmpty()) {
+            servico = servicos.stream().filter(item -> !ContratoServicos.encerrado(contrato, item)).findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Os serviços deste contrato foram encerrados."));
+        }
+        exigirServicoAtivo(contrato, servico);
+        return servico;
+    }
+
+    private void exigirServicoAtivo(Contrato contrato, ServicoComercial servico) {
+        if (ContratoServicos.encerrado(contrato, servico)) throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Este serviço do contrato foi encerrado.");
+    }
+
+    private void exigirMesmoServico(ContratoKanbanTask task, ContratoKanbanRaia destino) {
+        if (!Objects.equals(ContratoServicos.daTarefa(task), ContratoServicos.daRaia(destino))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A tarefa deve permanecer no Kanban do seu serviço.");
+        }
+    }
+
+    private int proximaPosicaoRaia(Long contratoId, ServicoComercial servico) {
         return raiaRepository.findByContrato_IdContratoOrderByPosicaoAscIdRaiaAsc(contratoId)
                 .stream()
+                .filter(raia -> Objects.equals(ContratoServicos.daRaia(raia), servico))
                 .map(ContratoKanbanRaia::getPosicao)
                 .filter(Objects::nonNull)
                 .max(Integer::compareTo)

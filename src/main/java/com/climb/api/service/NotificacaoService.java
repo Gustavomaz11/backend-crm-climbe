@@ -7,6 +7,7 @@ import com.climb.api.model.dto.NotificacaoResponseDTO;
 import com.climb.api.repository.NotificacaoRepository;
 import com.climb.api.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -19,10 +20,12 @@ public class NotificacaoService {
 
     private final NotificacaoRepository repository;
     private final UsuarioRepository usuarioRepository;
+    private final ApplicationEventPublisher eventos;
 
-    public NotificacaoService(NotificacaoRepository repository, UsuarioRepository usuarioRepository) {
+    public NotificacaoService(NotificacaoRepository repository, UsuarioRepository usuarioRepository, ApplicationEventPublisher eventos) {
         this.repository = repository;
         this.usuarioRepository = usuarioRepository;
+        this.eventos = eventos;
     }
 
     public List<Notificacao> listar() {
@@ -107,7 +110,9 @@ public class NotificacaoService {
 
     @Transactional
     public void marcarTodasComoLidasDoUsuario(Long usuarioId) {
-        repository.marcarTodasComoLidas(usuarioId, LocalDateTime.now());
+        if (repository.marcarTodasComoLidas(usuarioId, LocalDateTime.now()) > 0) {
+            eventos.publishEvent(new AvisoAtualizado(usuarioId, null, AvisoAtualizado.Tipo.NOTIFICACOES));
+        }
     }
 
     public void deletar(Long id) {

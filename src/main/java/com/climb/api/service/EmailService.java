@@ -5,6 +5,7 @@ import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -115,11 +116,14 @@ public class EmailService {
         String servidorSmtp = mailSender instanceof JavaMailSenderImpl smtp ? smtp.getHost() : "configurado";
         try {
             MimeMessage mensagem = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mensagem, "UTF-8");
+            boolean incluirLogo = html != null && html.contains("cid:climbe-logo");
+            MimeMessageHelper helper = new MimeMessageHelper(mensagem,
+                    incluirLogo ? MimeMessageHelper.MULTIPART_MODE_RELATED : MimeMessageHelper.MULTIPART_MODE_NO, "UTF-8");
             configurarRemetente(helper);
             helper.setTo(emailDestino.trim());
             helper.setSubject(assunto);
             helper.setText(html, true);
+            if (incluirLogo) helper.addInline("climbe-logo", new ClassPathResource("mail/assets/climbe-logo.png"), "image/png");
             mailSender.send(mensagem);
             log.info("E-mail aceito pelo servidor SMTP: envioId={}, smtp={}, destinatario={}, assunto='{}', messageId={}",
                     envioId, servidorSmtp, emailDestino, assunto, mensagem.getMessageID());
@@ -165,7 +169,7 @@ public class EmailService {
                   <tr><td align="center">
                     <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 12px 28px rgba(15,23,42,.08)">
                       <tr><td style="padding:24px 30px;background:#0f172a">
-                        <span style="color:#ffffff;font-size:23px;font-weight:800;letter-spacing:-.5px">climb</span><span style="color:#4db6b2;font-size:23px;font-weight:800">▰</span>
+                        <img src="cid:climbe-logo" width="210" height="71" alt="Climbe - Investimentos independentes" style="display:block;width:210px;max-width:100%%;height:auto;border:0;outline:none;text-decoration:none">
                       </td></tr>
                       <tr><td style="padding:34px 30px 28px">
                         <div style="display:inline-block;margin-bottom:16px;padding:6px 10px;border-radius:999px;background:#e6f4f3;color:#13777b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px">Climbe CRM</div>

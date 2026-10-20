@@ -43,7 +43,7 @@ public class KanbanPrazoAlertaService {
         });
         contratos.buscarAbertasComPrazoAte(hoje.plusDays(3)).forEach(t -> {
             Integer marco = marco(t.getDataFim(), hoje);
-            Usuario lider = t.getContrato().getResponsavel();
+            Usuario lider = com.climb.api.model.ContratoServicos.responsavelDaTarefa(t);
             if (marco != null && lider != null) adicionar(porDestinatario, lider.getId(), contrato(t, marco));
         });
         porDestinatario.forEach((id, lista) -> {
@@ -68,14 +68,12 @@ public class KanbanPrazoAlertaService {
                 String.join(", ", negocio.getServicosInteresse()), nomes(tarefa.getResponsaveisEfetivos()), tarefa.getPrazo(), marco, link);
     }
     private KanbanPrazoAtividade contrato(ContratoKanbanTask tarefa, int marco) {
-        var contrato = tarefa.getContrato(); var proposta = contrato.getProposta();
-        var servico = contrato.getServico() != null ? contrato.getServico() : proposta == null ? null : proposta.getServico();
-        String servicos = proposta != null && !proposta.getServicos().isEmpty()
-                ? proposta.getServicos().stream().map(s -> s.getServico().name().replace('_', ' ')).collect(Collectors.joining(", "))
-                : servico == null ? null : servico.name().replace('_', ' ');
+        var contrato = tarefa.getContrato();
+        var servico = com.climb.api.model.ContratoServicos.daTarefa(tarefa);
+        String servicos = servico == null ? null : servico.name().replace('_', ' ');
         return new KanbanPrazoAtividade(TarefaTipo.CONTRATO, tarefa.getIdTask(), tarefa.getTitulo(), contrato.getEmpresaNomeFantasia(),
                 servicos, nomes(tarefa.getResponsaveisEfetivos()), tarefa.getDataFim(), marco,
-                frontend + "/contratos/kanban?contrato=" + contrato.getIdContrato() + "&tarefaId=" + tarefa.getIdTask());
+                frontend + ContratoKanbanEndereco.daTarefa(tarefa));
     }
     private String nomes(Collection<Usuario> pessoas) {
         return pessoas.stream().map(Usuario::getNomeCompleto).collect(Collectors.joining(", "));

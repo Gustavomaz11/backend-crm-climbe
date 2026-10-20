@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
+@EntityListeners(com.climb.api.model.listener.AvisosPersistenciaListener.class)
 @Table(name = "notificacoes")
 public class Notificacao {
 

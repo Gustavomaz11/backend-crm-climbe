@@ -5,6 +5,8 @@ import com.climb.api.model.enums.ContratoPreparacaoEtapa;
 import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 @Entity
@@ -30,6 +32,19 @@ public class Contrato extends ItemArquivavelKanban {
     @ManyToOne
     @JoinColumn(name = "id_responsavel")
     private Usuario responsavel;
+
+    @ManyToMany
+    @JoinTable(name = "contrato_responsaveis_servico",
+            joinColumns = @JoinColumn(name = "contrato_id"),
+            inverseJoinColumns = @JoinColumn(name = "usuario_id"))
+    @MapKeyColumn(name = "servico", length = 50)
+    @MapKeyEnumerated(EnumType.STRING)
+    private Map<ServicoComercial, Usuario> responsaveisPorServico = new LinkedHashMap<>();
+
+    @ElementCollection
+    @CollectionTable(name = "contrato_servicos_encerrados", joinColumns = @JoinColumn(name = "contrato_id"))
+    @MapKeyColumn(name = "servico", length = 50)
+    private Map<String, ContratoServicoEncerramento> encerramentosPorServico = new LinkedHashMap<>();
 
     @ManyToOne
     @JoinColumn(name = "responsavel_comercial_id")
@@ -91,6 +106,12 @@ public class Contrato extends ItemArquivavelKanban {
 
     public Usuario getResponsavel() { return responsavel; }
     public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public Map<ServicoComercial, Usuario> getResponsaveisPorServico() { return responsaveisPorServico; }
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public Map<String, ContratoServicoEncerramento> getEncerramentosPorServico() { return encerramentosPorServico; }
 
     public Usuario getResponsavelComercial() { return responsavelComercial; }
     public void setResponsavelComercial(Usuario responsavelComercial) { this.responsavelComercial = responsavelComercial; }

@@ -28,6 +28,7 @@ class RevisaoContratoEnvioTest {
     private final ContratoRepository contratos = mock(ContratoRepository.class);
     private final EmailService email = mock(EmailService.class);
     private final ContratoNotificacaoService notificacoes = mock(ContratoNotificacaoService.class);
+    private final DocumentoFluxoNotificacaoService avisosFluxo = mock(DocumentoFluxoNotificacaoService.class);
     private final ZapSignClient zapSign = mock(ZapSignClient.class);
     private final DriveOrganizacaoService drive = mock(DriveOrganizacaoService.class);
     private final CloudflareR2ArquivoStorageService storage = mock(CloudflareR2ArquivoStorageService.class);
@@ -43,7 +44,7 @@ class RevisaoContratoEnvioTest {
         var properties = new ZapSignProperties(); properties.setWebhookSecret("test-secret");
         service = new RevisaoDocumentoService(revisoes, versoes, mock(RevisaoDocumentoAnotacaoRepository.class),
                 mock(PropostaRepository.class), contratos, usuarios, storage, preview,
-                email, notificacoes, new ContratoParcelaCalculator(), rbac, zapSign,
+                email, notificacoes, avisosFluxo, new ContratoParcelaCalculator(), rbac, zapSign,
                 properties, drive, "http://app.test", 30);
         contrato = new Contrato(); contrato.setIdContrato(10L);
         Empresa empresa = new Empresa(); empresa.setNomeFantasia("Empresa"); empresa.setEmail("cliente@example.test");
@@ -135,11 +136,17 @@ class RevisaoContratoEnvioTest {
         verify(email).enviarEmailComBotao(eq("cliente@example.test"), anyString(), anyString(), anyString(), anyString(), startsWith("http://app.test/revisao/"), anyString());
     }
 
-    @org.junit.jupiter.api.Test
-    void deveConcluirPreparacaoEGerarParcelasSomenteAposAssinaturaConfirmada() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void deveConcluirPreparacaoEGerarParcelasSomenteAposAssinaturaConfirmada(boolean variosTecnicos) {
         Usuario tecnico = new Usuario(); tecnico.setId(2L); tecnico.setEmail("tecnico@example.test");
         Usuario comercial = new Usuario(); comercial.setId(1L); comercial.setEmail("comercial@example.test");
         contrato.setResponsavel(tecnico); contrato.setResponsavelComercial(comercial);
+        if (variosTecnicos) {
+            Usuario cfo = new Usuario(); cfo.setId(3L); cfo.setEmail("cfo@example.test");
+            contrato.getResponsaveisPorServico().put(com.climb.api.model.enums.ServicoComercial.VALUATION, tecnico);
+            contrato.getResponsaveisPorServico().put(com.climb.api.model.enums.ServicoComercial.CFO, cfo);
+        }
         contrato.setEtapaPreparacao(com.climb.api.model.enums.ContratoPreparacaoEtapa.REVISAO);
         contrato.setStatus("PENDENTE");
         Proposta proposta = new Proposta(); proposta.setValuation(new java.math.BigDecimal("50000.00"));
@@ -161,9 +168,12 @@ class RevisaoContratoEnvioTest {
         assertThat(contrato.getParcelas()).extracting(ContratoParcela::getValor)
                 .containsExactly(new java.math.BigDecimal("25000.00"), new java.math.BigDecimal("25000.00"));
         verify(email).enviarEmailComBotao(eq("tecnico@example.test"), anyString(), anyString(), anyString(),
-                eq("Abrir contrato"), eq("http://app.test/kanban?contrato=10"), anyString());
+                eq("Abrir contrato"), eq("http://app.test/contratos/kanban?contrato=10" + (variosTecnicos ? "&servico=VALUATION" : "")), anyString());
+        if (variosTecnicos) verify(email).enviarEmailComBotao(eq("cfo@example.test"), anyString(), anyString(), anyString(),
+                eq("Abrir contrato"), eq("http://app.test/contratos/kanban?contrato=10&servico=CFO"), anyString());
         service.processarWebhookZapSign("test-secret", new com.climb.api.model.dto.ZapSignWebhookRequestDTO("doc_signed", "document-token", "signed", null));
         assertThat(contrato.getParcelas()).hasSize(2);
         verify(drive, times(1)).agendarContrato(contrato);
+        verify(notificacoes, times(1)).notificarContratoAprovado(contrato, 1);
     }
 }

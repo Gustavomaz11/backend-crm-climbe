@@ -159,7 +159,9 @@ class ContratoServiceTest {
         assertThat(contrato.getResponsavelComercial()).isSameAs(comercial);
         assertThat(contrato.getResponsavel()).isSameAs(tecnico);
         assertThat(contrato.getUrlPdf()).isNull();
-        verifyNoInteractions(contratoNotificacaoService, revisaoDocumentoService);
+        verify(contratoNotificacaoService).notificarPreparacaoCriada(contrato);
+        verify(contratoNotificacaoService, never()).notificarContratoAprovado(any());
+        verifyNoInteractions(revisaoDocumentoService);
     }
 
     @Test

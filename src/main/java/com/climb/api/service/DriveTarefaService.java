@@ -1,6 +1,8 @@
 package com.climb.api.service;
 
 import com.climb.api.model.Contrato;
+import com.climb.api.model.ContratoKanbanTask;
+import com.climb.api.model.ContratoServicos;
 import com.climb.api.model.EmpresaDriveServico;
 import com.climb.api.model.enums.ServicoComercial;
 import com.climb.api.repository.EmpresaDriveRepository;
@@ -34,9 +36,12 @@ public class DriveTarefaService {
 
     @Transactional(readOnly = true)
     public Pastas servicos(Long tarefaId, Long usuarioId) {
-        Contrato contrato = contrato(tarefaId, usuarioId);
+        var tarefa = tarefas.exigirTaskVisivel(tarefaId, usuarioId);
+        Contrato contrato = tarefa.getContrato();
         Long empresaId = contrato.getEmpresa().getIdEmpresa();
-        var lista = organizacao.servicos(contrato).stream().map(servico -> new Servico(servico, organizacao.nomeServico(servico),
+        var servicoDaTarefa = ContratoServicos.daTarefa(tarefa);
+        var lista = (servicoDaTarefa == null ? List.<ServicoComercial>of() : List.of(servicoDaTarefa)).stream()
+                .map(servico -> new Servico(servico, organizacao.nomeServico(servico),
                 pastas.findByEmpresaIdAndServico(empresaId, servico).map(EmpresaDriveServico::getPastaId).orElse(null))).toList();
         String mensagem = empresas.findById(empresaId).map(fila -> fila.getErro()).orElse(null);
         return new Pastas(lista, mensagem);
@@ -78,11 +83,10 @@ public class DriveTarefaService {
         return drive.baixar(exigirDentroDaPasta(raiz, arquivoId));
     }
 
-    private Contrato contrato(Long tarefaId, Long usuarioId) { return tarefas.exigirTaskVisivel(tarefaId, usuarioId).getContrato(); }
-
     private String raiz(Long tarefaId, Long usuarioId, ServicoComercial servico) {
-        Contrato contrato = contrato(tarefaId, usuarioId);
-        if (!organizacao.servicos(contrato).contains(servico)) throw naoEncontrado();
+        ContratoKanbanTask tarefa = tarefas.exigirTaskVisivel(tarefaId, usuarioId);
+        Contrato contrato = tarefa.getContrato();
+        if (!Objects.equals(ContratoServicos.daTarefa(tarefa), servico) || !organizacao.servicos(contrato).contains(servico)) throw naoEncontrado();
         return pastas.findByEmpresaIdAndServico(contrato.getEmpresa().getIdEmpresa(), servico)
                 .map(EmpresaDriveServico::getPastaId).orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "A pasta do serviço está aguardando sincronização após a assinatura do contrato."));

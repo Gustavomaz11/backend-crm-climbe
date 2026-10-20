@@ -6,6 +6,7 @@ import java.time.LocalTime;
 import java.time.LocalDateTime;
 
 @Entity
+@EntityListeners(com.climb.api.model.listener.AvisosPersistenciaListener.class)
 @Table(name = "reunioes")
 public class Reuniao extends ItemArquivavelKanban {
 

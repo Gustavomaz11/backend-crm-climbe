@@ -52,6 +52,20 @@ class DriveTarefaServiceTest {
         verifyNoInteractions(drive);
     }
 
+    @Test void tarefaCfoNaoPodeAbrirPastaDeOutroServicoDoMesmoContrato() {
+        var tarefa = tarefas.exigirTaskVisivel(10L, 7L);
+        var proposta = new Proposta(); proposta.setServicos(List.of(
+                new PropostaServico(ServicoComercial.BPO, java.math.BigDecimal.ONE, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO),
+                new PropostaServico(ServicoComercial.CFO, java.math.BigDecimal.ONE, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO)));
+        tarefa.getContrato().setProposta(proposta);
+        var raia = new ContratoKanbanRaia(); raia.setContrato(tarefa.getContrato()); raia.setServico(ServicoComercial.CFO);
+        tarefa.setRaia(raia);
+        assertThat(service.servicos(10L, 7L).servicos()).extracting(DriveTarefaService.Servico::servico).containsExactly(ServicoComercial.CFO);
+        assertThatThrownBy(() -> service.listar(10L, 7L, ServicoComercial.BPO, null))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("404");
+        verifyNoInteractions(drive);
+    }
+
     @Test void criaSubpastasNaPastaRealDoServico() {
         when(drive.buscar("2026")).thenReturn(pasta("2026", "bpo")); when(drive.buscar("bpo")).thenReturn(pasta("bpo", "empresa"));
         service.criarPasta(20L, 7L, ServicoComercial.BPO, new DriveTarefaService.NovaPasta(" Balanços ", "2026"));

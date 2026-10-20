@@ -76,6 +76,8 @@ class ContratoKanbanServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(contratoRepository.findByIdForUpdate(any()))
+                .thenAnswer(invocacao -> contratoRepository.findById(invocacao.getArgument(0)));
         gestor = usuario(1L, "Gestor", "ATIVO");
         contrato = new Contrato();
         contrato.setIdContrato(CONTRATO_ID);

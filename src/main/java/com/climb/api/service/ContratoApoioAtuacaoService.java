@@ -32,7 +32,8 @@ public class ContratoApoioAtuacaoService {
         bloquearContrato(tarefa);
         LocalDateTime agora = LocalDateTime.now(clock);
         Map<Long, Usuario> selecionados = new HashMap<>();
-        if (!tarefa.getRaia().isConcluiTarefas()) {
+        if (!tarefa.getRaia().isConcluiTarefas() && !com.climb.api.model.ContratoServicos.encerrado(
+                tarefa.getContrato(), com.climb.api.model.ContratoServicos.daTarefa(tarefa))) {
             Set<Long> atribuidos = new HashSet<>();
             tarefa.getResponsaveisEfetivos().forEach(u -> atribuidos.add(u.getId()));
             tarefa.getApoios().stream().filter(u -> atribuidos.contains(u.getId()))

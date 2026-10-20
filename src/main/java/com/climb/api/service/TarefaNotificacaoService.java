@@ -39,7 +39,7 @@ public class TarefaNotificacaoService {
     }
 
     public void atribuicoes(ContratoKanbanTask tarefa, Set<Long> anteriores) {
-        String destino = "/contratos/kanban?contrato=" + tarefa.getContrato().getIdContrato() + "&tarefaId=" + tarefa.getIdTask();
+        String destino = ContratoKanbanEndereco.daTarefa(tarefa);
         notificarAtribuidos(tarefa.getResponsaveisEfetivos(), anteriores, tarefa.getTitulo(),
                 tarefa.getContrato().getEmpresaNomeFantasia(), tarefa.getDataFim(), destino);
     }
@@ -63,11 +63,11 @@ public class TarefaNotificacaoService {
     }
 
     private void notificarLider(ContratoKanbanTask tarefa, String tipo, String assunto, String acao) {
-        entrega.notificar(tarefa.getContrato().getResponsavel(), tipo, assunto,
+        entrega.notificar(com.climb.api.model.ContratoServicos.responsavelDaTarefa(tarefa), tipo, assunto,
                 "A tarefa \"" + tarefa.getTitulo() + "\" " + acao + ".\nEmpresa: "
                         + tarefa.getContrato().getEmpresaNomeFantasia() + ".\nResponsáveis: "
                         + tarefa.getResponsaveisEfetivos().stream().map(Usuario::getNomeCompleto).collect(Collectors.joining(", "))
                         + ".\nColuna: " + tarefa.getRaia().getTitulo() + ".",
-                "/contratos/kanban?contrato=" + tarefa.getContrato().getIdContrato() + "&tarefaId=" + tarefa.getIdTask());
+                ContratoKanbanEndereco.daTarefa(tarefa));
     }
 }

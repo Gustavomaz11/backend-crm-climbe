@@ -37,4 +37,6 @@ public interface NotificacaoRepository extends JpaRepository<Notificacao, Long> 
             @Param("dataLeitura") LocalDateTime dataLeitura);
 
     boolean existsByUsuario_IdAndMensagemAndTipoAndDataEnvio(Long usuarioId, String mensagem, String tipo, LocalDate dataEnvio);
+
+    boolean existsByUsuario_IdAndTipoAndMensagem(Long usuarioId, String tipo, String mensagem);
 }

@@ -21,21 +21,33 @@ public class ContratoNotificacaoService {
 
     private final NotificacaoRepository notificacaoRepository;
     private final EmailService emailService;
+    private final DocumentoFluxoNotificacaoService avisosFluxo;
     private final int diasAvisoVencimento;
 
     public ContratoNotificacaoService(NotificacaoRepository notificacaoRepository,
                                       EmailService emailService,
+                                      DocumentoFluxoNotificacaoService avisosFluxo,
                                       @Value("${app.contract-notifications.expiration-warning-days:30}") int diasAvisoVencimento) {
         this.notificacaoRepository = notificacaoRepository;
         this.emailService = emailService;
+        this.avisosFluxo = avisosFluxo;
         this.diasAvisoVencimento = diasAvisoVencimento;
     }
 
     public void notificarContratoCriado(Contrato contrato) {
+        avisosFluxo.contratoCriado(contrato);
+        if (ContratoService.STATUS_APROVADO.equals(contrato.getStatus())) avisosFluxo.contratoAprovado(contrato);
         String assunto = "Contrato criado";
         String mensagem = "Contrato #" + contrato.getIdContrato() + " criado com status " + contrato.getStatus() + ".";
-        notificarEquipeInterna(contrato, assunto, mensagem, TIPO_CONTRATO);
+        Usuario responsavel = obterResponsavel(contrato);
+        if (responsavel != null) emailService.enviarEmail(responsavel.getEmail(), assunto, montarCorpo(responsavel.getNomeCompleto(), mensagem));
     }
+
+    public void notificarPreparacaoCriada(Contrato contrato) { avisosFluxo.contratoCriado(contrato); }
+
+    public void notificarContratoAprovado(Contrato contrato) { avisosFluxo.contratoAprovado(contrato); }
+
+    public void notificarContratoAprovado(Contrato contrato, Integer versao) { avisosFluxo.contratoAprovado(contrato, versao); }
 
     public void notificarParticipacaoEquipe(Contrato contrato, Usuario usuario, boolean temporaria) {
         String empresa = contrato.getEmpresa() == null ? "Contrato #" + contrato.getIdContrato() : contrato.getEmpresa().getNomeFantasia();
@@ -126,13 +138,6 @@ public class ContratoNotificacaoService {
         if (empresa != null && empresa.getEmail() != null && !empresa.getEmail().isBlank()) {
             emailService.enviarEmail(empresa.getEmail(), assunto, montarCorpo(empresa.getNomeFantasia(), mensagem));
         }
-    }
-
-    private void notificarEquipeInterna(Contrato contrato, String assunto, String mensagem, String tipo) {
-        Usuario responsavel = obterResponsavel(contrato);
-        if (responsavel == null) return;
-        salvarNotificacao(responsavel, mensagem, tipo);
-        emailService.enviarEmail(responsavel.getEmail(), assunto, montarCorpo(responsavel.getNomeCompleto(), mensagem));
     }
 
     private void salvarNotificacao(Usuario usuario, String mensagem, String tipo) {

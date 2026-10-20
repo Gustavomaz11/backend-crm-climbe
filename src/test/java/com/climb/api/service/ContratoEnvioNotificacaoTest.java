@@ -13,7 +13,7 @@ class ContratoEnvioNotificacaoTest {
     void deveAvisarResponsavelComercialMesmoQuandoOutroUsuarioEnviou() {
         var repository = mock(NotificacaoRepository.class);
         var email = mock(EmailService.class);
-        var service = new ContratoNotificacaoService(repository, email, 30);
+        var service = new ContratoNotificacaoService(repository, email, mock(DocumentoFluxoNotificacaoService.class), 30);
         Usuario comercial = new Usuario(); comercial.setId(1L); comercial.setEmail("comercial@example.test");
         comercial.setNomeCompleto("Comercial");
         Usuario preparador = new Usuario(); preparador.setId(3L);
