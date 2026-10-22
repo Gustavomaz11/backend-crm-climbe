@@ -34,7 +34,7 @@ class PipelineDashboardCalculator {
                 conversaoPorEtapa(negocios, movimentacoes),
                 conversaoAgrupada(negocios, negocio -> negocio.getFunil().getNome()),
                 conversaoAgrupada(negocios, PipelineVendasNegocio::getEstrategiaComercial),
-                conversaoAgrupada(negocios, negocio -> negocio.getResponsavel().getNomeCompleto()),
+                conversaoAgrupada(negocios, PipelineVendasNegocio::getResponsavelNome),
                 tempoPorEtapa(movimentacoes),
                 motivosPerda(negocios, perdidos),
                 estagnados,
@@ -145,7 +145,7 @@ class PipelineDashboardCalculator {
         if (dias <= limite) return null;
         return new PipelineDashboardResponseDTO.NegocioAtencao(
                 negocio.getIdNegocio(), negocio.getNomeEmpresa(), negocio.getEtapa().getNome(),
-                negocio.getFunil().getNome(), negocio.getResponsavel().getNomeCompleto(), dias, limite);
+                negocio.getFunil().getNome(), negocio.getResponsavelNome(), dias, limite);
     }
 
     private double dias(LocalDateTime inicio, LocalDateTime fim) {

@@ -91,7 +91,7 @@ public class PipelineCampanhaExecucaoManager {
     }
 
     private Usuario escolherParticipante(PipelineVendasNegocio lead, List<Usuario> participantes, int indice) {
-        return participantes.stream().filter(usuario -> Objects.equals(usuario.getId(), lead.getResponsavel().getId()))
+        return participantes.stream().filter(usuario -> Objects.equals(usuario.getId(), lead.getResponsavelId()))
                 .findFirst().orElse(participantes.get(indice % participantes.size()));
     }
 

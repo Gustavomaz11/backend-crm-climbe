@@ -34,10 +34,10 @@ class PipelineEmpresaCadastroService {
         empresa.setRazaoSocial(dto.nomeEmpresa().trim());
         empresa.setNomeFantasia(dto.nomeEmpresa().trim());
         empresa.setCnpj(cnpj);
-        empresa.setTelefone(dto.telefone().trim());
-        empresa.setEmail(dto.email().trim().toLowerCase());
+        empresa.setTelefone(dto.telefone() == null ? "" : dto.telefone().trim());
+        empresa.setEmail(dto.email() == null ? "" : dto.email().trim().toLowerCase());
         empresa.setRepresentanteNome(dto.nomeContato().trim());
-        empresa.setRepresentanteContato(dto.telefone().trim());
+        empresa.setRepresentanteContato(empresa.getTelefone());
 
         try {
             empresa = empresaRepository.saveAndFlush(empresa);

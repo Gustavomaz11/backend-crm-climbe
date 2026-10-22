@@ -30,18 +30,23 @@ Essa operação cria o lead diretamente no funil **Pré-vendas · Todas as estra
 
 ```json
 {
-  "empresaId": 1,
+  "nomeEmpresa": "Empresa exemplo",
+  "cnpj": "11.222.333/0001-81",
   "nomeContato": "Representante exemplo",
   "telefone": "79999991234",
   "email": "contato@example.com",
-  "responsavelId": 1,
+  "responsavelId": 0,
   "origemNegocio": "Integração",
   "estrategiaComercial": "Contato direto",
   "observacoes": "Lead recebido pela plataforma parceira"
 }
 ```
 
-Substitua os IDs fictícios de empresa e responsável por registros existentes. `empresaId`, `nomeContato`, `responsavelId`, `origemNegocio` e `estrategiaComercial` são obrigatórios; telefone, e-mail e observações são opcionais, sujeitos às regras adicionais da etapa. A operação é incluída no catálogo e no PDF quando selecionada para a integração. Tokens existentes precisam receber essa nova permissão explicitamente.
+Não envie `empresaId`: a empresa é cadastrada automaticamente com `nomeEmpresa`, `cnpj` e os dados de contato, e seu ID é retornado na resposta. Se o CNPJ já estiver cadastrado, o sistema usa essa empresa sem alterar seus dados. `nomeEmpresa`, CNPJ válido, `nomeContato`, `origemNegocio` e `estrategiaComercial` são obrigatórios; telefone, e-mail e observações são opcionais, sujeitos às regras adicionais da etapa.
+
+Envie `responsavelId: 0` ou omita esse campo. O lead fica **Sem responsável**, disponível para atribuição a um usuário ativo pela tela de Pré-vendas. IDs positivos e negativos são rejeitados nessa operação. O banco mantém o vínculo de responsável vazio até a atribuição; nenhum usuário de ID 0 é criado. Negócios do funil de Vendas continuam exigindo responsável, inclusive na conversão de um lead.
+
+A operação é incluída no catálogo e no PDF quando selecionada para a integração. Tokens existentes precisam receber essa permissão explicitamente. A migração `V83__leads_sem_responsavel.sql` permite o vínculo vazio no banco; aplique-a pelo fluxo de Flyway do ambiente antes de usar o endpoint atualizado.
 
 ## Autenticação
 

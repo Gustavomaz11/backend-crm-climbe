@@ -40,6 +40,8 @@ class IntegracaoSecurityIntegrationTest {
     @Autowired PipelineVendasFunilRepository funis;
     @Autowired PipelineVendasEtapaRepository etapas;
     @Autowired PipelineVendasNegocioRepository negocios;
+    @Autowired PipelineVendasService pipeline;
+    @Autowired PipelineCampanhaService campanhas;
     @Autowired IntegracaoEscopo escopo;
     @Autowired IntegracaoEntregaService entrega;
     @Autowired WebApplicationContext context;
@@ -49,6 +51,8 @@ class IntegracaoSecurityIntegrationTest {
     @MockitoBean CloudflareR2ArquivoStorageService storage;
     @MockitoBean ZapSignClient signatures;
     @MockitoBean IntegracaoAuditoriaService auditoriaDeRequisicoes;
+    @MockitoBean DriveOrganizacaoService driveOrganizacao;
+    @MockitoBean EmpresaComprovanteService comprovantes;
     MockMvc mvc;
     @BeforeEach void setup() {
         when(rbac.temPermissao(anyLong(), any(PermissaoCodigo.class))).thenReturn(true);
@@ -241,27 +245,46 @@ class IntegracaoSecurityIntegrationTest {
         var outraEtapa = etapa(pre, "LEAD_CONECTADO", 1);
         var lista = etapa(pre, "LISTA_LEADS", 99);
         String token = tokenLead(c);
-        String body = new com.google.gson.Gson().toJson(Map.of("empresaId", empresaId, "nomeContato", "Lead da plataforma",
-                "responsavelId", c.getCriadoPor(), "origemNegocio", "Integração", "estrategiaComercial", "Contato direto",
+        long empresasAntes = empresas.count();
+        String body = new com.google.gson.Gson().toJson(Map.of("nomeEmpresa", "Nova empresa da plataforma", "cnpj", "11222333000181", "nomeContato", "Lead da plataforma",
+                "responsavelId", 0, "origemNegocio", "Integração", "estrategiaComercial", "Contato direto", "empresaId", empresaId,
                 "funilId", vendas.getIdFunil(), "etapaId", outraEtapa.getIdEtapa()));
         var resposta = mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
                 .contentType("application/json").content(body))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.funilId").value(pre.getIdFunil()))
                 .andExpect(jsonPath("$.etapaId").value(lista.getIdEtapa())).andExpect(jsonPath("$.resultado").value("ABERTO"))
+                .andExpect(jsonPath("$.responsavelId").value(0)).andExpect(jsonPath("$.empresaId").isNumber())
                 .andReturn().getResponse().getContentAsString();
         Long id = com.google.gson.JsonParser.parseString(resposta).getAsJsonObject().get("id").getAsLong();
-        assertThat(negocios.findById(id).orElseThrow().getFunil().getCodigo()).isEqualTo("PRE_VENDAS");
-        assertThat(negocios.findById(id).orElseThrow().getEtapa().getCodigo()).isEqualTo("LISTA_LEADS");
+        negocios.flush();
+        var lead = negocios.findById(id).orElseThrow();
+        assertThat(lead.getFunil().getCodigo()).isEqualTo("PRE_VENDAS");
+        assertThat(lead.getEtapa().getCodigo()).isEqualTo("LISTA_LEADS");
+        assertThat(lead.getResponsavel()).isNull();
+        assertThat(lead.getEmpresa().getIdEmpresa()).isNotEqualTo(empresaId);
+        assertThat(lead.getEmpresa().getCnpj()).isEqualTo("11.222.333/0001-81");
+        assertThat(empresas.count()).isEqualTo(empresasAntes + 1);
+        assertThat(pipeline.buscarBoard(c.getCriadoPor(), pre.getIdFunil()).etapas().stream().flatMap(e -> e.negocios().stream()))
+                .anySatisfy(n -> { assertThat(n.id()).isEqualTo(id); assertThat(n.responsavelNome()).isEqualTo("Sem responsável"); });
+        assertThat(campanhas.listarLeads(c.getCriadoPor())).hasSize(1);
+        assertThat(negocios.findDashboardNegocios(null, null, 0L, pre.getIdFunil(), null, null, null, null, null)).hasSize(1);
+        mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(body)).andExpect(status().isCreated());
+        assertThat(empresas.count()).isEqualTo(empresasAntes + 1);
+        var atribuicao = new com.climb.api.model.dto.PipelineNegocioRequestDTO(pre.getIdFunil(), lead.getEmpresa().getIdEmpresa(),
+                lead.getNomeEmpresa(), lead.getNomeContato(), "", "", c.getCriadoPor(), lista.getIdEtapa(), null,
+                lead.getOrigemNegocio(), lead.getEstrategiaComercial(), null, null, null);
+        assertThat(pipeline.atualizar(id, c.getCriadoPor(), atribuicao).responsavelId()).isEqualTo(c.getCriadoPor());
     }
     @Test void operacaoDeLeadsExigePermissaoPropriaENaoUsaFunilDeVendasSePreVendasNaoExistir() throws Exception {
-        var c = cliente(); Long empresaId = c.getEmpresaIds().iterator().next();
+        var c = cliente();
         var configuracao = new IntegracaoDTO.Cadastro(c.getNome(), c.getCnpj(), c.getResponsavel(), c.getEmail(), IntegracaoModulo.COMERCIAL,
                 Set.of("POST"), Set.of("comercial.negocios.criar"), Set.of(), c.getExpiraEm(), 120);
         service.salvar(c.getId(), configuracao, c.getCriadoPor());
         var credenciais = service.ativar(tokens.ativacao(service.buscar(c.getId())));
         var token = service.autenticar(credenciais.client_id(), credenciais.client_secret()).access_token();
-        String body = new com.google.gson.Gson().toJson(Map.of("empresaId", empresaId, "nomeContato", "Lead da plataforma",
-                "responsavelId", c.getCriadoPor(), "origemNegocio", "Integração", "estrategiaComercial", "Contato direto"));
+        String body = new com.google.gson.Gson().toJson(Map.of("nomeEmpresa", "Empresa nova", "cnpj", "11222333000181", "nomeContato", "Lead da plataforma",
+                "responsavelId", 0, "origemNegocio", "Integração", "estrategiaComercial", "Contato direto"));
         mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
                 .contentType("application/json").content(body)).andExpect(status().isForbidden());
         c = cliente(); token = tokenLead(c); funil("VENDAS_TESTE", "VENDAS", 1);
@@ -269,6 +292,30 @@ class IntegracaoSecurityIntegrationTest {
         mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
                 .contentType("application/json").content(body)).andExpect(status().isConflict());
         assertThat(negocios.count()).isEqualTo(antes);
+    }
+    @Test void validaCadastroDaEmpresaEAceitaResponsavelOmitidoComoZero() throws Exception {
+        var c = cliente(); var pre = funil("PRE_VENDAS", "PRE_VENDAS", 1); etapa(pre, "LISTA_LEADS", 1);
+        String token = tokenLead(c);
+        var body = new LinkedHashMap<String, Object>(Map.of("nomeEmpresa", "Empresa sem atribuição", "cnpj", "04.252.011/0001-10",
+                "nomeContato", "Contato", "origemNegocio", "Integração", "estrategiaComercial", "Contato direto"));
+        long empresasAntes = empresas.count();
+        mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(new com.google.gson.Gson().toJson(body)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.responsavelId").value(0));
+        assertThat(empresas.count()).isEqualTo(empresasAntes);
+        for (long responsavel : List.of(-1L, c.getCriadoPor())) {
+            body.put("responsavelId", responsavel);
+            mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                    .contentType("application/json").content(new com.google.gson.Gson().toJson(body))).andExpect(status().isBadRequest());
+        }
+        body.put("responsavelId", 0); body.put("cnpj", "11222333000100");
+        mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(new com.google.gson.Gson().toJson(body))).andExpect(status().isBadRequest());
+        body.remove("cnpj");
+        mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(new com.google.gson.Gson().toJson(body))).andExpect(status().isBadRequest());
+        assertThat(negocios.count()).isEqualTo(1);
+        assertThat(empresas.count()).isEqualTo(empresasAntes);
     }
     private String tokenLead(IntegracaoCliente c) {
         var cadastro = new IntegracaoDTO.Cadastro(c.getNome(), c.getCnpj(), c.getResponsavel(), c.getEmail(), IntegracaoModulo.COMERCIAL,

@@ -58,6 +58,8 @@ public class PipelinePreVendaService {
         venda.setPessoa(lead.getPessoa()); venda.setEmpresa(lead.getEmpresa()); venda.setNomeEmpresa(lead.getNomeEmpresa());
         venda.setNomeContato(lead.getNomeContato()); venda.setEmail(lead.getEmail()); venda.setTelefone(lead.getTelefone());
         venda.setResponsavel(responsavelId == null ? lead.getResponsavel() : usuarios.findById(responsavelId).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Responsável não encontrado")));
+        if (venda.getResponsavel() == null)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um responsável antes de converter o lead em venda");
         venda.setCriadoPor(usuarios.findById(usuarioId).orElseThrow());
         venda.setCampanhaOrigem(lead.getCampanhaOrigem()); venda.setEstrategiaComercial(lead.getEstrategiaComercial());
         venda.setOrigemNegocio(lead.getOrigemNegocio()); venda.setDataReuniao(lead.getDataReuniao());

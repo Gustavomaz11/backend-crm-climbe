@@ -41,8 +41,8 @@ public class PipelineVendasNegocio extends ItemArquivavelKanban {
     @Column(length = 180)
     private String email;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "responsavel_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "responsavel_id")
     private Usuario responsavel;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -119,6 +119,8 @@ public class PipelineVendasNegocio extends ItemArquivavelKanban {
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     public Usuario getResponsavel() { return responsavel; }
+    public Long getResponsavelId() { return responsavel == null ? 0L : responsavel.getId(); }
+    public String getResponsavelNome() { return responsavel == null ? "Sem responsável" : responsavel.getNomeCompleto(); }
     public void setResponsavel(Usuario responsavel) { this.responsavel = responsavel; }
     public PipelineVendasEtapa getEtapa() { return etapa; }
     public void setEtapa(PipelineVendasEtapa etapa) { this.etapa = etapa; }

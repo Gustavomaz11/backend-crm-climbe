@@ -17,18 +17,18 @@ class IntegracaoPreVendasServiceTest {
     PipelineVendasEtapaRepository etapas = mock(PipelineVendasEtapaRepository.class);
     PipelineVendasService negocios = mock(PipelineVendasService.class);
     IntegracaoEscopo escopo = mock(IntegracaoEscopo.class);
-    IntegracaoPreVendasService service = new IntegracaoPreVendasService(funis, etapas, negocios, escopo);
+    EmpresaRepository empresas = mock(EmpresaRepository.class);
+    IntegracaoPreVendasService service = new IntegracaoPreVendasService(funis, etapas, negocios, escopo, empresas);
     PipelineVendasFunil funil;
     PipelineVendasEtapa lista;
-    IntegracaoLeadRequest dados = new IntegracaoLeadRequest(7L, "Contato", "79999991234", "contato@example.com", 99L, "Integração", "Contato direto", null);
+    IntegracaoLeadRequest dados = new IntegracaoLeadRequest("Empresa exemplo", "11222333000181", "Contato", "79999991234", "contato@example.com", 0L, "Integração", "Contato direto", null);
 
     @BeforeEach void setup() {
         funil = new PipelineVendasFunil(); funil.setIdFunil(80L); funil.setTipo("PRE_VENDAS");
         lista = new PipelineVendasEtapa(); lista.setIdEtapa(120L); lista.setResultado(PipelineVendasResultado.ABERTO);
         when(funis.findByCodigoAndAtivoTrue("PRE_VENDAS")).thenReturn(Optional.of(funil));
         when(etapas.findByFunilIdFunilAndCodigoAndAtivoTrue(80L, "LISTA_LEADS")).thenReturn(Optional.of(lista));
-        var empresa = new Empresa(); empresa.setIdEmpresa(7L); empresa.setNomeFantasia("Empresa exemplo");
-        when(escopo.empresa(7L)).thenReturn(empresa); when(escopo.ator()).thenReturn(99L);
+        when(escopo.ator()).thenReturn(99L);
     }
     @Test void resolveDestinoPelosCodigosEDelegaCriacaoComDadosDoLead() {
         service.criar(dados);
@@ -36,9 +36,21 @@ class IntegracaoPreVendasServiceTest {
         verify(negocios).criar(eq(99L), payload.capture());
         assertThat(payload.getValue().funilId()).isEqualTo(80L);
         assertThat(payload.getValue().etapaId()).isEqualTo(120L);
-        assertThat(payload.getValue().empresaId()).isEqualTo(7L);
+        assertThat(payload.getValue().empresaId()).isNull();
+        assertThat(payload.getValue().cadastrarEmpresa()).isTrue();
+        assertThat(payload.getValue().cnpj()).isEqualTo("11222333000181");
+        assertThat(payload.getValue().responsavelId()).isZero();
         assertThat(payload.getValue().nomeContato()).isEqualTo("Contato");
         assertThat(payload.getValue().nomeEmpresa()).isEqualTo("Empresa exemplo");
+    }
+    @Test void reutilizaEmpresaIdentificadaPeloCnpjSemExigirIdDoIntegrador() {
+        var empresa = new Empresa(); empresa.setIdEmpresa(7L);
+        when(empresas.findFirstByCnpjIn(java.util.List.of("11222333000181", "11.222.333/0001-81"))).thenReturn(Optional.of(empresa));
+        service.criar(dados);
+        var payload = ArgumentCaptor.forClass(PipelineNegocioRequestDTO.class);
+        verify(negocios).criar(eq(99L), payload.capture());
+        assertThat(payload.getValue().empresaId()).isEqualTo(7L);
+        assertThat(payload.getValue().cadastrarEmpresa()).isFalse();
     }
     @Test void funilAusenteNaoCriaNegocioEmOutroDestino() {
         when(funis.findByCodigoAndAtivoTrue("PRE_VENDAS")).thenReturn(Optional.empty());

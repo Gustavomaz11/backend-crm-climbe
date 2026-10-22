@@ -110,13 +110,13 @@ public class PipelineVendasService {
         negocio.setCriadoEm(agora);
         negocio.setUltimaMovimentacaoEm(agora);
         negocio.setResultado(PipelineVendasResultado.ABERTO);
-        aplicarDados(negocio, dto, resolverEmpresa(dto));
         PipelineVendasEtapa etapa = resolverEtapaCriacao(dto);
         if (etapa.getResultado() != PipelineVendasResultado.ABERTO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Um negócio deve ser criado em uma etapa aberta");
         }
         negocio.setFunil(etapa.getFunil());
         negocio.setEtapa(etapa);
+        aplicarDados(negocio, dto, resolverEmpresa(dto));
         negocio.setResultado(negocio.getEtapa().getResultado());
         cadastros.aplicar(negocio, dto);
         if (negocio.getFunil().isPreVendas()) negocio.setValorEstimadoProposta(null);
@@ -381,9 +381,9 @@ public class PipelineVendasService {
 
 
     private void registrarAlteracoes(PipelineVendasNegocio negocio, Long usuarioId, NegocioSnapshot anterior) {
-        if (!Objects.equals(anterior.responsavelId(), negocio.getResponsavel().getId())) {
+        if (!Objects.equals(anterior.responsavelId(), negocio.getResponsavelId())) {
             historicoService.registrar(negocio, usuarioId, PipelineHistoricoTipo.ALTERACAO_RESPONSAVEL,
-                    "Responsável alterado de " + anterior.responsavelNome() + " para " + negocio.getResponsavel().getNomeCompleto());
+                    "Responsável alterado de " + anterior.responsavelNome() + " para " + negocio.getResponsavelNome());
         }
         if (!Objects.equals(anterior.valorEstimado(), negocio.getValorEstimadoProposta())) {
             historicoService.registrar(negocio, usuarioId, PipelineHistoricoTipo.ALTERACAO_VALOR_PROPOSTA,
@@ -424,7 +424,13 @@ public class PipelineVendasService {
         negocio.setNomeContato(dto.nomeContato().trim());
         negocio.setTelefone(dto.telefone() == null ? "" : dto.telefone().trim());
         negocio.setEmail(dto.email() == null ? "" : dto.email().trim().toLowerCase());
-        negocio.setResponsavel(buscarUsuario(dto.responsavelId(), "Responsável não encontrado"));
+        if (Long.valueOf(0).equals(dto.responsavelId()) && negocio.getFunil().isPreVendas()) {
+            negocio.setResponsavel(null);
+        } else {
+            if (dto.responsavelId() == null || dto.responsavelId() <= 0)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione um responsável para o negócio");
+            negocio.setResponsavel(buscarUsuario(dto.responsavelId(), "Responsável não encontrado"));
+        }
         negocio.setDataReuniao(dto.dataReuniao());
         negocio.setOrigemNegocio(dto.origemNegocio().trim());
         negocio.setEstrategiaComercial(dto.estrategiaComercial().trim());
@@ -578,7 +584,7 @@ public class PipelineVendasService {
                 negocio.getFunil().getIdFunil(), negocio.getFunil().getNome(),
                 negocio.getEmpresa() != null ? negocio.getEmpresa().getIdEmpresa() : null,
                 negocio.getNomeEmpresa(), negocio.getNomeContato(), negocio.getTelefone(), negocio.getEmail(),
-                negocio.getResponsavel().getId(), negocio.getResponsavel().getNomeCompleto(),
+                negocio.getResponsavelId(), negocio.getResponsavelNome(),
                 negocio.getEtapa().getIdEtapa(), negocio.getEtapa().getCodigo(), negocio.getEtapa().getNome(),
                 negocio.getDataReuniao(), negocio.getOrigemNegocio(), negocio.getEstrategiaComercial(),
                 negocio.getServicoInteresse(), negocio.getServicosInteresse(),
@@ -651,7 +657,7 @@ public class PipelineVendasService {
             return new NegocioSnapshot(
                     negocio.getEmpresa() == null ? null : negocio.getEmpresa().getIdEmpresa(),
                     negocio.getNomeEmpresa(), negocio.getNomeContato(), negocio.getTelefone(), negocio.getEmail(),
-                    negocio.getResponsavel().getId(), negocio.getResponsavel().getNomeCompleto(),
+                    negocio.getResponsavelId(), negocio.getResponsavelNome(),
                     negocio.getDataReuniao(), negocio.getOrigemNegocio(), negocio.getEstrategiaComercial(),
                     negocio.getServicoInteresse(), negocio.getValorEstimadoProposta(), negocio.getObservacoes(),
                     negocio.getEtapa().getIdEtapa(), negocio.getEtapa().getNome(), negocio.getResultado(),
@@ -689,7 +695,7 @@ public class PipelineVendasService {
         return negocioRepository.findByFunilIdFunilOrderByEtapaPosicaoAscUltimaMovimentacaoEmDesc(funil.getIdFunil()).stream()
                 .filter(PipelineVendasNegocio::estaArquivado)
                 .map(n -> new KanbanItemArquivadoDTO(n.getIdNegocio(), n.getNomeEmpresa(), n.getEtapa().getNome(),
-                        n.getResponsavel().getNomeCompleto(), n.getArquivadoEm(), toResponse(n))).toList();
+                        n.getResponsavelNome(), n.getArquivadoEm(), toResponse(n))).toList();
     }
 
     @Transactional

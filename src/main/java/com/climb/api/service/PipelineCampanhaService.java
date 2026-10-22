@@ -57,7 +57,7 @@ public class PipelineCampanhaService {
         return negocioRepository.findByResultadoOrderByCriadoEmDesc(PipelineVendasResultado.ABERTO).stream()
                 .map(negocio -> new PipelineCampanhaLeadDTO(
                         negocio.getIdNegocio(), negocio.getNomeEmpresa(), negocio.getNomeContato(),
-                        negocio.getResponsavel().getNomeCompleto(), negocio.getServicoInteresse(),
+                        negocio.getResponsavelNome(), negocio.getServicoInteresse(),
                         negocio.getFunil().getNome(), negocio.getEtapa().getNome(), negocio.getFunil().getTipo(),
                         negocio.getCampanhaOrigem() == null ? null : negocio.getCampanhaOrigem().getIdCampanha()))
                 .toList();

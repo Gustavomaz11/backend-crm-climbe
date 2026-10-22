@@ -35,9 +35,10 @@ public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineV
     @Query("""
             select negocio
             from PipelineVendasNegocio negocio
+            left join negocio.responsavel responsavel
             where (:inicio is null or negocio.criadoEm >= :inicio)
               and (:fimExclusivo is null or negocio.criadoEm < :fimExclusivo)
-              and (:responsavelId is null or negocio.responsavel.id = :responsavelId)
+              and (:responsavelId is null or responsavel.id = :responsavelId or (:responsavelId = 0 and responsavel is null))
               and ((:funilId is null and negocio.funil.tipo = 'VENDAS') or negocio.funil.idFunil = :funilId)
               and (:empresaId is null or negocio.empresa.idEmpresa = :empresaId)
               and (:resultado is null or negocio.resultado = :resultado)

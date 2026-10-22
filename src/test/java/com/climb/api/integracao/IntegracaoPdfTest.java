@@ -61,7 +61,10 @@ class IntegracaoPdfTest {
             int inicio = texto.lastIndexOf("--data '") + "--data '".length();
             var payload = com.google.gson.JsonParser.parseString(texto.substring(inicio, texto.indexOf("'", inicio))).getAsJsonObject();
             assertThat(payload.get("email").getAsString()).isEqualTo("contato@example.com");
-            assertThat(payload.has("funilId") || payload.has("etapaId")).isFalse();
+            assertThat(payload.has("funilId") || payload.has("etapaId") || payload.has("empresaId")).isFalse();
+            assertThat(payload.get("responsavelId").getAsInt()).isZero();
+            assertThat(payload.get("nomeEmpresa").getAsString()).isNotBlank();
+            assertThat(payload.get("cnpj").getAsString()).isNotBlank();
         }
     }
     @Test void todaRotaExternaTemEntradaNoCatalogoSemPermissoesImplicitas() {

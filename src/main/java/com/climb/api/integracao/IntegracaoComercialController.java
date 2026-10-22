@@ -85,9 +85,9 @@ public class IntegracaoComercialController {
     public NegocioResumo negocio(@PathVariable Long id) { escopo.negocio(id); return NegocioResumo.de(negocios.buscar(id, escopo.ator())); }
     @PostMapping("/pre-vendas/leads") @ResponseStatus(HttpStatus.CREATED)
     @IntegracaoEndpoint(codigo = "comercial.prevendas.leads.criar", modulo = COMERCIAL,
-            descricao = "Cria um lead na etapa Lista de leads do funil Pré-vendas · Todas as estratégias. O destino é automático; não envie funilId ou etapaId. empresaId deve identificar uma empresa já cadastrada.",
-            exemplo = "{\"empresaId\":1,\"nomeContato\":\"Representante exemplo\",\"telefone\":\"79999991234\",\"email\":\"contato@example.com\",\"responsavelId\":1,\"origemNegocio\":\"Integração\",\"estrategiaComercial\":\"Contato direto\",\"observacoes\":\"Lead recebido pela plataforma parceira\"}",
-            resposta = "{\"id\":1,\"empresaId\":1,\"funilId\":2,\"etapaId\":10,\"responsavelId\":1,\"nomeContato\":\"Representante exemplo\",\"resultado\":\"ABERTO\"}")
+            descricao = "Cria em Lista de leads do funil Pré-vendas · Todas as estratégias. O destino é automático. Envie nomeEmpresa e cnpj: a empresa é cadastrada ou localizada pelo CNPJ. empresaId é gerado pelo sistema; não envie empresaId, funilId ou etapaId. Envie responsavelId: 0 (ou omita) para ficar Sem responsável até atribuição pela tela.",
+            exemplo = "{\"nomeEmpresa\":\"Empresa exemplo\",\"cnpj\":\"11.222.333/0001-81\",\"nomeContato\":\"Representante exemplo\",\"telefone\":\"79999991234\",\"email\":\"contato@example.com\",\"responsavelId\":0,\"origemNegocio\":\"Integração\",\"estrategiaComercial\":\"Contato direto\",\"observacoes\":\"Lead recebido pela plataforma parceira\"}",
+            resposta = "{\"id\":1,\"empresaId\":1,\"funilId\":2,\"etapaId\":10,\"responsavelId\":0,\"nomeContato\":\"Representante exemplo\",\"resultado\":\"ABERTO\"}")
     public NegocioResumo criarLead(@Valid @RequestBody IntegracaoLeadRequest dto) {
         return NegocioResumo.de(preVendas.criar(dto));
     }

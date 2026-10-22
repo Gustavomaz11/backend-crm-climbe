@@ -51,7 +51,8 @@ public class IntegracaoPdfService {
                         ? "As consultas GET abrangem somente as empresas autorizadas listadas neste documento."
                         : "A empresa é definida na requisição ou pelo registro alterado, sem seleção prévia no cadastro da integração. Os vínculos entre registros continuam sendo validados.");
                 texto.linha("Header: Authorization: Bearer ACCESS_TOKEN");
-                texto.linha("Parâmetros de caminho: substitua cada {id}, {tarefaId} ou outro identificador pelo ID do registro autorizado.");
+                if (operacao.caminho().contains("{"))
+                    texto.linha("Parâmetros de caminho: substitua cada {id}, {tarefaId} ou outro identificador pelo ID do registro autorizado.");
                 if (!operacao.payloadExemplo().isBlank()) {
                     texto.linha("Content-Type: application/json"); texto.titulo("Payload de exemplo"); texto.json(operacao.payloadExemplo());
                 } else texto.linha("Esta operação não recebe corpo JSON.");

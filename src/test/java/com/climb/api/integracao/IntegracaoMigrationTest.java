@@ -7,6 +7,21 @@ import java.sql.DriverManager;
 import static org.assertj.core.api.Assertions.*;
 
 class IntegracaoMigrationTest {
+    @Test void permiteLeadSemResponsavelPreservandoVinculosExistentesEChaveEstrangeira() throws Exception {
+        try (var conn = DriverManager.getConnection("jdbc:h2:mem:lead_migration;MODE=MySQL", "sa", ""); var sql = conn.createStatement()) {
+            sql.execute("CREATE TABLE usuarios(id BIGINT PRIMARY KEY)");
+            sql.execute("CREATE TABLE pipeline_vendas_negocios(id_negocio BIGINT PRIMARY KEY, responsavel_id BIGINT NOT NULL REFERENCES usuarios(id))");
+            sql.execute("INSERT INTO usuarios VALUES(1)");
+            sql.execute("INSERT INTO pipeline_vendas_negocios VALUES(1,1)");
+            ScriptUtils.executeSqlScript(conn, new ClassPathResource("db/migration/V83__leads_sem_responsavel.sql"));
+            sql.execute("INSERT INTO pipeline_vendas_negocios VALUES(2,NULL)");
+            try (var rs = sql.executeQuery("SELECT responsavel_id FROM pipeline_vendas_negocios WHERE id_negocio=1")) {
+                assertThat(rs.next()).isTrue(); assertThat(rs.getLong(1)).isEqualTo(1);
+            }
+            assertThatThrownBy(() -> sql.execute("INSERT INTO pipeline_vendas_negocios VALUES(3,0)"))
+                    .isInstanceOf(java.sql.SQLException.class);
+        }
+    }
     @Test void migraEstruturaEConcedeGestaoSomenteAAdministradoresExistentes() throws Exception {
         try (var conn = DriverManager.getConnection("jdbc:h2:mem:integracao_migration;MODE=MySQL", "sa", ""); var sql = conn.createStatement()) {
             sql.execute("CREATE TABLE usuarios(id BIGINT PRIMARY KEY)");

@@ -36,6 +36,29 @@ class PipelinePreVendasIntegrationTest {
     @Autowired PessoaClienteRepository pessoas;
     @MockitoBean RbacService rbac;
 
+    @Test void leadSemResponsavelMantemCadenciaEPedeAtribuicaoParaConverterEmVenda() {
+        var f = preparar(); var campanha = campanha(f, "Leads da integração");
+        var dto = new PipelineNegocioRequestDTO(f.pre.getIdFunil(), f.empresa.getIdEmpresa(), "Empresa teste", "Maria", "", "",
+                0L, f.pre.getEtapas().getFirst().getIdEtapa(), null, "Integração", "Ativa", "", null, null,
+                List.of(), false, null, f.pessoa.getIdPessoa(), campanha.id(), Set.of(), Map.of());
+        var lead = vendas.criar(f.usuario.getId(), dto);
+        assertEquals(0L, lead.responsavelId()); assertEquals("Sem responsável", lead.responsavelNome());
+        assertEquals(1, tarefaRepository.findByNegocioIdNegocioOrderByPrazoAscCriadoEmDesc(lead.id()).size());
+        var erro = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> vendas.ganharPreVenda(lead.id(), f.usuario.getId(), f.venda.getIdFunil(), null));
+        assertEquals(400, erro.getStatusCode().value());
+        assertTrue(negocios.findByPreVendaOrigemIdNegocio(lead.id()).isEmpty());
+    }
+
+    @Test void negocioDeVendasContinuaExigindoResponsavel() {
+        var f = preparar();
+        var dto = new PipelineNegocioRequestDTO(f.venda.getIdFunil(), f.empresa.getIdEmpresa(), "Empresa teste", "Maria", "", "",
+                0L, f.venda.getEtapas().getFirst().getIdEtapa(), null, "Integração", "Ativa", "", null, null);
+        var erro = assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> vendas.criar(f.usuario.getId(), dto));
+        assertEquals(400, erro.getStatusCode().value());
+        assertEquals(0, negocios.count());
+    }
+
     @Test
     void pessoaPodeTerDoisLeadsEConversaoPreservaOrigemSemDuplicarVenda() {
         var f = preparar();
