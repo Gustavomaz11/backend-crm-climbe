@@ -79,6 +79,11 @@ public class ReuniaoController {
         service.deletar(id, getAuthenticatedUserId());
     }
 
+    @PostMapping("/{id}/cancelar")
+    public Reuniao cancelar(@PathVariable Long id) {
+        return service.cancelar(id, getAuthenticatedUserId());
+    }
+
     @GetMapping("/arquivados")
     public List<KanbanItemArquivadoDTO> listarArquivados() {
         return service.listarArquivados(getAuthenticatedUserId());

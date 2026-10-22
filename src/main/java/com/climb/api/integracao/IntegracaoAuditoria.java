@@ -14,5 +14,7 @@ public class IntegracaoAuditoria {
     @Column(length = 10) private String metodo;
     @Column(length = 255) private String rota;
     private Integer status;
+    @Column(name = "payload_requisicao", columnDefinition = "MEDIUMTEXT") private String payloadRequisicao;
+    @Column(name = "payload_limite_excedido", nullable = false) private boolean payloadLimiteExcedido;
     @Column(name = "criado_em", nullable = false) private Instant criadoEm = Instant.now();
 }

@@ -7,6 +7,17 @@ import java.sql.DriverManager;
 import static org.assertj.core.api.Assertions.*;
 
 class IntegracaoMigrationTest {
+    @Test void adicionaPayloadSemPreencherEventosAntigos() throws Exception {
+        try (var conn = DriverManager.getConnection("jdbc:h2:mem:payload_migration;MODE=MySQL", "sa", ""); var sql = conn.createStatement()) {
+            sql.execute("CREATE TABLE integracao_auditoria(id BIGINT PRIMARY KEY, evento VARCHAR(100))");
+            sql.execute("INSERT INTO integracao_auditoria VALUES(1,'REQUISICAO')");
+            ScriptUtils.executeSqlScript(conn, new ClassPathResource("db/migration/V84__payload_auditoria_integracoes.sql"));
+            try (var rs = sql.executeQuery("SELECT payload_requisicao,payload_limite_excedido FROM integracao_auditoria WHERE id=1")) {
+                assertThat(rs.next()).isTrue(); assertThat(rs.getString(1)).isNull(); assertThat(rs.getBoolean(2)).isFalse();
+            }
+            sql.execute("INSERT INTO integracao_auditoria(id,evento,payload_requisicao) VALUES(2,'REQUISICAO','{\"responsavelId\":0}')");
+        }
+    }
     @Test void permiteLeadSemResponsavelPreservandoVinculosExistentesEChaveEstrangeira() throws Exception {
         try (var conn = DriverManager.getConnection("jdbc:h2:mem:lead_migration;MODE=MySQL", "sa", ""); var sql = conn.createStatement()) {
             sql.execute("CREATE TABLE usuarios(id BIGINT PRIMARY KEY)");

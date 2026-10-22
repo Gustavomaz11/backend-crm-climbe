@@ -34,5 +34,13 @@ public final class IntegracaoDTO {
     public record Ativacao(@NotBlank @Size(max = 2048) String token) {}
     public record Credenciais(String client_id, String client_secret) {}
     public record Token(String access_token, String token_type, long expires_in, String scope) {}
+    public record AuditoriaResumo(Long id, String evento, Long atorId, String metodo, String rota, Integer status,
+                                  Instant criadoEm, boolean payloadDisponivel, boolean payloadLimiteExcedido) {
+        static AuditoriaResumo de(IntegracaoAuditoria a) {
+            return new AuditoriaResumo(a.getId(), a.getEvento(), a.getAtorId(), a.getMetodo(), a.getRota(), a.getStatus(),
+                    a.getCriadoEm(), a.getPayloadRequisicao() != null, a.isPayloadLimiteExcedido());
+        }
+    }
+    public record PayloadAuditoria(String payload) {}
     public record AlterarStatus(@Pattern(regexp = "SUSPENSO|ATIVO|REVOGADO") @NotNull String status) {}
 }

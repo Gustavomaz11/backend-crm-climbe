@@ -34,6 +34,7 @@ class IntegracaoSecurityIntegrationTest {
     @Autowired IntegracaoTokens tokens;
     @Autowired IntegracaoClienteRepository repository;
     @Autowired IntegracaoCatalogo catalogo;
+    @Autowired IntegracaoAuditoriaRepository auditoriaRepository;
     @Autowired EmpresaRepository empresas;
     @Autowired UsuarioRepository usuarios;
     @Autowired ContratoRepository contratos;
@@ -154,6 +155,42 @@ class IntegracaoSecurityIntegrationTest {
         mvc.perform(get("/integracoes").header("Authorization", "Bearer " + humano)).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].clientSecret").doesNotExist()).andExpect(jsonPath("$[0].secretHash").doesNotExist())
                 .andExpect(jsonPath("$[0].ativacaoNonce").doesNotExist());
+        verifyNoInteractions(auditoriaDeRequisicoes);
+    }
+
+    @Test void payloadExigeGestaoEEventoDaMesmaIntegracaoESoCarregaDetalheQuandoSolicitado() throws Exception {
+        var c = cliente();
+        var antigo = new IntegracaoAuditoria(); antigo.setIntegracaoId(c.getId()); antigo.setEvento("REQUISICAO");
+        antigo.setMetodo("POST"); antigo.setStatus(201); auditoriaRepository.saveAndFlush(antigo);
+        var evento = new IntegracaoAuditoria(); evento.setIntegracaoId(c.getId()); evento.setEvento("REQUISICAO");
+        evento.setMetodo("POST"); evento.setStatus(201); evento.setRota("/api/integracoes/v1/comercial/pre-vendas/leads");
+        evento.setPayloadRequisicao("{\"nomeContato\":\"Contato do payload\",\"responsavelId\":0}");
+        auditoriaRepository.saveAndFlush(evento);
+        String humano = sessoes.criar(usuarios.findById(c.getCriadoPor()).orElseThrow()).accessToken();
+        String detalhe = "/integracoes/" + c.getId() + "/auditoria/" + evento.getId() + "/payload";
+        String historico = mvc.perform(get("/integracoes/" + c.getId() + "/auditoria").header("Authorization", "Bearer " + humano))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$[0].payloadDisponivel").value(true)).andExpect(jsonPath("$[1].payloadDisponivel").value(false))
+                .andExpect(jsonPath("$[0].payloadRequisicao").doesNotExist()).andReturn().getResponse().getContentAsString();
+        assertThat(historico).doesNotContain("Contato do payload");
+        mvc.perform(get(detalhe).header("Authorization", "Bearer " + humano)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store")).andExpect(jsonPath("$.payload").value(evento.getPayloadRequisicao()));
+        var outra = cliente();
+        mvc.perform(get("/integracoes/" + outra.getId() + "/auditoria/" + evento.getId() + "/payload").header("Authorization", "Bearer " + humano)).andExpect(status().isNotFound());
+        mvc.perform(get("/integracoes/" + c.getId() + "/auditoria/" + antigo.getId() + "/payload").header("Authorization", "Bearer " + humano)).andExpect(status().isNotFound());
+        mvc.perform(get(detalhe)).andExpect(status().isUnauthorized());
+        mvc.perform(get(detalhe).header("Authorization", "Bearer " + tokenLead(c))).andExpect(status().isUnauthorized());
+        when(rbac.temPermissao(c.getCriadoPor(), PermissaoCodigo.INTEGRACOES_GERENCIAR)).thenReturn(false);
+        mvc.perform(get(detalhe).header("Authorization", "Bearer " + humano)).andExpect(status().isForbidden());
+    }
+
+    @Test void falhaDeCriacaoNaoArmazenaCorpoDaRequisicao() throws Exception {
+        var c = cliente(); String token = tokenLead(c);
+        mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("text/plain").content("{\"client_secret\":\"segredo-teste\"}"))
+                .andExpect(status().isUnsupportedMediaType());
+        verify(auditoriaDeRequisicoes).registrar(eq(c.getId()), eq("REQUISICAO"), isNull(), eq("POST"),
+                eq("/api/integracoes/v1/comercial/pre-vendas/leads"), eq(415), isNull(), eq(false));
     }
 
     @Test void gravacaoComercialDispensaEmpresasNoCadastroEIgnoraCamposDeAprovacaoEUsuario() throws Exception {
@@ -248,13 +285,17 @@ class IntegracaoSecurityIntegrationTest {
         long empresasAntes = empresas.count();
         String body = new com.google.gson.Gson().toJson(Map.of("nomeEmpresa", "Nova empresa da plataforma", "cnpj", "11222333000181", "nomeContato", "Lead da plataforma",
                 "responsavelId", 0, "origemNegocio", "Integração", "estrategiaComercial", "Contato direto", "empresaId", empresaId,
-                "funilId", vendas.getIdFunil(), "etapaId", outraEtapa.getIdEtapa()));
+                "funilId", vendas.getIdFunil(), "etapaId", outraEtapa.getIdEtapa(), "client_secret", "nao-persistir"));
         var resposta = mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
                 .contentType("application/json").content(body))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.funilId").value(pre.getIdFunil()))
                 .andExpect(jsonPath("$.etapaId").value(lista.getIdEtapa())).andExpect(jsonPath("$.resultado").value("ABERTO"))
                 .andExpect(jsonPath("$.responsavelId").value(0)).andExpect(jsonPath("$.empresaId").isNumber())
                 .andReturn().getResponse().getContentAsString();
+        var payloadCapturado = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(auditoriaDeRequisicoes).registrar(eq(c.getId()), eq("REQUISICAO"), isNull(), eq("POST"),
+                eq("/api/integracoes/v1/comercial/pre-vendas/leads"), eq(201), payloadCapturado.capture(), eq(false));
+        assertThat(payloadCapturado.getValue()).contains("Nova empresa da plataforma", "[OCULTO]").doesNotContain("nao-persistir");
         Long id = com.google.gson.JsonParser.parseString(resposta).getAsJsonObject().get("id").getAsLong();
         negocios.flush();
         var lead = negocios.findById(id).orElseThrow();

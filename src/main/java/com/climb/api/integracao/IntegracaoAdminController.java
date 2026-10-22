@@ -44,7 +44,18 @@ public class IntegracaoAdminController {
                 .body(pdf.gerar(service.buscar(id)));
     }
     @GetMapping("/{id}/auditoria")
-    public List<IntegracaoAuditoria> auditoria(@PathVariable String id) {
-        service.buscar(id); return auditoria.findTop100ByIntegracaoIdOrderByIdDesc(id);
+    public ResponseEntity<List<IntegracaoDTO.AuditoriaResumo>> auditoria(@PathVariable String id) {
+        service.buscar(id);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(auditoria.findTop100ByIntegracaoIdOrderByIdDesc(id)
+                .stream().map(IntegracaoDTO.AuditoriaResumo::de).toList());
+    }
+    @GetMapping("/{id}/auditoria/{eventoId}/payload")
+    public ResponseEntity<IntegracaoDTO.PayloadAuditoria> payload(@PathVariable String id, @PathVariable Long eventoId) {
+        service.buscar(id);
+        var evento = auditoria.findByIdAndIntegracaoId(eventoId, id)
+                .filter(a -> a.getPayloadRequisicao() != null)
+                .orElseThrow(() -> IntegracaoService.erro(HttpStatus.NOT_FOUND, "Payload não registrado para este evento."));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(new IntegracaoDTO.PayloadAuditoria(evento.getPayloadRequisicao()));
     }
 }

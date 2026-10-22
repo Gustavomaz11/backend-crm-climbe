@@ -100,6 +100,10 @@ public class Reuniao extends ItemArquivavelKanban {
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 
+    public boolean estaCancelada() {
+        return "CANCELADA".equals(status) || "CANCELADO".equals(status);
+    }
+
     public String getGoogleEventId() { return googleEventId; }
     public Long getOrganizadorId() { return organizadorId; }
     public void setOrganizadorId(Long organizadorId) { this.organizadorId = organizadorId; }

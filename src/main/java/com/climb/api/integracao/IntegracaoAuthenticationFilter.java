@@ -5,6 +5,7 @@ import jakarta.servlet.http.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,6 +39,7 @@ public class IntegracaoAuthenticationFilter extends OncePerRequestFilter {
             operacao = catalogo.localizar(request.getMethod(), caminho).orElse(null);
         } catch (ResponseStatusException e) { responder(response, e); return; }
         int status = 500;
+        var requisicao = new ContentCachingRequestWrapper(request, IntegracaoPayloadAuditoria.LIMITE_BYTES + 1);
         try {
             if (operacao == null || operacao.modulo() != cliente.getModulo()
                     || !cliente.getMetodos().contains(request.getMethod()) || !cliente.getOperacoes().contains(operacao.codigo())) {
@@ -46,13 +48,15 @@ public class IntegracaoAuthenticationFilter extends OncePerRequestFilter {
             } else {
                 var auth = new UsernamePasswordAuthenticationToken(cliente, null, List.of(new SimpleGrantedAuthority("ROLE_INTEGRATION")));
                 SecurityContextHolder.getContext().setAuthentication(auth);
-                chain.doFilter(request, response);
+                chain.doFilter(requisicao, response);
             }
             status = response.getStatus();
         } finally {
             SecurityContextHolder.clearContext();
+            var captura = IntegracaoPayloadAuditoria.capturar(requisicao, status);
             auditoria.registrar(cliente.getId(), "REQUISICAO", null, request.getMethod(),
-                    operacao == null ? "/api/integracoes/operacao-nao-catalogada" : operacao.caminho(), status);
+                    operacao == null ? "/api/integracoes/operacao-nao-catalogada" : operacao.caminho(), status,
+                    captura.payload(), captura.limiteExcedido());
         }
     }
     private void responder(HttpServletResponse response, ResponseStatusException e) throws IOException {

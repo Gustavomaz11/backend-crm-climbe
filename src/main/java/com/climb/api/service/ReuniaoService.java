@@ -151,7 +151,7 @@ public class ReuniaoService {
         Reuniao reuniao = buscarPorId(id, usuarioId);
         var detalhes = ReuniaoListItemDTO.fromEntity(reuniao);
         Event eventoGoogle = null;
-        if (StringUtils.hasText(reuniao.getGoogleEventId())) {
+        if (!reuniao.estaCancelada() && StringUtils.hasText(reuniao.getGoogleEventId())) {
             String token = googleCredentialService.obterAccessToken(usuarioId).orElse(null);
             if (StringUtils.hasText(token)) {
                 try {
@@ -231,10 +231,14 @@ public class ReuniaoService {
 
     @Transactional
     public Reuniao atualizar(Long id, Long usuarioId, ReuniaoRequestDTO request) {
+        if ("CANCELADA".equals(request.getStatus()) || "CANCELADO".equals(request.getStatus())) {
+            return cancelar(id, usuarioId);
+        }
         exigirUsuarioAutenticado(usuarioId);
         Reuniao reuniao = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Reuniao nao encontrada"));
         exigirParticipante(reuniao.getIdReuniao(), usuarioId);
+        boolean estavaCancelada = reuniao.estaCancelada();
         Long organizadorId = reuniao.getOrganizadorId() == null ? usuarioId : reuniao.getOrganizadorId();
         String accessToken = exigirCredencialGoogle(organizadorId);
         String agendamentoAnterior = assinaturaAgendamento(reuniao);
@@ -251,7 +255,7 @@ public class ReuniaoService {
                 request.getParticipanteIds() == null ? new ArrayList<>(convidadosAnteriores) : request.getParticipanteIds(), organizadorId));
 
         try {
-            Event evento = salva.getGoogleEventId() == null
+            Event evento = estavaCancelada || salva.getGoogleEventId() == null
                     ? googleCalendarService.criarEvento(salva, accessToken, emailsConvidados(convidados), emailOrganizador(salva, convidados))
                     : googleCalendarService.atualizarEvento(salva, accessToken, emailsConvidados(convidados));
             salva.setGoogleEventId(evento.getId());
@@ -267,6 +271,30 @@ public class ReuniaoService {
             if (!novos.isEmpty()) reuniaoEmailService.notificarAgendamento(salva, novos);
         }
         return salva;
+    }
+
+    @Transactional
+    public Reuniao cancelar(Long id, Long usuarioId) {
+        exigirUsuarioAutenticado(usuarioId);
+        Reuniao reuniao = repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reunião não encontrada."));
+        if (!usuarioId.equals(reuniao.getOrganizadorId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Somente o criador pode cancelar esta reunião.");
+        }
+        if (reuniao.estaCancelada()) return reuniao;
+
+        if (StringUtils.hasText(reuniao.getGoogleEventId())) {
+            String accessToken = exigirCredencialGoogle(usuarioId);
+            try {
+                googleCalendarService.deletarEvento(reuniao.getGoogleEventId(), accessToken);
+            } catch (Exception e) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                        "Não foi possível cancelar no Google Agenda. Tente novamente.", e);
+            }
+        }
+        reuniao.setStatus("CANCELADA");
+        reuniao.setLinkMeet(null);
+        return repository.save(reuniao);
     }
 
     @Transactional
@@ -388,7 +416,7 @@ public class ReuniaoService {
     }
 
     private boolean sincronizarEventoGoogle(Reuniao reuniao, String accessToken) {
-        if (reuniao.getGoogleEventId() == null || reuniao.getGoogleEventId().isBlank()) {
+        if (reuniao.estaCancelada() || !StringUtils.hasText(reuniao.getGoogleEventId())) {
             return true;
         }
 

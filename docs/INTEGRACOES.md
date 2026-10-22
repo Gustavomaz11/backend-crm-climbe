@@ -63,11 +63,19 @@ Também aceita `client_id` e `client_secret` no formulário, sem combinar as dua
 
 O token tem duração máxima de 15 minutos, limitada à validade da integração. Sua assinatura, emissor, audiência, tipo e versão são independentes dos tokens de usuários. A cada requisição são conferidos status, validade, usuário criador ativo, versão, módulo, método e operação. Suspensão, revogação, edição de permissões e rotação invalidam os tokens existentes; reativação não restaura tokens antigos. A rotação também invalida o segredo e exige nova ativação. Revogação é permanente.
 
-O limite por integração é persistido e compartilhado entre instâncias e tokens, incluindo a emissão de tokens. Há proteção adicional de 30 tentativas por minuto/IP nas rotas públicas, por instância; configure também o limite de entrada no proxy em ambientes com múltiplas instâncias. O IP vem do endereço remoto informado pelo servidor; como o projeto utiliza forwarded headers, o proxy deve limpar os headers de origem recebidos da internet e informar o IP confiável. Respostas 429 incluem `Retry-After`. As últimas 100 entradas de auditoria podem ser consultadas na tela; o banco preserva o histórico completo sem corpos de requisição, tokens ou segredos.
+O limite por integração é persistido e compartilhado entre instâncias e tokens, incluindo a emissão de tokens. Há proteção adicional de 30 tentativas por minuto/IP nas rotas públicas, por instância; configure também o limite de entrada no proxy em ambientes com múltiplas instâncias. O IP vem do endereço remoto informado pelo servidor; como o projeto utiliza forwarded headers, o proxy deve limpar os headers de origem recebidos da internet e informar o IP confiável. Respostas 429 incluem `Retry-After`. As últimas 100 entradas de auditoria podem ser consultadas na tela; o banco preserva o histórico completo.
+
+## Payload das criações no histórico
+
+Em **Tokens e Integração → Histórico → Ver payload**, administradores com `INTEGRACOES_GERENCIAR` podem consultar o JSON enviado nas novas criações externas (`POST` com resposta `201`). O corpo é registrado após a conclusão e exibido formatado; ele representa os dados recebidos, inclusive os campos que o endpoint ignorou, com campos de credenciais substituídos por `[OCULTO]`, também em objetos e listas aninhados. Cabeçalhos de autenticação e corpos das rotas de ativação/emissão de tokens não são armazenados.
+
+A captura aceita JSON de até 64 KB e profundidade de até 64 níveis. Corpos maiores são omitidos integralmente e o histórico indica **Acima de 64 KB**, sem impedir a operação. Falhas, outros métodos/respostas e eventos anteriores à atualização continuam sem corpo registrado; o payload de eventos antigos não pode ser recuperado.
+
+`GET /integracoes/{id}/auditoria` retorna somente metadados e os indicadores `payloadDisponivel`/`payloadLimiteExcedido`. O detalhe é carregado sob demanda em `GET /integracoes/{id}/auditoria/{eventoId}/payload`, com a mesma permissão administrativa e validação do vínculo entre evento e integração. Ambas as respostas usam `Cache-Control: no-store`. Tokens externos não acessam essas rotas administrativas.
 
 ## Configuração e execução
 
-Aplique **V82__tokens_integracoes.sql** pelo Flyway antes de iniciar esta versão. No perfil `prod`, o Flyway executa na inicialização por padrão. Em desenvolvimento, ou com `SPRING_FLYWAY_ENABLED=false`, rode o serviço de migrations (`docker compose run --rm flyway`, com o banco disponível) antes de reiniciar o backend. Atualize também o frontend. Configure:
+Aplique as migrations até **V84__payload_auditoria_integracoes.sql** pelo Flyway antes de iniciar esta versão. No perfil `prod`, o Flyway executa na inicialização por padrão. Em desenvolvimento, ou com `SPRING_FLYWAY_ENABLED=false`, rode o serviço de migrations (`docker compose run --rm flyway`, com o banco disponível) antes de reiniciar o backend. Atualize também o frontend. Configure:
 
 ```dotenv
 INTEGRACOES_API_URL=https://climbe-api-ewke.onrender.com
