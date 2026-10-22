@@ -14,6 +14,7 @@ public class IntegracaoEscopo {
     private final PropostaRepository propostas;
     private final EmpresaRepository empresas;
     private final PipelineVendasNegocioRepository negocios;
+    private final jakarta.servlet.http.HttpServletRequest request;
 
     public IntegracaoCliente cliente() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
@@ -23,7 +24,14 @@ public class IntegracaoEscopo {
     }
     public Long ator() { return cliente().getCriadoPor(); }
     public Set<Long> empresas() { return cliente().getEmpresaIds(); }
-    public boolean permite(Long empresaId) { return empresaId != null && empresas().contains(empresaId); }
+    public boolean permite(Long empresaId) {
+        if (empresaId == null) return false;
+        var integracao = cliente();
+        String metodo = request.getMethod();
+        if (metodo == null || !integracao.getMetodos().contains(metodo)) return false;
+        if ("GET".equals(metodo)) return integracao.getEmpresaIds().contains(empresaId);
+        return Set.of("POST", "PUT", "DELETE", "PATCH").contains(metodo);
+    }
     public Empresa empresa(Long id) {
         if (!permite(id)) throw indisponivel();
         return empresas.findById(id).orElseThrow(IntegracaoEscopo::indisponivel);

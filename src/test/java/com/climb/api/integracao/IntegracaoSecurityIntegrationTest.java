@@ -104,7 +104,7 @@ class IntegracaoSecurityIntegrationTest {
         mvc.perform(get("/integracoes").header("Authorization", "Bearer " + humano)).andExpect(status().isForbidden());
     }
 
-    @Test void nuncaListaOuAlteraDadosDeOutraEmpresa() throws Exception {
+    @Test void filtroDeEmpresasRestringeGetSemRestringirDeleteEmTokenCombinado() throws Exception {
         var c = cliente(); var permitida = empresas.findById(c.getEmpresaIds().iterator().next()).orElseThrow();
         var outra = empresa("11.222.333/0001-81"); var user = usuarios.findById(c.getCriadoPor()).orElseThrow();
         contrato(permitida, user); contrato(outra, user);
@@ -116,8 +116,8 @@ class IntegracaoSecurityIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.itens[0].empresaId").value(permitida.getIdEmpresa()));
         var externo = contratos.findByEmpresa_IdEmpresaOrderByIdContratoDesc(outra.getIdEmpresa()).getFirst();
         mvc.perform(get("/api/integracoes/v1/juridico/contratos/" + externo.getIdContrato()).header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
-        mvc.perform(delete("/api/integracoes/v1/juridico/contratos/" + externo.getIdContrato()).header("Authorization", "Bearer " + token)).andExpect(status().isNotFound());
-        assertThat(contratos.existsById(externo.getIdContrato())).isTrue();
+        mvc.perform(delete("/api/integracoes/v1/juridico/contratos/" + externo.getIdContrato()).header("Authorization", "Bearer " + token)).andExpect(status().isNoContent());
+        assertThat(contratos.existsById(externo.getIdContrato())).isFalse();
     }
 
     @Test void limiteCompartilhadoNaoPodeSerContornadoEmitindoOutroToken() throws Exception {
@@ -149,14 +149,14 @@ class IntegracaoSecurityIntegrationTest {
                 .andExpect(jsonPath("$[0].ativacaoNonce").doesNotExist());
     }
 
-    @Test void gravacaoComercialRestringeEmpresaEIgnoraCamposDeAprovacaoEUsuario() throws Exception {
+    @Test void gravacaoComercialDispensaEmpresasNoCadastroEIgnoraCamposDeAprovacaoEUsuario() throws Exception {
         var c = cliente();
+        Long empresaId = c.getEmpresaIds().iterator().next();
         var input = new IntegracaoDTO.Cadastro(c.getNome(), c.getCnpj(), c.getResponsavel(), c.getEmail(), IntegracaoModulo.COMERCIAL,
-                Set.of("POST", "PATCH"), Set.of("comercial.propostas.criar", "comercial.propostas.valuation"), c.getEmpresaIds(), c.getExpiraEm(), 120);
-        service.salvar(c.getId(), input, c.getCriadoPor());
+                Set.of("POST", "PATCH"), Set.of("comercial.propostas.criar", "comercial.propostas.valuation"), null, c.getExpiraEm(), 120);
+        assertThat(service.salvar(c.getId(), input, c.getCriadoPor()).empresaIds()).isEmpty();
         var segredo = service.ativar(tokens.ativacao(service.buscar(c.getId())));
         String token = service.autenticar(segredo.client_id(), segredo.client_secret()).access_token();
-        Long empresaId = c.getEmpresaIds().iterator().next();
         var resultado = mvc.perform(post("/api/integracoes/v1/comercial/propostas").header("Authorization", "Bearer " + token)
                 .contentType("application/json").content("{\"empresaId\":" + empresaId + ",\"valuation\":100000,\"status\":\"APROVADA\",\"usuarioId\":999999}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("PENDENTE"))
@@ -168,7 +168,22 @@ class IntegracaoSecurityIntegrationTest {
         var outra = empresa("11.222.333/0001-81");
         mvc.perform(post("/api/integracoes/v1/comercial/propostas").header("Authorization", "Bearer " + token)
                 .contentType("application/json").content("{\"empresaId\":" + outra.getIdEmpresa() + ",\"valuation\":100000}"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.empresaId").value(outra.getIdEmpresa()));
+        mvc.perform(get("/api/integracoes/v1/comercial/propostas").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+    }
+
+    @Test void cadastroAdminAceitaEmpresaIdsOmitidoSemGetEExigeEmpresasComGet() throws Exception {
+        var c = cliente(); var humano = sessoes.criar(usuarios.findById(c.getCriadoPor()).orElseThrow()).accessToken();
+        var dados = new LinkedHashMap<String, Object>(Map.of("nome", c.getNome(), "cnpj", c.getCnpj(),
+                "responsavel", c.getResponsavel(), "email", c.getEmail(), "modulo", "COMERCIAL",
+                "metodos", List.of("POST"), "operacoes", List.of("comercial.propostas.criar"),
+                "expiraEm", c.getExpiraEm().toString(), "limitePorMinuto", 120));
+        var gson = new com.google.gson.Gson();
+        mvc.perform(post("/integracoes").header("Authorization", "Bearer " + humano).contentType("application/json").content(gson.toJson(dados)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.empresaIds").isEmpty());
+        dados.put("metodos", List.of("GET")); dados.put("operacoes", List.of("comercial.propostas.listar"));
+        mvc.perform(post("/integracoes").header("Authorization", "Bearer " + humano).contentType("application/json").content(gson.toJson(dados)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("Selecione ao menos uma empresa autorizada para GET."));
     }
 
     @Test void filaNaoSobrescreveReenvioNovoEReagendaFalhaSemPersistirSegredo() {

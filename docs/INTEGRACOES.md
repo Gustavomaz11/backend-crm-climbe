@@ -4,7 +4,7 @@ O menu fica em **Configurações → Tokens e Integração**. A permissão `INTE
 
 ## Cadastro e entrega
 
-Informe plataforma/empresa, CNPJ (numérico ou alfanumérico com dígitos verificadores), representante e e-mail. Selecione um módulo, os métodos HTTP, as operações e as empresas cujos dados podem ser acessados. Informe validade e limite por minuto. Uma integração pode acessar várias empresas explicitamente autorizadas; o CNPJ do destinatário não define o escopo dos dados.
+Informe plataforma/empresa, CNPJ (numérico ou alfanumérico com dígitos verificadores), representante e e-mail. Selecione um módulo, os métodos HTTP e as operações. Informe validade e limite por minuto. A seleção de empresas aparece e é obrigatória somente quando GET estiver marcado; ela limita exclusivamente as consultas. Para POST, PUT, DELETE e PATCH, não é necessário preencher empresas no cadastro: a empresa vem da requisição ou do registro alterado. Em integrações com métodos combinados, a seleção continua restringindo apenas GET. O CNPJ do destinatário identifica a plataforma que recebe as credenciais.
 
 O cadastro enfileira um e-mail com Client ID, documentação PDF e link de ativação. O link usa o fragmento da URL, expira em até 24 horas e só é consumido quando o destinatário clica em **Ativar e mostrar credenciais**. O segredo aleatório de 256 bits é criado nessa etapa, exibido uma vez e armazenado apenas como SHA-256. Não aparece em listagens, logs, PDF ou reenvios.
 
@@ -20,7 +20,7 @@ Os endpoints externos ficam em `/api/integracoes/v1` e são separados das rotas 
 
 Essas são as operações publicadas na primeira versão da API externa. Rotas internas de administração, usuários e outras operações não catalogadas continuam indisponíveis para integrações. Edição genérica não permite aprovar contratos ou mover tarefas/negócios: cada ação possui autorização explícita. As regras e permissões de negócio do usuário criador continuam sendo verificadas pelos serviços existentes. As respostas usam projeções próprias, sem expor entidades completas ou o catálogo global de usuários.
 
-Listagens filtram as empresas no banco e recebem `pagina` (inicia em 0) e `tamanho` (1–100; padrão 50). Registros fora do escopo respondem 404. A consulta individual e cada alteração validam o escopo antes de executar o serviço, incluindo vínculos entre empresas, propostas e negócios.
+As consultas GET, tanto listagens quanto acessos individuais, ficam limitadas às empresas selecionadas. Listagens filtram as empresas no banco e recebem `pagina` (inicia em 0) e `tamanho` (1–100; padrão 50). Consultas fora do escopo respondem 404. POST, PUT, DELETE e PATCH dispensam esse filtro, mas exigem os registros necessários à operação e preservam as validações de negócio, permissões e vínculos entre empresas, propostas e negócios. Um token sem GET não pode consultar dados, mesmo que tenha permissão para gravá-los.
 
 ## Autenticação
 

@@ -26,10 +26,21 @@ class IntegracaoPdfTest {
         try (var doc = Loader.loadPDF(bytes)) {
             var texto = new PDFTextStripper().getText(doc);
             assertThat(texto).contains("/api/integracoes/oauth/token", "PATCH", "/contratos/{id}/aprovar", "APROVADO", "CLIENT_SECRET");
+            assertThat(texto).contains("Empresas autorizadas para GET", "consultas GET", "seleção prévia");
             assertThat(texto).doesNotContain("DELETE", "/comercial/", "/tecnico/");
             assertThat(doc.getNumberOfPages()).isGreaterThanOrEqualTo(3);
             var renderer = new PDFRenderer(doc);
             for (int i = 0; i < doc.getNumberOfPages(); i++) ImageIO.write(renderer.renderImageWithDPI(i, 100), "png", dir.resolve("pagina-" + (i + 1) + ".png").toFile());
+        }
+    }
+    @Test void pdfSemGetNaoExibeSelecaoDeEmpresas() throws Exception {
+        var pdf = new IntegracaoPdfService(new IntegracaoCatalogo()); ReflectionTestUtils.setField(pdf, "apiUrl", "https://api.example.com");
+        var c = new IntegracaoCliente(); c.setNome("Plataforma exemplo"); c.setClientId("climbe_exemplo"); c.setModulo(IntegracaoModulo.COMERCIAL);
+        c.setMetodos(Set.of("POST")); c.setOperacoes(Set.of("comercial.propostas.criar")); c.setEmpresaIds(Set.of()); c.setExpiraEm(Instant.parse("2027-12-31T23:59:59Z"));
+        try (var doc = Loader.loadPDF(pdf.gerar(c))) {
+            var texto = new PDFTextStripper().getText(doc);
+            assertThat(texto).doesNotContain("Empresas autorizadas", "consultas GET");
+            assertThat(texto).contains("seleção prévia", "comercial.propostas.criar");
         }
     }
     @Test void todaRotaExternaTemEntradaNoCatalogoSemPermissoesImplicitas() {

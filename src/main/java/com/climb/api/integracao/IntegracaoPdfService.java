@@ -23,7 +23,7 @@ public class IntegracaoPdfService {
             texto.linha("Empresa/plataforma: " + cliente.getNome());
             texto.linha("Client ID: " + cliente.getClientId());
             texto.linha("Módulo: " + cliente.getModulo() + " | Métodos: " + String.join(", ", new TreeSet<>(cliente.getMetodos())));
-            texto.linha("Empresas autorizadas (IDs): " + new TreeSet<>(cliente.getEmpresaIds()));
+            if (cliente.getMetodos().contains("GET")) texto.linha("Empresas autorizadas para GET (IDs): " + new TreeSet<>(cliente.getEmpresaIds()));
             texto.linha("Validade: " + DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm z").withZone(ZoneId.of("America/Sao_Paulo")).format(cliente.getExpiraEm()));
             texto.linha("Versão da API: v1 | Documento gerado em " + LocalDate.now(ZoneId.of("America/Sao_Paulo")));
             texto.linha("URL base: " + apiUrl.replaceAll("/+$", ""));
@@ -38,7 +38,7 @@ public class IntegracaoPdfService {
             texto.json("{\"access_token\":\"TOKEN_EXEMPLO\",\"token_type\":\"Bearer\",\"expires_in\":900,\"scope\":\"OPERACOES_AUTORIZADAS\"}");
             texto.linha("Envie Authorization: Bearer ACCESS_TOKEN nas operações abaixo. O token dura até 15 minutos, limitado à validade da integração. Obtenha outro token usando as credenciais quando expirar; não há refresh token.");
             texto.titulo("Regras de acesso e erros");
-            texto.linha("Acesso limitado ao módulo, métodos, operações e empresas deste cadastro. As regras de negócio e permissões do usuário que criou a integração continuam aplicáveis. Novos endpoints exigem liberação explícita.");
+            texto.linha("Acesso limitado ao módulo, métodos e operações deste cadastro. As regras de negócio e permissões do usuário que criou a integração continuam aplicáveis. Novos endpoints exigem liberação explícita.");
             texto.linha("Limite compartilhado: " + cliente.getLimitePorMinuto() + " requisições/minuto por integração, incluindo emissão de tokens. Respostas 429 incluem Retry-After. Paginação começa em zero e aceita tamanho entre 1 e 100.");
             texto.linha("HTTP 400: dados inválidos; 401: credencial inválida, expirada ou revogada; 403: operação sem permissão; 404: registro inexistente ou fora do escopo; 409: conflito; 429: limite atingido. Verifique o campo message da resposta.");
             texto.linha("IDs e valores abaixo são fictícios. Substitua-os pelos registros autorizados. Não repita gravações automaticamente sem verificar o resultado anterior.");
@@ -47,6 +47,9 @@ public class IntegracaoPdfService {
                 texto.titulo(operacao.metodo() + " " + operacao.caminho());
                 texto.linha("Operação: " + operacao.codigo());
                 texto.linha(operacao.descricao());
+                texto.linha("GET".equals(operacao.metodo())
+                        ? "As consultas GET abrangem somente as empresas autorizadas listadas neste documento."
+                        : "A empresa é definida na requisição ou pelo registro alterado, sem seleção prévia no cadastro da integração. Os vínculos entre registros continuam sendo validados.");
                 texto.linha("Header: Authorization: Bearer ACCESS_TOKEN");
                 texto.linha("Parâmetros de caminho: substitua cada {id}, {tarefaId} ou outro identificador pelo ID do registro autorizado.");
                 if (!operacao.payloadExemplo().isBlank()) {

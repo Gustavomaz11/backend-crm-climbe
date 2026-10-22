@@ -14,9 +14,11 @@ public final class IntegracaoDTO {
             @NotNull IntegracaoModulo modulo,
             @NotEmpty @Size(max = 5) Set<@NotBlank String> metodos,
             @NotEmpty @Size(max = 200) Set<@NotBlank String> operacoes,
-            @NotEmpty @Size(max = 500) Set<@NotNull @Positive Long> empresaIds,
+            @Size(max = 500) Set<@NotNull @Positive Long> empresaIds,
             @NotNull @Future Instant expiraEm,
-            @Min(1) @Max(3000) int limitePorMinuto) {}
+            @Min(1) @Max(3000) int limitePorMinuto) {
+        public Cadastro { empresaIds = empresaIds == null ? Set.of() : empresaIds; }
+    }
 
     public record Resumo(String id, String clientId, String nome, String cnpj, String responsavel,
             String email, IntegracaoModulo modulo, String status, Set<String> metodos, Set<String> operacoes,

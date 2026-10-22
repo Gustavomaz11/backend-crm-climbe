@@ -36,7 +36,8 @@ public class IntegracaoService {
         c.setNome(dto.nome().trim()); c.setCnpj(dto.cnpj().replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT));
         c.setResponsavel(dto.responsavel().trim()); c.setEmail(dto.email().trim().toLowerCase(Locale.ROOT));
         c.setModulo(dto.modulo()); c.setMetodos(new LinkedHashSet<>(dto.metodos()));
-        c.setOperacoes(new LinkedHashSet<>(dto.operacoes())); c.setEmpresaIds(new LinkedHashSet<>(dto.empresaIds()));
+        c.setOperacoes(new LinkedHashSet<>(dto.operacoes()));
+        c.setEmpresaIds(dto.metodos().contains("GET") ? new LinkedHashSet<>(dto.empresaIds()) : new LinkedHashSet<>());
         c.setExpiraEm(dto.expiraEm()); c.setLimitePorMinuto(dto.limitePorMinuto());
         if (id == null || novoEmail || "PENDENTE".equals(c.getStatus())) prepararAtivacao(c);
         enfileirar(c); repository.save(c); registrar(c, id == null ? "CRIADA" : "ATUALIZADA", ator);
@@ -46,8 +47,11 @@ public class IntegracaoService {
         if (!METODOS.containsAll(dto.metodos()) || !dto.expiraEm().isAfter(Instant.now()))
             throw erro(HttpStatus.BAD_REQUEST, "Métodos ou validade inválidos.");
         if (!IntegracaoCnpj.valido(dto.cnpj())) throw erro(HttpStatus.BAD_REQUEST, "Informe um CNPJ válido, com os dígitos verificadores corretos.");
-        if (empresas.countByIdEmpresaIn(dto.empresaIds()) != dto.empresaIds().size())
-            throw erro(HttpStatus.BAD_REQUEST, "Uma das empresas selecionadas não existe.");
+        if (dto.metodos().contains("GET")) {
+            if (dto.empresaIds().isEmpty()) throw erro(HttpStatus.BAD_REQUEST, "Selecione ao menos uma empresa autorizada para GET.");
+            if (empresas.countByIdEmpresaIn(dto.empresaIds()) != dto.empresaIds().size())
+                throw erro(HttpStatus.BAD_REQUEST, "Uma das empresas selecionadas não existe.");
+        }
         var disponiveis = catalogo.listar(dto.modulo()).stream()
                 .filter(o -> dto.metodos().contains(o.metodo())).map(IntegracaoCatalogo.Operacao::codigo).toList();
         if (!disponiveis.containsAll(dto.operacoes())) throw erro(HttpStatus.BAD_REQUEST, "Operação incompatível com o módulo ou métodos.");
