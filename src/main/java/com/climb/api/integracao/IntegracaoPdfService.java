@@ -56,9 +56,11 @@ public class IntegracaoPdfService {
                     texto.linha("Content-Type: application/json"); texto.titulo("Payload de exemplo"); texto.json(operacao.payloadExemplo());
                 } else texto.linha("Esta operação não recebe corpo JSON.");
                 texto.titulo("Exemplo em cURL");
+                String payloadCurl = operacao.payloadExemplo().isBlank() ? "" : new com.google.gson.GsonBuilder()
+                        .setPrettyPrinting().create().toJson(com.google.gson.JsonParser.parseString(operacao.payloadExemplo()));
                 texto.codigo("curl -X " + operacao.metodo() + " '" + apiUrl.replaceAll("/+$", "") + operacao.caminho()
                         + "' \\\n  -H 'Authorization: Bearer ACCESS_TOKEN'" + (operacao.payloadExemplo().isBlank() ? ""
-                        : " \\\n  -H 'Content-Type: application/json' \\\n  --data '" + operacao.payloadExemplo() + "'"));
+                        : " \\\n  -H 'Content-Type: application/json' \\\n  --data '" + payloadCurl + "'"));
                 texto.titulo("Resposta de exemplo");
                 if (operacao.respostaExemplo().startsWith("{")) texto.json(operacao.respostaExemplo()); else texto.linha(operacao.respostaExemplo());
             }

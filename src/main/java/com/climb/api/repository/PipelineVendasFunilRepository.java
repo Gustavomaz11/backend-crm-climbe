@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PipelineVendasFunilRepository extends JpaRepository<PipelineVendasFunil, Long> {
+    Optional<PipelineVendasFunil> findByCodigoAndAtivoTrue(String codigo);
     @EntityGraph(attributePaths = "etapas")
     List<PipelineVendasFunil> findAllByOrderByPosicaoAsc();
 

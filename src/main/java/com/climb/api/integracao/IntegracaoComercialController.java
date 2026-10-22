@@ -21,6 +21,7 @@ public class IntegracaoComercialController {
     private final PipelineVendasNegocioRepository negociosRepository;
     private final PipelineVendasEtapaRepository etapas;
     private final PipelineVendasService negocios;
+    private final IntegracaoPreVendasService preVendas;
     public record PropostaInput(@NotNull @Positive Long empresaId, Long negocioId, @NotNull @DecimalMin("0.01") BigDecimal valuation) {}
     public record Valuation(@NotNull @DecimalMin("0.01") BigDecimal valuation) {}
     public record PropostaResumo(Long id, Long empresaId, Long negocioId, BigDecimal valuation, PropostaStatus status, LocalDate dataCriacao) {
@@ -82,8 +83,16 @@ public class IntegracaoComercialController {
     @GetMapping("/negocios/{id}")
     @IntegracaoEndpoint(codigo = "comercial.negocios.ler", modulo = COMERCIAL, descricao = "Consulta um negócio autorizado.", resposta = "{\"id\":1,\"empresaId\":1,\"funilId\":1,\"etapaId\":1,\"resultado\":\"ABERTO\"}")
     public NegocioResumo negocio(@PathVariable Long id) { escopo.negocio(id); return NegocioResumo.de(negocios.buscar(id, escopo.ator())); }
+    @PostMapping("/pre-vendas/leads") @ResponseStatus(HttpStatus.CREATED)
+    @IntegracaoEndpoint(codigo = "comercial.prevendas.leads.criar", modulo = COMERCIAL,
+            descricao = "Cria um lead na etapa Lista de leads do funil Pré-vendas · Todas as estratégias. O destino é automático; não envie funilId ou etapaId. empresaId deve identificar uma empresa já cadastrada.",
+            exemplo = "{\"empresaId\":1,\"nomeContato\":\"Representante exemplo\",\"telefone\":\"79999991234\",\"email\":\"contato@example.com\",\"responsavelId\":1,\"origemNegocio\":\"Integração\",\"estrategiaComercial\":\"Contato direto\",\"observacoes\":\"Lead recebido pela plataforma parceira\"}",
+            resposta = "{\"id\":1,\"empresaId\":1,\"funilId\":2,\"etapaId\":10,\"responsavelId\":1,\"nomeContato\":\"Representante exemplo\",\"resultado\":\"ABERTO\"}")
+    public NegocioResumo criarLead(@Valid @RequestBody IntegracaoLeadRequest dto) {
+        return NegocioResumo.de(preVendas.criar(dto));
+    }
     @PostMapping("/negocios") @ResponseStatus(HttpStatus.CREATED)
-    @IntegracaoEndpoint(codigo = "comercial.negocios.criar", modulo = COMERCIAL, descricao = "Cria negócio aberto vinculado a uma empresa autorizada. Campos obrigatórios adicionais do funil continuam sendo validados.",
+    @IntegracaoEndpoint(codigo = "comercial.negocios.criar", modulo = COMERCIAL, descricao = "Cria negócio no funil e na etapa definidos no payload, vinculado a uma empresa cadastrada. Campos obrigatórios adicionais do funil continuam sendo validados.",
             exemplo = "{\"empresaId\":1,\"funilId\":1,\"etapaId\":1,\"nomeContato\":\"Representante exemplo\",\"email\":\"contato@example.com\",\"responsavelId\":1,\"origemNegocio\":\"Integração\",\"estrategiaComercial\":\"Contato direto\",\"valorEstimadoProposta\":10000}",
             resposta = "{\"id\":1,\"empresaId\":1,\"funilId\":1,\"etapaId\":1,\"resultado\":\"ABERTO\"}")
     public NegocioResumo criarNegocio(@Valid @RequestBody NegocioInput dto) { return NegocioResumo.de(negocios.criar(escopo.ator(), negocioDTO(dto))); }

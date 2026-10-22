@@ -43,6 +43,27 @@ class IntegracaoPdfTest {
             assertThat(texto).contains("seleção prévia", "comercial.propostas.criar");
         }
     }
+    @Test void documentaCriacaoDoLeadComDestinoAutomaticoEmPreVendas() throws Exception {
+        var pdf = new IntegracaoPdfService(new IntegracaoCatalogo());
+        ReflectionTestUtils.setField(pdf, "apiUrl", "https://climbe-api-ewke.onrender.com");
+        var c = new IntegracaoCliente(); c.setNome("Plataforma de leads"); c.setClientId("climbe_exemplo");
+        c.setModulo(IntegracaoModulo.COMERCIAL); c.setMetodos(Set.of("POST"));
+        c.setOperacoes(Set.of("comercial.prevendas.leads.criar")); c.setEmpresaIds(Set.of());
+        c.setExpiraEm(Instant.parse("2027-12-31T23:59:59Z"));
+        byte[] bytes = pdf.gerar(c);
+        var dir = Path.of("target", "integracao-preview"); Files.createDirectories(dir);
+        Files.write(dir.resolve("documentacao-prevendas.pdf"), bytes);
+        try (var doc = Loader.loadPDF(bytes)) {
+            String texto = new PDFTextStripper().getText(doc);
+            assertThat(texto).contains("POST /api/integracoes/v1/comercial/pre-vendas/leads", "comercial.prevendas.leads.criar",
+                    "Lista de leads", "Todas as estratégias", "O destino é automático", "empresaId", "nomeContato");
+            assertThat(texto).doesNotContain("/comercial/negocios", "/comercial/propostas");
+            int inicio = texto.lastIndexOf("--data '") + "--data '".length();
+            var payload = com.google.gson.JsonParser.parseString(texto.substring(inicio, texto.indexOf("'", inicio))).getAsJsonObject();
+            assertThat(payload.get("email").getAsString()).isEqualTo("contato@example.com");
+            assertThat(payload.has("funilId") || payload.has("etapaId")).isFalse();
+        }
+    }
     @Test void todaRotaExternaTemEntradaNoCatalogoSemPermissoesImplicitas() {
         var catalogo = new IntegracaoCatalogo(); int rotas = 0;
         for (var tipo : List.of(IntegracaoTecnicoController.class, IntegracaoComercialController.class, IntegracaoJuridicoController.class)) {

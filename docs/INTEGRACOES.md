@@ -15,12 +15,33 @@ O processamento usa o SMTP já configurado, sem manter transação de banco dura
 Os endpoints externos ficam em `/api/integracoes/v1` e são separados das rotas da aplicação. O catálogo administrativo `GET /integracoes/catalogo` é derivado das rotas anotadas e também gera o PDF personalizado. Uma nova rota não recebe acesso nas integrações existentes automaticamente.
 
 - Técnico: listar contratos autorizados, consultar o Kanban, criar, editar, mover e excluir tarefas.
-- Comercial: consultar, criar, editar e excluir propostas; alterar valuation; consultar, criar, editar e mover negócios entre etapas abertas.
+- Comercial: criar leads em Pré-vendas; consultar, criar, editar e excluir propostas; alterar valuation; consultar, criar, editar e mover negócios entre etapas abertas.
 - Jurídico: consultar, criar, editar e excluir contratos; aprovar/rejeitar; movimentar preparação; baixar PDF.
 
 Essas são as operações publicadas na primeira versão da API externa. Rotas internas de administração, usuários e outras operações não catalogadas continuam indisponíveis para integrações. Edição genérica não permite aprovar contratos ou mover tarefas/negócios: cada ação possui autorização explícita. As regras e permissões de negócio do usuário criador continuam sendo verificadas pelos serviços existentes. As respostas usam projeções próprias, sem expor entidades completas ou o catálogo global de usuários.
 
 As consultas GET, tanto listagens quanto acessos individuais, ficam limitadas às empresas selecionadas. Listagens filtram as empresas no banco e recebem `pagina` (inicia em 0) e `tamanho` (1–100; padrão 50). Consultas fora do escopo respondem 404. POST, PUT, DELETE e PATCH dispensam esse filtro, mas exigem os registros necessários à operação e preservam as validações de negócio, permissões e vínculos entre empresas, propostas e negócios. Um token sem GET não pode consultar dados, mesmo que tenha permissão para gravá-los.
+
+## Entrada de leads em Pré-vendas
+
+No cadastro do token, selecione **Comercial → POST → `/api/integracoes/v1/comercial/pre-vendas/leads`**, operação `comercial.prevendas.leads.criar`.
+
+Essa operação cria o lead diretamente no funil **Pré-vendas · Todas as estratégias**, etapa **Lista de leads**. O servidor resolve o funil pelo código `PRE_VENDAS` e a etapa pelo código `LISTA_LEADS`, sem exigir `funilId` ou `etapaId` na requisição. Esses campos não alteram o destino dessa operação. Se o funil ou a etapa estiverem indisponíveis, retorna 409 e não cria o lead em outro local.
+
+```json
+{
+  "empresaId": 1,
+  "nomeContato": "Representante exemplo",
+  "telefone": "79999991234",
+  "email": "contato@example.com",
+  "responsavelId": 1,
+  "origemNegocio": "Integração",
+  "estrategiaComercial": "Contato direto",
+  "observacoes": "Lead recebido pela plataforma parceira"
+}
+```
+
+Substitua os IDs fictícios de empresa e responsável por registros existentes. `empresaId`, `nomeContato`, `responsavelId`, `origemNegocio` e `estrategiaComercial` são obrigatórios; telefone, e-mail e observações são opcionais, sujeitos às regras adicionais da etapa. A operação é incluída no catálogo e no PDF quando selecionada para a integração. Tokens existentes precisam receber essa nova permissão explicitamente.
 
 ## Autenticação
 

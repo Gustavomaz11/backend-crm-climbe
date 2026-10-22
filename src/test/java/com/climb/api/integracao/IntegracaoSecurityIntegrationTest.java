@@ -37,6 +37,9 @@ class IntegracaoSecurityIntegrationTest {
     @Autowired EmpresaRepository empresas;
     @Autowired UsuarioRepository usuarios;
     @Autowired ContratoRepository contratos;
+    @Autowired PipelineVendasFunilRepository funis;
+    @Autowired PipelineVendasEtapaRepository etapas;
+    @Autowired PipelineVendasNegocioRepository negocios;
     @Autowired IntegracaoEscopo escopo;
     @Autowired IntegracaoEntregaService entrega;
     @Autowired WebApplicationContext context;
@@ -230,6 +233,57 @@ class IntegracaoSecurityIntegrationTest {
                 Set.of("GET"), Set.of("comercial.propostas.listar"), c.getEmpresaIds(), c.getExpiraEm(), 120);
         assertThatThrownBy(() -> service.salvar(null, invalido, c.getCriadoPor())).isInstanceOf(ResponseStatusException.class);
         assertThatThrownBy(() -> service.salvar(null, cadastro(c.getEmpresaIds(), Instant.now().minusSeconds(5)), c.getCriadoPor())).isInstanceOf(ResponseStatusException.class);
+    }
+    @Test void leadDaIntegracaoSempreEntraNaListaDeLeadsDoFunilPreVendas() throws Exception {
+        var c = cliente(); Long empresaId = c.getEmpresaIds().iterator().next();
+        var vendas = funil("VENDAS_TESTE", "VENDAS", 1);
+        var pre = funil("PRE_VENDAS", "PRE_VENDAS", 2);
+        var outraEtapa = etapa(pre, "LEAD_CONECTADO", 1);
+        var lista = etapa(pre, "LISTA_LEADS", 99);
+        String token = tokenLead(c);
+        String body = new com.google.gson.Gson().toJson(Map.of("empresaId", empresaId, "nomeContato", "Lead da plataforma",
+                "responsavelId", c.getCriadoPor(), "origemNegocio", "Integração", "estrategiaComercial", "Contato direto",
+                "funilId", vendas.getIdFunil(), "etapaId", outraEtapa.getIdEtapa()));
+        var resposta = mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.funilId").value(pre.getIdFunil()))
+                .andExpect(jsonPath("$.etapaId").value(lista.getIdEtapa())).andExpect(jsonPath("$.resultado").value("ABERTO"))
+                .andReturn().getResponse().getContentAsString();
+        Long id = com.google.gson.JsonParser.parseString(resposta).getAsJsonObject().get("id").getAsLong();
+        assertThat(negocios.findById(id).orElseThrow().getFunil().getCodigo()).isEqualTo("PRE_VENDAS");
+        assertThat(negocios.findById(id).orElseThrow().getEtapa().getCodigo()).isEqualTo("LISTA_LEADS");
+    }
+    @Test void operacaoDeLeadsExigePermissaoPropriaENaoUsaFunilDeVendasSePreVendasNaoExistir() throws Exception {
+        var c = cliente(); Long empresaId = c.getEmpresaIds().iterator().next();
+        var configuracao = new IntegracaoDTO.Cadastro(c.getNome(), c.getCnpj(), c.getResponsavel(), c.getEmail(), IntegracaoModulo.COMERCIAL,
+                Set.of("POST"), Set.of("comercial.negocios.criar"), Set.of(), c.getExpiraEm(), 120);
+        service.salvar(c.getId(), configuracao, c.getCriadoPor());
+        var credenciais = service.ativar(tokens.ativacao(service.buscar(c.getId())));
+        var token = service.autenticar(credenciais.client_id(), credenciais.client_secret()).access_token();
+        String body = new com.google.gson.Gson().toJson(Map.of("empresaId", empresaId, "nomeContato", "Lead da plataforma",
+                "responsavelId", c.getCriadoPor(), "origemNegocio", "Integração", "estrategiaComercial", "Contato direto"));
+        mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(body)).andExpect(status().isForbidden());
+        c = cliente(); token = tokenLead(c); funil("VENDAS_TESTE", "VENDAS", 1);
+        long antes = negocios.count();
+        mvc.perform(post("/api/integracoes/v1/comercial/pre-vendas/leads").header("Authorization", "Bearer " + token)
+                .contentType("application/json").content(body)).andExpect(status().isConflict());
+        assertThat(negocios.count()).isEqualTo(antes);
+    }
+    private String tokenLead(IntegracaoCliente c) {
+        var cadastro = new IntegracaoDTO.Cadastro(c.getNome(), c.getCnpj(), c.getResponsavel(), c.getEmail(), IntegracaoModulo.COMERCIAL,
+                Set.of("POST"), Set.of("comercial.prevendas.leads.criar"), Set.of(), c.getExpiraEm(), 120);
+        service.salvar(c.getId(), cadastro, c.getCriadoPor());
+        var credenciais = service.ativar(tokens.ativacao(service.buscar(c.getId())));
+        return service.autenticar(credenciais.client_id(), credenciais.client_secret()).access_token();
+    }
+    private PipelineVendasFunil funil(String codigo, String tipo, int posicao) {
+        var f = new PipelineVendasFunil(); f.setCodigo(codigo); f.setTipo(tipo); f.setNome("PRE_VENDAS".equals(tipo) ? "Pré-vendas" : "Vendas");
+        f.setEstrategia("Todas as estratégias"); f.setPosicao(posicao); return funis.saveAndFlush(f);
+    }
+    private PipelineVendasEtapa etapa(PipelineVendasFunil funil, String codigo, int posicao) {
+        var e = new PipelineVendasEtapa(); e.setFunil(funil); e.setCodigo(codigo); e.setNome(codigo); e.setPosicao(posicao);
+        e.setResultado(com.climb.api.model.enums.PipelineVendasResultado.ABERTO); return etapas.saveAndFlush(e);
     }
     private IntegracaoCliente cliente() {
         var user = new Usuario(); user.setNomeCompleto("Teste integração"); user.setContato("85999999999");
