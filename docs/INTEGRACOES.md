@@ -24,8 +24,10 @@ Listagens filtram as empresas no banco e recebem `pagina` (inicia em 0) e `taman
 
 ## Autenticação
 
+Endpoint público para gerar o access token: `POST https://climbe-api-ewke.onrender.com/api/integracoes/oauth/token`.
+
 ```sh
-curl -X POST 'https://API_PUBLICA/api/integracoes/oauth/token' \
+curl -X POST 'https://climbe-api-ewke.onrender.com/api/integracoes/oauth/token' \
   -u 'CLIENT_ID:CLIENT_SECRET' \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data 'grant_type=client_credentials'
@@ -42,7 +44,7 @@ O limite por integração é persistido e compartilhado entre instâncias e toke
 Aplique **V82__tokens_integracoes.sql** pelo Flyway antes de iniciar esta versão. No perfil `prod`, o Flyway executa na inicialização por padrão. Em desenvolvimento, ou com `SPRING_FLYWAY_ENABLED=false`, rode o serviço de migrations (`docker compose run --rm flyway`, com o banco disponível) antes de reiniciar o backend. Atualize também o frontend. Configure:
 
 ```dotenv
-INTEGRACOES_API_URL=https://URL_PUBLICA_DO_BACKEND
+INTEGRACOES_API_URL=https://climbe-api-ewke.onrender.com
 INTEGRACOES_EMAIL_ENABLED=true
 INTEGRACOES_EMAIL_INTERVALO_MS=5000
 # Opcional: chave exclusiva aleatória com no mínimo 32 caracteres.
@@ -50,5 +52,7 @@ INTEGRACOES_EMAIL_INTERVALO_MS=5000
 ```
 
 `APP_FRONTEND_URL` deve apontar para o frontend público para que o link do e-mail funcione. As configurações SMTP existentes continuam sendo usadas. Se `INTEGRACOES_CHAVE` estiver ausente, utiliza uma chave derivada de `jwt.secret`, com separação de domínio. Alterar a chave invalida links e tokens em circulação. Os testes usam H2, SMTP simulado e dados fictícios; não enviam e-mails reais.
+
+O perfil `prod` utiliza `https://climbe-api-ewke.onrender.com` como URL padrão para os PDFs. A variável `INTEGRACOES_API_URL`, quando definida no ambiente de execução, substitui esse padrão. Depois de atualizar a configuração e reiniciar o backend, baixe ou reenvie a documentação para obter o PDF atualizado.
 
 As listagens, campos e métodos disponíveis são definidos pelo catálogo; o PDF é um retrato das permissões no momento da geração. Edição de permissões enfileira uma versão atualizada da documentação.

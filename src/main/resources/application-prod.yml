@@ -41,3 +41,7 @@ spring:
           connectiontimeout: ${SPRING_MAIL_CONNECTION_TIMEOUT:10000}
           timeout: ${SPRING_MAIL_TIMEOUT:10000}
           writetimeout: ${SPRING_MAIL_WRITE_TIMEOUT:10000}
+
+app:
+  integracoes:
+    api-url: ${INTEGRACOES_API_URL:https://climbe-api-ewke.onrender.com}
