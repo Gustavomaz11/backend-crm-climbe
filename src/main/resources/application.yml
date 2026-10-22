@@ -54,6 +54,12 @@ app:
     expiration-cron: "${CONTRACT_EXPIRATION_CRON:0 0 8 * * *}"
   document-review:
     expiration-days: ${DOCUMENT_REVIEW_EXPIRATION_DAYS:30}
+  integracoes:
+    api-url: ${INTEGRACOES_API_URL:http://localhost:8080}
+    chave: ${INTEGRACOES_CHAVE:${jwt.secret}}
+    email:
+      enabled: ${INTEGRACOES_EMAIL_ENABLED:true}
+      intervalo-ms: ${INTEGRACOES_EMAIL_INTERVALO_MS:5000}
   zapsign:
     api-url: ${ZAPSIGN_API_URL:https://api.zapsign.com.br}
     api-token: ${API_ZAPSIGN:}

@@ -11,6 +11,7 @@ import com.climb.api.model.Proposta;
 import com.climb.api.model.enums.PropostaStatus;
 
 public interface PropostaRepository extends JpaRepository<Proposta, Long> {
+    org.springframework.data.domain.Page<Proposta> findByEmpresa_IdEmpresaIn(java.util.Collection<Long> ids, org.springframework.data.domain.Pageable pagina);
 
     List<Proposta> findByStatus(PropostaStatus status);
 

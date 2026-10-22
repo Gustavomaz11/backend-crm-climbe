@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.climb.api.model.Contrato;
 
 public interface ContratoRepository extends JpaRepository<Contrato, Long> {
+    org.springframework.data.domain.Page<Contrato> findByEmpresa_IdEmpresaIn(java.util.Collection<Long> ids, org.springframework.data.domain.Pageable pagina);
     String JOIN_SERVICOS = """
             from Contrato contrato left join contrato.proposta proposta
                  left join proposta.servicos servicoProposta

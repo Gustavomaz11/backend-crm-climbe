@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Optional;
 
 public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
+    long countByIdEmpresaIn(java.util.Collection<Long> ids);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("select e from Empresa e where e.idEmpresa = :id")

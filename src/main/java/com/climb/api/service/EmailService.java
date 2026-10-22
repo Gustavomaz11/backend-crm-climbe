@@ -107,6 +107,17 @@ public class EmailService {
     }
 
     public boolean enviarEmailHtml(String emailDestino, String assunto, String html) {
+        return enviarEmailHtml(emailDestino, assunto, html, null);
+    }
+
+    public boolean enviarEmailComPdf(String destino, String assunto, String titulo, String mensagem,
+            String textoBotao, String urlBotao, byte[] pdf) {
+        String corpo = "<p style=\"white-space:pre-line\">" + HtmlUtils.htmlEscape(mensagem) + "</p>";
+        return enviarEmailHtml(destino, assunto, montarTemplate(titulo, corpo, textoBotao, urlBotao,
+                "O segredo é exibido uma única vez na ativação. Guarde-o no servidor da plataforma integrada."), pdf);
+    }
+
+    private boolean enviarEmailHtml(String emailDestino, String assunto, String html, byte[] pdf) {
         if (emailDestino == null || emailDestino.isBlank()) {
             log.warn("Envio de e-mail ignorado: destinatário vazio. Assunto: {}", assunto);
             return false;
@@ -118,12 +129,15 @@ public class EmailService {
             MimeMessage mensagem = mailSender.createMimeMessage();
             boolean incluirLogo = html != null && html.contains("cid:climbe-logo");
             MimeMessageHelper helper = new MimeMessageHelper(mensagem,
-                    incluirLogo ? MimeMessageHelper.MULTIPART_MODE_RELATED : MimeMessageHelper.MULTIPART_MODE_NO, "UTF-8");
+                    pdf != null ? MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED : incluirLogo
+                            ? MimeMessageHelper.MULTIPART_MODE_RELATED : MimeMessageHelper.MULTIPART_MODE_NO, "UTF-8");
             configurarRemetente(helper);
             helper.setTo(emailDestino.trim());
             helper.setSubject(assunto);
             helper.setText(html, true);
             if (incluirLogo) helper.addInline("climbe-logo", new ClassPathResource("mail/assets/climbe-logo.png"), "image/png");
+            if (pdf != null) helper.addAttachment("documentacao-integracao-climbe.pdf",
+                    new org.springframework.core.io.ByteArrayResource(pdf), "application/pdf");
             mailSender.send(mensagem);
             log.info("E-mail aceito pelo servidor SMTP: envioId={}, smtp={}, destinatario={}, assunto='{}', messageId={}",
                     envioId, servidorSmtp, emailDestino, assunto, mensagem.getMessageID());

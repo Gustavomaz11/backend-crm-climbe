@@ -34,7 +34,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE)
+    @Order(Ordered.HIGHEST_PRECEDENCE + 1)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))

@@ -1,6 +1,7 @@
 package com.climb.api.model;
 
 public enum PermissaoCodigo {
+    INTEGRACOES_GERENCIAR,
     JURIDICO_CONTRATO_LER,
     JURIDICO_CONTRATO_CRIAR,
     JURIDICO_CONTRATO_EDITAR,

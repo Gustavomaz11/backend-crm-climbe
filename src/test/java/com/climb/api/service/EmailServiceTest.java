@@ -24,6 +24,23 @@ import static org.mockito.Mockito.when;
 class EmailServiceTest {
 
     @Test
+    void enviaDocumentacaoPdfAnexaSemIncluirSegredoNoEmail() throws Exception {
+        var sender = mock(JavaMailSender.class);
+        var message = new MimeMessage(Session.getInstance(new Properties()));
+        when(sender.createMimeMessage()).thenReturn(message);
+        var service = new EmailService(sender, "contato@climbe.com.br", "Climbe", "", "https://crm.example.com");
+        byte[] pdf = "%PDF-exemplo".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(service.enviarEmailComPdf("responsavel@example.com", "Integração", "Ativação", "CLIENT_ID: exemplo",
+                "Obter segredo", "https://crm.example.com/integracoes/ativar#token=exemplo", pdf));
+        message.saveChanges(); assertTrue(message.isMimeType("multipart/mixed"));
+        var mixed = (Multipart) message.getContent();
+        var attachment = mixed.getBodyPart(mixed.getCount() - 1);
+        assertEquals("documentacao-integracao-climbe.pdf", attachment.getFileName());
+        assertEquals(Part.ATTACHMENT, attachment.getDisposition());
+        assertArrayEquals(pdf, attachment.getInputStream().readAllBytes()); verify(sender).send(message);
+    }
+
+    @Test
     void deveEncaminharPropostaParaHotmailSemRestringirODominio() throws Exception {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         MimeMessage mensagem = new MimeMessage(Session.getInstance(new Properties()));

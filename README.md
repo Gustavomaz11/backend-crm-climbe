@@ -308,3 +308,7 @@ src/main/java/com/climb/api/
 └── service/
     └── HelloService.java           # Camada de serviço
 ```
+
+## Tokens e Integração
+
+O cadastro de plataformas externas, OAuth Client Credentials, escopos por módulo/operação/empresa, ativação por e-mail e documentação PDF estão descritos em [docs/INTEGRACOES.md](docs/INTEGRACOES.md). Esta versão exige a migration **V82__tokens_integracoes.sql** e a configuração de `INTEGRACOES_API_URL` com a URL pública do backend.

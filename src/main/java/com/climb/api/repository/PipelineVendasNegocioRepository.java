@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface PipelineVendasNegocioRepository extends JpaRepository<PipelineVendasNegocio, Long> {
+    org.springframework.data.domain.Page<PipelineVendasNegocio> findByEmpresa_IdEmpresaIn(java.util.Collection<Long> ids, org.springframework.data.domain.Pageable pagina);
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("update PipelineVendasNegocio item set item.arquivadoEm = :agora " +
             "where item.arquivadoEm is null and item.arquivarApos <= :agora and item.resultado in (com.climb.api.model.enums.PipelineVendasResultado.GANHO, com.climb.api.model.enums.PipelineVendasResultado.PERDIDO)")
