@@ -294,7 +294,10 @@ public class ReuniaoService {
         }
         reuniao.setStatus("CANCELADA");
         reuniao.setLinkMeet(null);
-        return repository.save(reuniao);
+        Reuniao salva = repository.save(reuniao);
+        reuniaoEmailService.notificarCancelamento(salva,
+                participanteReuniaoRepository.findByReuniao_IdReuniao(id));
+        return salva;
     }
 
     @Transactional

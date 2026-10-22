@@ -41,17 +41,22 @@ class ReuniaoCancelamentoTest {
         when(repository.findByIdForUpdate(3L)).thenReturn(Optional.of(reuniao));
         when(credentials.obterAccessToken(1L)).thenReturn(Optional.of("token-criador"));
         when(repository.save(reuniao)).thenReturn(reuniao);
+        var convidados = List.of(new com.climb.api.model.ParticipanteReuniao());
+        when(participantes.findByReuniao_IdReuniao(3L)).thenReturn(convidados);
 
+        assertThat(service.cancelar(3L, 1L)).isSameAs(reuniao);
         assertThat(service.cancelar(3L, 1L)).isSameAs(reuniao);
 
         assertThat(reuniao.getStatus()).isEqualTo("CANCELADA");
         assertThat(reuniao.getLinkMeet()).isNull();
         assertThat(reuniao.getGoogleEventId()).isEqualTo("evento");
-        var ordem = inOrder(calendar, repository);
+        var ordem = inOrder(calendar, repository, emails);
         ordem.verify(calendar).deletarEvento("evento", "token-criador");
         ordem.verify(repository).save(reuniao);
+        ordem.verify(emails).notificarCancelamento(reuniao, convidados);
         verify(repository, never()).delete(any());
-        verifyNoInteractions(participantes, emails);
+        verify(participantes, never()).deleteAll(any());
+        verifyNoMoreInteractions(emails);
     }
 
     @Test void cancelaReuniaoSemEventoGoogleSemExigirCredenciais() {
@@ -60,7 +65,8 @@ class ReuniaoCancelamentoTest {
         when(repository.save(reuniao)).thenReturn(reuniao);
 
         assertThat(service.cancelar(3L, 1L).getStatus()).isEqualTo("CANCELADA");
-        verifyNoInteractions(credentials, calendar, participantes);
+        verifyNoInteractions(credentials, calendar);
+        verify(emails).notificarCancelamento(reuniao, List.of());
     }
 
     @Test void impedeCancelamentoPorConvidadoOuOutroUsuario() {
@@ -70,19 +76,19 @@ class ReuniaoCancelamentoTest {
                 e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
 
         verify(repository, never()).save(any());
-        verifyNoInteractions(credentials, calendar, participantes);
+        verifyNoInteractions(credentials, calendar, participantes, emails);
     }
 
     @Test void exigeUsuarioAutenticadoAntesDeConsultarReuniao() {
         assertThatThrownBy(() -> service.cancelar(3L, null)).isInstanceOfSatisfying(ResponseStatusException.class,
                 e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
-        verifyNoInteractions(repository, credentials, calendar);
+        verifyNoInteractions(repository, credentials, calendar, emails);
     }
 
     @Test void informaQuandoReuniaoNaoExiste() {
         assertThatThrownBy(() -> service.cancelar(3L, 1L)).isInstanceOfSatisfying(ResponseStatusException.class,
                 e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-        verifyNoInteractions(credentials, calendar);
+        verifyNoInteractions(credentials, calendar, emails);
     }
 
     @ParameterizedTest @ValueSource(strings = {"CANCELADA", "CANCELADO"})
@@ -92,7 +98,7 @@ class ReuniaoCancelamentoTest {
 
         assertThat(service.cancelar(3L, 1L)).isSameAs(reuniao);
         verify(repository, never()).save(any());
-        verifyNoInteractions(credentials, calendar, participantes);
+        verifyNoInteractions(credentials, calendar, participantes, emails);
     }
 
     @Test void falhaNoGooglePreservaAgendamentoELinkMeet() throws Exception {
@@ -107,7 +113,7 @@ class ReuniaoCancelamentoTest {
         assertThat(reuniao.getStatus()).isEqualTo("AGENDADA");
         assertThat(reuniao.getLinkMeet()).isNotBlank();
         verify(repository, never()).save(any());
-        verifyNoInteractions(participantes);
+        verifyNoInteractions(participantes, emails);
     }
 
     @Test void ausenciaDeCredenciaisPreservaReuniao() {
@@ -117,7 +123,7 @@ class ReuniaoCancelamentoTest {
                 e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
         assertThat(reuniao.getStatus()).isEqualTo("AGENDADA");
         verify(repository, never()).save(any());
-        verifyNoInteractions(calendar);
+        verifyNoInteractions(calendar, emails);
     }
 
     @Test void atualizarStatusParaCanceladaTambemExigeCriador() {
@@ -125,7 +131,7 @@ class ReuniaoCancelamentoTest {
         var request = new ReuniaoRequestDTO(); request.setStatus("CANCELADA");
         assertThatThrownBy(() -> service.atualizar(3L, 2L, request)).isInstanceOfSatisfying(ResponseStatusException.class,
                 e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verifyNoInteractions(credentials, calendar, participantes);
+        verifyNoInteractions(credentials, calendar, participantes, emails);
     }
 
     @Test void cancelamentoPeloStatusDoKanbanUsaMesmoFluxo() throws Exception {
@@ -136,6 +142,7 @@ class ReuniaoCancelamentoTest {
         var request = new ReuniaoRequestDTO(); request.setStatus("CANCELADO");
         assertThat(service.atualizar(3L, 1L, request).getStatus()).isEqualTo("CANCELADA");
         verify(calendar).deletarEvento("evento", "token");
+        verify(emails).notificarCancelamento(reuniao, List.of());
     }
 
     @Test void sincronizacaoGoogleMantemHistoricoDaReuniaoCancelada() throws Exception {
