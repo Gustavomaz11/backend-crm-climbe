@@ -38,6 +38,10 @@ build/
 ### Logs ###
 *.log
 
+### Ferramentas Python locais ###
+__pycache__/
+*.pyc
+
 ### Certificados locais de rede corporativa ###
 certs/*
 !certs/README.md

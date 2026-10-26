@@ -1,5 +1,7 @@
 # Climb Services API
 
+Convites para sócios e limpeza pontual da base: [documentação](docs/CONVITES_E_LIMPEZA.md).
+
 API REST construída com Spring Boot 4 e Java 25.
 
 ## Pré-requisitos
