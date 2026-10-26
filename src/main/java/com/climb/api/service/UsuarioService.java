@@ -236,7 +236,6 @@ public class UsuarioService {
                 SolicitacaoAcessoStatus.APROVADO,
                 aprovadorId,
                 atribuicao.cargo().getNome());
-        emailService.enviarAcessoAprovado(salvo.getEmail(), salvo.getNomeCompleto());
         return toResponse(salvo);
     }
 

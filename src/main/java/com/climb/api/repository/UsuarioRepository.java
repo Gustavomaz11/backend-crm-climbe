@@ -15,6 +15,27 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     Optional<Usuario> findByEmail(String email);
 
+    // Grupos são modelos aplicados como permissões individuais; não há vínculo usuário/grupo.
+    @Query(value = """
+            SELECT usuario.* FROM usuarios usuario
+            WHERE usuario.situacao = 'ATIVO'
+              AND EXISTS (
+                SELECT 1 FROM grupos_permissoes grupo
+                WHERE grupo.ativo = true AND LOWER(TRIM(grupo.nome)) = 'administrador'
+                  AND EXISTS (SELECT 1 FROM grupo_permissao_itens item WHERE item.grupo_id = grupo.id)
+                  AND NOT EXISTS (
+                    SELECT 1 FROM grupo_permissao_itens item
+                    WHERE item.grupo_id = grupo.id
+                      AND NOT EXISTS (
+                        SELECT 1 FROM usuario_permissoes acesso
+                        WHERE acesso.id_usuario = usuario.id AND acesso.id_permissao = item.permissao_id
+                      )
+                  )
+              )
+            ORDER BY usuario.id
+            """, nativeQuery = true)
+    List<Usuario> buscarAdministradoresAtivos();
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select usuario from Usuario usuario where usuario.id = :id")
     Optional<Usuario> findByIdForUpdate(@Param("id") Long id);

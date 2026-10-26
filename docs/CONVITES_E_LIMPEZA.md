@@ -32,6 +32,31 @@ Publique backend e frontend juntos. Não há nova migration. Configure
 (por exemplo, `https://www.crmclimbe.com.br`), e mantenha as configurações SMTP e
 OAuth já utilizadas pelo sistema.
 
+## Avisos de solicitação e aprovação
+
+Ao registrar uma nova solicitação, por Google ou pelo cadastro com e-mail e senha,
+o sistema grava um aviso individual para cada administrador ativo. O aviso aparece
+no sininho e no popup de notificações, com nome e e-mail do solicitante, e abre
+`/aprovar-acesso`. Consultar novamente um cadastro Google já pendente não gera
+outra solicitação nem outro aviso.
+
+Atualmente os grupos são modelos de permissões: aplicar um grupo copia seus itens
+para o usuário. Por isso, o destinatário administrador é o usuário `ATIVO` que
+possui todas as permissões do grupo ativo chamado `Administrador`, podendo também
+ter permissões extras. Um grupo vazio ou inativo não seleciona destinatários.
+Possuir somente `PERMITIR_ACESSO` não equivale a possuir todo o grupo Administrador.
+
+Ao aprovar, o e-mail do solicitante é colocado na fila na mesma transação da
+decisão. A mensagem informa que o acesso ao CRM foi aprovado e que as atividades
+já podem começar. Cadastros Google recebem o link `/convite`, que inicia a
+autenticação Google, e orientação para concluir o primeiro cadastro, quando
+necessário. Cadastros com senha recebem o link para o login padrão.
+
+Recusas, exclusões, tentativas repetidas de aprovação e operações desfeitas não
+geram e-mail de aprovação. O envio usa as novas tentativas da fila existente,
+sem esperar o SMTP durante a aprovação. Os avisos dos administradores ficam
+somente no sistema. Esta atualização não exige migration.
+
 # Limpeza pontual da base
 
 `scripts/reset_database.py` é uma ferramenta manual, independente do Flyway e da

@@ -102,7 +102,6 @@ public class OAuth2PendingService {
                 SolicitacaoAcessoStatus.APROVADO,
                 aprovadorUsuarioId,
                 atribuicao.cargo().getNome());
-        emailService.enviarAcessoAprovado(pending.getEmail(), pending.getNome());
     }
 
     @Transactional

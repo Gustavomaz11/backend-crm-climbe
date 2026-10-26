@@ -74,7 +74,8 @@ class OAuth2PendingServiceTest {
         assertEquals(Set.of(permissao), pending.getPermissoes());
         verify(repository).save(pending);
         verify(usuarioService).prepararCadastroGoogleAprovado(pending);
-        verify(emailService).enviarAcessoAprovado(pending.getEmail(), pending.getNome());
+        verify(solicitacaoAcessoService).decidir(com.climb.api.model.SolicitacaoAcessoOrigem.GOOGLE,
+                pending.getId(), com.climb.api.model.SolicitacaoAcessoStatus.APROVADO, 1L, cargo.getNome());
     }
 
     @Test

@@ -205,7 +205,7 @@ class UsuarioServiceAprovacaoTest {
     }
 
     @Test
-    void deveEnviarEmailAoAprovarSolicitacaoManual() {
+    void deveConcluirHistoricoAoAprovarSolicitacaoManual() {
         Usuario pendente = new Usuario();
         pendente.setId(8L);
         pendente.setNomeCompleto("Novo Usuario");
@@ -222,7 +222,8 @@ class UsuarioServiceAprovacaoTest {
 
         service.aprovarUsuario(8L, 1L, cargo.getId(), Set.of());
 
-        verify(emailService).enviarAcessoAprovado(pendente.getEmail(), pendente.getNomeCompleto());
+        verify(solicitacaoAcessoService).decidir(SolicitacaoAcessoOrigem.USUARIO,
+                pendente.getId(), SolicitacaoAcessoStatus.APROVADO, 1L, cargo.getNome());
     }
 
     @Test

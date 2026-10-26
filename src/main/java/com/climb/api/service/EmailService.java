@@ -24,18 +24,15 @@ public class EmailService {
     private final String remetente;
     private final String nomeRemetente;
     private final String responderPara;
-    private final String frontendUrl;
 
     public EmailService(JavaMailSender mailSender,
                         @Value("${app.mail.from:no-reply@climbe.com}") String remetente,
                         @Value("${app.mail.from-name:Climbe}") String nomeRemetente,
-                        @Value("${app.mail.reply-to:}") String responderPara,
-                        @Value("${app.frontend-url:http://localhost:5173}") String frontendUrl) {
+                        @Value("${app.mail.reply-to:}") String responderPara) {
         this.mailSender = mailSender;
         this.remetente = remetente;
         this.nomeRemetente = nomeRemetente;
         this.responderPara = responderPara;
-        this.frontendUrl = frontendUrl;
     }
 
     public void enviarEmailBoasVindas(String emailDestino, String nomeUsuario) {
@@ -57,19 +54,6 @@ public class EmailService {
                 null,
                 null,
                 "Nenhuma ação é necessária neste momento."
-        );
-    }
-
-    public void enviarAcessoAprovado(String emailDestino, String nomeUsuario) {
-        enviarEmailComBotao(
-                emailDestino,
-                "Seu acesso ao Climbe foi aprovado",
-                "Acesso aprovado",
-                "Olá, " + nomeOuPadrao(nomeUsuario) + "! Seu acesso ao Climbe foi aprovado. "
-                        + "Entre usando a mesma forma de login utilizada no cadastro.",
-                "Acessar o Climbe",
-                frontendUrl,
-                "Se você não solicitou este acesso, avise a equipe Climbe."
         );
     }
 

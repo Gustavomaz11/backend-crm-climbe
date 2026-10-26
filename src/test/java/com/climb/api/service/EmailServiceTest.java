@@ -28,7 +28,7 @@ class EmailServiceTest {
         var sender = mock(JavaMailSender.class);
         var message = new MimeMessage(Session.getInstance(new Properties()));
         when(sender.createMimeMessage()).thenReturn(message);
-        var service = new EmailService(sender, "contato@climbe.com.br", "Climbe", "", "https://crm.example.com");
+        var service = new EmailService(sender, "contato@climbe.com.br", "Climbe", "");
         byte[] pdf = "%PDF-exemplo".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(service.enviarEmailComPdf("responsavel@example.com", "Integração", "Ativação", "CLIENT_ID: exemplo",
                 "Obter segredo", "https://crm.example.com/integracoes/ativar#token=exemplo", pdf));
@@ -45,7 +45,7 @@ class EmailServiceTest {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         MimeMessage mensagem = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(mensagem);
-        EmailService service = new EmailService(mailSender, "contato@climbe.com.br", "Climbe", "", "https://www.crmclimbe.com.br");
+        EmailService service = new EmailService(mailSender, "contato@climbe.com.br", "Climbe", "");
 
         assertTrue(service.enviarEmailComBotao("cliente@hotmail.com", "Documento para análise", "Proposta",
                 "Olá! Sua proposta está disponível para revisão.", "Revisar documento", "https://www.crmclimbe.com.br/revisao/token-teste", "Climbe"));
@@ -73,7 +73,7 @@ class EmailServiceTest {
         MimeMessage mensagem = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(mensagem);
         doThrow(new MailSendException("550 5.7.1 envio recusado")).when(mailSender).send(mensagem);
-        EmailService service = new EmailService(mailSender, "contato@climbe.com.br", "Climbe", "", "https://www.crmclimbe.com.br");
+        EmailService service = new EmailService(mailSender, "contato@climbe.com.br", "Climbe", "");
 
         assertFalse(service.enviarEmailHtml("cliente@hotmail.com", "Documento para análise", "<p>Proposta</p>"));
     }
@@ -88,8 +88,7 @@ class EmailServiceTest {
                 mailSender,
                 "notificacoes@envios.crmclimbe.com.br",
                 "Climbe",
-                "contato@climbe.com.br",
-                "https://www.crmclimbe.com.br"
+                "contato@climbe.com.br"
         );
 
         boolean enviado = emailService.enviarEmailHtml(

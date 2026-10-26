@@ -36,6 +36,7 @@ class SolicitacaoAcessoServiceTest {
     private SolicitacaoAcessoRepository repository;
     @Mock private UsuarioRepository usuarioRepository;
     @Mock private OAuth2PendingRegistrationRepository pendingRepository;
+    @Mock private AcessoNotificacaoService notificacoes;
     @InjectMocks private SolicitacaoAcessoService service;
 
     @Test
@@ -55,6 +56,7 @@ class SolicitacaoAcessoServiceTest {
         ArgumentCaptor<SolicitacaoAcesso> captor = ArgumentCaptor.forClass(SolicitacaoAcesso.class);
         verify(repository).save(captor.capture());
         SolicitacaoAcesso historico = captor.getValue();
+        verify(notificacoes).novaSolicitacao(historico);
         assertEquals(SolicitacaoAcessoStatus.PENDENTE, historico.getStatus());
         assertNotNull(historico.getCriadoEm());
 
@@ -68,6 +70,7 @@ class SolicitacaoAcessoServiceTest {
                 "Comercial");
 
         assertEquals(SolicitacaoAcessoStatus.APROVADO, historico.getStatus());
+        verify(notificacoes).acessoAprovado(historico);
         assertEquals(1L, historico.getDecididoPor());
         assertNotNull(historico.getDecididoEm());
     }

@@ -24,13 +24,16 @@ public class SolicitacaoAcessoService {
     private final SolicitacaoAcessoRepository repository;
     private final UsuarioRepository usuarioRepository;
     private final OAuth2PendingRegistrationRepository pendingRepository;
+    private final AcessoNotificacaoService notificacoes;
 
     public SolicitacaoAcessoService(SolicitacaoAcessoRepository repository,
                                    UsuarioRepository usuarioRepository,
-                                   OAuth2PendingRegistrationRepository pendingRepository) {
+                                   OAuth2PendingRegistrationRepository pendingRepository,
+                                   AcessoNotificacaoService notificacoes) {
         this.repository = repository;
         this.usuarioRepository = usuarioRepository;
         this.pendingRepository = pendingRepository;
+        this.notificacoes = notificacoes;
     }
 
     @Transactional
@@ -44,6 +47,7 @@ public class SolicitacaoAcessoService {
         solicitacao.setContato(usuario.getContato());
         solicitacao.setCargoNome(usuario.getCargo() != null ? usuario.getCargo().getNome() : null);
         repository.save(solicitacao);
+        notificacoes.novaSolicitacao(solicitacao);
     }
 
     @Transactional
@@ -57,6 +61,7 @@ public class SolicitacaoAcessoService {
         solicitacao.setCriadoEm(pending.getCriadoEm());
         solicitacao.setExpiraEm(pending.getExpiraEm());
         repository.save(solicitacao);
+        notificacoes.novaSolicitacao(solicitacao);
     }
 
     @Transactional
@@ -81,6 +86,9 @@ public class SolicitacaoAcessoService {
             solicitacao.setCargoNome(cargoNome);
         }
         salvarDecisao(solicitacao);
+        if (status == SolicitacaoAcessoStatus.APROVADO) {
+            notificacoes.acessoAprovado(solicitacao);
+        }
     }
 
     @Transactional
